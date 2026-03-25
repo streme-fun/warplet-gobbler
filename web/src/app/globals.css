@@ -5,3 +5,175 @@
 body {
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/* Warplet breathing glow */
+@keyframes breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 20px rgba(0, 245, 255, 0.4)) drop-shadow(0 0 60px rgba(0, 245, 255, 0.15));
+    transform: translateY(0px);
+  }
+  50% {
+    filter: drop-shadow(0 0 35px rgba(0, 245, 255, 0.7)) drop-shadow(0 0 80px rgba(123, 97, 255, 0.3));
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes eye-flicker {
+  0%, 90%, 100% { opacity: 1; }
+  95% { opacity: 0.3; }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes mouth-chomp {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  15% { transform: scale(1.05) rotate(-2deg); }
+  30% { transform: scale(0.97) rotate(1deg); }
+  45% { transform: scale(1.02) rotate(-0.5deg); }
+  60% { transform: scale(1); }
+}
+
+@keyframes float-particle {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 0;
+  }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% {
+    transform: translateY(-120px) translateX(var(--drift, 20px)) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes card-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(0, 245, 255, 0);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 245, 255, 0.1);
+  }
+}
+
+@keyframes drain-fill {
+  0% { width: 0%; }
+  100% { width: var(--fill, 65%); }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-breathe {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+.animate-chomp:hover {
+  animation: mouth-chomp 0.6s ease-in-out;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 3s ease-out infinite;
+}
+
+.animate-card-glow {
+  animation: card-glow 4s ease-in-out infinite;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.8s ease-out both;
+}
+
+.animate-fade-up-delay-1 {
+  animation: fade-up 0.8s ease-out 0.15s both;
+}
+
+.animate-fade-up-delay-2 {
+  animation: fade-up 0.8s ease-out 0.3s both;
+}
+
+.animate-fade-up-delay-3 {
+  animation: fade-up 0.8s ease-out 0.45s both;
+}
+
+/* Particle system */
+.particle {
+  animation: float-particle 3s ease-out infinite;
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Drain bar animation */
+.drain-bar {
+  animation: drain-fill 2s ease-out 1s both;
+}
+
+/* Subtle noise texture overlay */
+.noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+}
+
+/* Warplet tiled background texture */
+.warplet-watermark {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  background-image: url("/warplet.png");
+  background-size: 120px 120px;
+  background-repeat: repeat;
+  opacity: 0.04;
+  filter: grayscale(1) contrast(2) brightness(2);
+  mix-blend-mode: lighten;
+}
+
+/* Mobile responsive overrides */
+.warplet-img img {
+  width: 180px;
+  height: 180px;
+}
+
+@media (min-width: 640px) {
+  .warplet-img img {
+    width: 280px;
+    height: 280px;
+  }
+}
+
+/* Stats ribbon: force row on mobile */
+.stats-ribbon {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #13111C;
+}
+::-webkit-scrollbar-thumb {
+  background: #7B61FF;
+  border-radius: 3px;
+}
