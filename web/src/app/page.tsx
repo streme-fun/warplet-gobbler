@@ -1,6 +1,22 @@
-import { ConnectKitButton } from "connectkit";
+"use client";
+
+import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useMiniApp } from "@/hooks/useMiniApp";
 
 export default function Home() {
+  const { isLoaded, context } = useMiniApp();
+  const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+
+  if (!isLoaded) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="text-lg text-gray-400">Loading...</div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center gap-8 p-8">
       <div className="text-center">
@@ -8,9 +24,33 @@ export default function Home() {
         <p className="text-lg text-gray-400">
           A PunkStrategy-style flywheel for Warplets
         </p>
+        {context?.user && (
+          <p className="text-sm text-gray-500 mt-1">
+            Welcome, {context.user.displayName ?? `FID ${context.user.fid}`}
+          </p>
+        )}
       </div>
 
-      <ConnectKitButton />
+      {isConnected ? (
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-sm font-mono text-gray-400">
+            {address?.slice(0, 6)}...{address?.slice(-4)}
+          </p>
+          <button
+            onClick={() => disconnect()}
+            className="btn btn-outline btn-sm"
+          >
+            Disconnect
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => connectors[0] && connect({ connector: connectors[0] })}
+          className="btn btn-primary"
+        >
+          Connect Wallet
+        </button>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full mt-8">
         {/* Dutch Auction — the Gobbler */}

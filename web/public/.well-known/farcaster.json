@@ -1,0 +1,23 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "WarpletGobbler",
+    "iconUrl": "https://warpletgobbler.xyz/icon.png",
+    "homeUrl": "https://warpletgobbler.xyz/",
+    "imageUrl": "https://warpletgobbler.xyz/og-image.png",
+    "buttonTitle": "Launch",
+    "splashImageUrl": "https://warpletgobbler.xyz/splash.png",
+    "splashBackgroundColor": "#13111C",
+    "webhookUrl": "https://warpletgobbler.xyz/api/webhook",
+    "description": "A PunkStrategy-style flywheel for Warplets using Superfluid streaming",
+    "primaryCategory": "finance",
+    "tags": ["warplets", "defi", "auction", "staking", "base"],
+    "requiredChains": ["eip155:8453"],
+    "requiredCapabilities": []
+  }
+}
