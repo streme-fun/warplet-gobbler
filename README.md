@@ -1,6 +1,6 @@
 # WarpletGobbler
 
-A PunkStrategy-style flywheel for [Warplets](https://warplets.xyz) using Superfluid streaming.
+A PunkStrategy-style flywheel for [Warplets](https://opensea.io/collection/the-warplets-farcaster) using Superfluid streaming.
 
 ## How It Works
 
