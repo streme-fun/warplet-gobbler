@@ -15,6 +15,14 @@ contract DutchAuction is IDutchAuction {
 
     event Gobbled(address indexed buyer, uint256 tokenId, uint256 amount);
 
+
+    constructor(address _warplets, address _paymentToken, address _nftReserve, address _recoveryWallet) {
+        warplets = IERC721(_warplets);
+        paymentToken = IERC20(_paymentToken);
+        nftReserve = _nftReserve;
+        paymentToken.approve(_recoveryWallet, 100 ether);  // this account can recover up to 100 paymentToken if needed
+    }
+
     function currentPrice() external view override returns (uint256) {
         return paymentToken.balanceOf(address(this));
     }
