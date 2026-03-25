@@ -1,0 +1,16 @@
+{
+  "name": "warplet-gobbler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WarpletGobbler — PunkStrategy-style flywheel for Warplets using Superfluid streaming",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "test": "pnpm -r test",
+    "clean": "pnpm -r clean"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=9"
+  }
+}

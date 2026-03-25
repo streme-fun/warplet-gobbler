@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Next.js
+packages/web/.next/
+packages/web/out/
+
+# Foundry
+packages/contracts/out/
+packages/contracts/cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# pnpm
+.pnpm-store/
+
+# Misc
+*.log
