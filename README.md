@@ -26,16 +26,15 @@ Fee treasury ──stream USDCx──▸ Dutch Auction ("Gobbler")
 
 ```
 warplet-gobbler/
-├── packages/
-│   ├── contracts/     # Foundry — Solidity contracts
-│   │   ├── src/       # Contract source + interfaces
-│   │   ├── test/      # Forge tests
-│   │   └── script/    # Deploy scripts
-│   └── web/           # Next.js — Frontend app
-│       ├── src/app/   # App router pages
-│       ├── src/abi/   # Contract ABIs (copied from contracts/out/)
-│       ├── src/hooks/ # React hooks (wagmi)
-│       └── src/lib/   # Shared utils, contract addresses
+├── contracts/          # Foundry — Solidity contracts
+│   ├── src/            # Contract source + interfaces
+│   ├── test/           # Forge tests
+│   └── script/         # Deploy scripts
+├── web/                # Next.js — Frontend app
+│   ├── src/app/        # App router pages
+│   ├── src/abi/        # Contract ABIs (copied from contracts/out/)
+│   ├── src/hooks/      # React hooks (wagmi)
+│   └── src/lib/        # Shared utils, contract addresses
 ├── pnpm-workspace.yaml
 └── package.json
 ```
@@ -55,17 +54,17 @@ warplet-gobbler/
 pnpm install
 
 # Copy env files
-cp packages/web/.env.example packages/web/.env.local
-cp packages/contracts/.env.example packages/contracts/.env
+cp web/.env.example web/.env.local
+cp contracts/.env.example contracts/.env
 
 # Run the web app
 pnpm dev
 
 # Build contracts
-pnpm build:contracts
+cd contracts && forge build
 
 # Run contract tests
-pnpm test
+cd contracts && forge test
 ```
 
 ## Team
