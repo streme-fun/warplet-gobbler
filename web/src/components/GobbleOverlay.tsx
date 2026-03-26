@@ -15,7 +15,16 @@ export default function GobbleOverlay({ onDone }: { onDone: () => void }) {
     let H = window.innerHeight;
     cv.width = W;
     cv.height = H;
-    const MID = H / 2;
+    let MID = H / 2;
+
+    const onResize = () => {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      cv.width = W;
+      cv.height = H;
+      MID = H / 2;
+    };
+    window.addEventListener("resize", onResize);
 
     let time = 0;
     let phase = 1;
@@ -217,6 +226,7 @@ export default function GobbleOverlay({ onDone }: { onDone: () => void }) {
     frame();
     return () => {
       cancelled = true;
+      window.removeEventListener("resize", onResize);
     };
   }, [onDone]);
 

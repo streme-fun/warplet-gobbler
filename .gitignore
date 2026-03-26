@@ -2,12 +2,12 @@
 node_modules/
 
 # Next.js
-packages/web/.next/
-packages/web/out/
+web/.next/
+web/out/
 
 # Foundry
-packages/contracts/out/
-packages/contracts/cache/
+contracts/out/
+contracts/cache/
 
 # Environment
 .env
@@ -28,3 +28,4 @@ Thumbs.db
 # Misc
 *.log
 .next/
+*.tsbuildinfo

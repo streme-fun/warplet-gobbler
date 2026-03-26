@@ -23,7 +23,7 @@ export default function BuyOverlay({
   useEffect(() => {
     const cv = canvasRef.current;
     if (!cv) return;
-    const ctx = cv.getContext("2d")!;
+    const ctx = cv.getContext("2d");
     if (!ctx) return;
 
     let W = window.innerWidth;
@@ -33,6 +33,15 @@ export default function BuyOverlay({
 
     let cancelled = false;
     let time = 0;
+    let lastFrameTime = performance.now();
+
+    const onResize = () => {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      cv.width = W;
+      cv.height = H;
+    };
+    window.addEventListener("resize", onResize);
 
     // Load warplet image
     const img = new Image();
@@ -461,7 +470,9 @@ export default function BuyOverlay({
     // ========== MAIN FRAME ==========
     function frame() {
       if (cancelled) return;
-      const dt = 0.016;
+      const now = performance.now();
+      const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+      lastFrameTime = now;
       time += dt;
 
       // Hit-stop
@@ -649,6 +660,7 @@ export default function BuyOverlay({
     frame();
     return () => {
       cancelled = true;
+      window.removeEventListener("resize", onResize);
     };
   }, [fid, startRect, onDone]);
 

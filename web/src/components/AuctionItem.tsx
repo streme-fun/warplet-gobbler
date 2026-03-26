@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import AuctionWarpletCanvas from "./AuctionWarpletCanvas";
+import AuctionWarpletImage from "./AuctionWarpletImage";
 import StreamingNumber from "./StreamingNumber";
 import type { MockAuction } from "@/lib/mock-data";
 
@@ -30,7 +30,7 @@ export default function AuctionItem({
         disabled={bought}
         onClick={handleClick}
       >
-        <AuctionWarpletCanvas fid={auction.fid} />
+        <AuctionWarpletImage fid={auction.fid} />
       </button>
 
       <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded-full border border-base-content/10 text-base-content/60">

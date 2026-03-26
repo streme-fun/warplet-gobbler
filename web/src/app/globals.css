@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  font-family: var(--font-cinzel), "Cinzel", serif;
+  font-family: var(--font-eb-garamond), "EB Garamond", serif;
 }
 
 /* Warplet breathing glow */
