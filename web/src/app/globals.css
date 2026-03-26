@@ -166,6 +166,109 @@ body {
   gap: 0.5rem;
 }
 
+/* === Hollow Knight Abyss background === */
+
+/* Deep void gradient — pitch black center fading to dark indigo at edges */
+.abyss-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, transparent 0%, rgba(10, 5, 20, 0.6) 100%),
+    linear-gradient(180deg, #08060E 0%, #0D0A18 30%, #0A0714 60%, #060410 100%);
+}
+
+/* Void tendrils — dark wisps that rise from the bottom */
+@keyframes tendril-rise {
+  0% {
+    transform: translateY(0) scaleX(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-35vh) scaleX(0.7);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-70vh) scaleX(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes tendril-sway {
+  0%, 100% { transform: translateX(0); }
+  33% { transform: translateX(12px); }
+  66% { transform: translateX(-8px); }
+}
+
+.abyss-tendril {
+  position: absolute;
+  bottom: -20px;
+  width: var(--tendril-w, 40px);
+  height: var(--tendril-h, 180px);
+  background: linear-gradient(0deg,
+    rgba(15, 10, 30, 0.9) 0%,
+    rgba(20, 15, 40, 0.5) 40%,
+    transparent 100%
+  );
+  border-radius: 50% 50% 0 0;
+  filter: blur(var(--tendril-blur, 8px));
+  animation:
+    tendril-rise var(--tendril-dur, 8s) ease-in-out infinite,
+    tendril-sway var(--sway-dur, 6s) ease-in-out infinite;
+  animation-delay: var(--tendril-delay, 0s);
+  pointer-events: none;
+}
+
+/* Void motes — tiny dark particles that drift upward */
+@keyframes void-mote-float {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  15% { opacity: var(--mote-peak, 0.4); }
+  85% { opacity: var(--mote-peak, 0.4); }
+  100% {
+    transform: translateY(var(--mote-travel, -200px)) translateX(var(--mote-drift, 30px));
+    opacity: 0;
+  }
+}
+
+.void-mote {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: void-mote-float var(--mote-dur, 6s) ease-in-out infinite;
+  animation-delay: var(--mote-delay, 0s);
+}
+
+/* Void pulse — subtle breathing darkness at the very bottom */
+@keyframes void-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scaleY(1.15);
+  }
+}
+
+.abyss-floor-glow {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30%;
+  background: linear-gradient(0deg,
+    rgba(8, 4, 16, 0.95) 0%,
+    rgba(15, 10, 30, 0.4) 50%,
+    transparent 100%
+  );
+  animation: void-pulse 6s ease-in-out infinite;
+  transform-origin: bottom;
+  pointer-events: none;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;

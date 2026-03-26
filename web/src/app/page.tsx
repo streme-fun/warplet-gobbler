@@ -45,6 +45,80 @@ const PARALLAX_WARPLETS = [
   { id: 17, fid: 8, x: 82, y: 70, size: 95, opacity: 0.08, speed: 0.11, rotate: 14, blur: 0 },
 ];
 
+// Void tendrils — dark wisps rising from the bottom edge
+const TENDRILS = [
+  { id: 0, left: "5%", w: 30, h: 160, blur: 10, dur: 9, sway: 7, delay: 0 },
+  { id: 1, left: "15%", w: 50, h: 220, blur: 6, dur: 11, sway: 5, delay: 1.5 },
+  { id: 2, left: "28%", w: 35, h: 180, blur: 9, dur: 8, sway: 8, delay: 3 },
+  { id: 3, left: "42%", w: 60, h: 250, blur: 5, dur: 12, sway: 6, delay: 0.8 },
+  { id: 4, left: "55%", w: 25, h: 140, blur: 12, dur: 7, sway: 9, delay: 4.2 },
+  { id: 5, left: "68%", w: 45, h: 200, blur: 7, dur: 10, sway: 5.5, delay: 2 },
+  { id: 6, left: "78%", w: 55, h: 230, blur: 6, dur: 13, sway: 7, delay: 1 },
+  { id: 7, left: "90%", w: 35, h: 170, blur: 10, dur: 9, sway: 6, delay: 3.5 },
+];
+
+// Void motes — tiny dark particles drifting upward
+const VOID_MOTES = [
+  { id: 0, left: "8%", bottom: "5%", size: 3, color: "#1a1030", peak: 0.5, travel: -250, drift: 20, dur: 7, delay: 0 },
+  { id: 1, left: "20%", bottom: "15%", size: 2, color: "#150d28", peak: 0.3, travel: -180, drift: -15, dur: 5, delay: 1.2 },
+  { id: 2, left: "35%", bottom: "8%", size: 4, color: "#1e1540", peak: 0.4, travel: -300, drift: 25, dur: 9, delay: 2.5 },
+  { id: 3, left: "45%", bottom: "20%", size: 2, color: "#12091f", peak: 0.35, travel: -200, drift: -30, dur: 6, delay: 0.5 },
+  { id: 4, left: "58%", bottom: "3%", size: 3, color: "#1a1030", peak: 0.45, travel: -280, drift: 10, dur: 8, delay: 3.8 },
+  { id: 5, left: "70%", bottom: "12%", size: 2, color: "#150d28", peak: 0.3, travel: -160, drift: -20, dur: 5.5, delay: 1.8 },
+  { id: 6, left: "82%", bottom: "6%", size: 3, color: "#1e1540", peak: 0.5, travel: -220, drift: 35, dur: 7.5, delay: 4 },
+  { id: 7, left: "92%", bottom: "18%", size: 2, color: "#12091f", peak: 0.35, travel: -190, drift: -12, dur: 6.5, delay: 2 },
+  { id: 8, left: "50%", bottom: "2%", size: 5, color: "#0d0818", peak: 0.25, travel: -350, drift: 8, dur: 11, delay: 0.3 },
+  { id: 9, left: "25%", bottom: "25%", size: 2, color: "#1a1030", peak: 0.3, travel: -150, drift: -18, dur: 5, delay: 5 },
+];
+
+function AbyssBackground() {
+  return (
+    <div className="fixed inset-0 abyss-gradient pointer-events-none" style={{ zIndex: -1 }}>
+      {/* Void tendrils */}
+      {TENDRILS.map((t) => (
+        <div
+          key={t.id}
+          className="abyss-tendril"
+          style={{
+            left: t.left,
+            // @ts-expect-error CSS custom properties
+            "--tendril-w": `${t.w}px`,
+            "--tendril-h": `${t.h}px`,
+            "--tendril-blur": `${t.blur}px`,
+            "--tendril-dur": `${t.dur}s`,
+            "--sway-dur": `${t.sway}s`,
+            "--tendril-delay": `${t.delay}s`,
+          }}
+        />
+      ))}
+
+      {/* Void motes */}
+      {VOID_MOTES.map((m) => (
+        <div
+          key={m.id}
+          className="void-mote"
+          style={{
+            left: m.left,
+            bottom: m.bottom,
+            width: m.size,
+            height: m.size,
+            backgroundColor: m.color,
+            // @ts-expect-error CSS custom properties
+            "--mote-peak": m.peak,
+            "--mote-travel": `${m.travel}px`,
+            "--mote-drift": `${m.drift}px`,
+            "--mote-dur": `${m.dur}s`,
+            "--mote-delay": `${m.delay}s`,
+          }}
+        />
+      ))}
+
+      {/* Floor glow — breathing darkness at the bottom */}
+      <div className="abyss-floor-glow" />
+    </div>
+  );
+}
+
 function ParallaxBackground() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -159,14 +233,17 @@ function StatBar({
 export default function Home() {
   return (
     <main className="min-h-screen relative overflow-hidden noise-overlay">
+      {/* Hollow Knight Abyss texture */}
+      <AbyssBackground />
+
       {/* Parallax warplet background */}
       <ParallaxBackground />
 
-      {/* Background gradient orbs */}
+      {/* Background gradient orbs — dimmed to work with abyss */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-secondary/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/3 rounded-full blur-3xl" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-secondary/3 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/2 rounded-full blur-3xl" />
       </div>
 
       {/* Nav */}
