@@ -9,6 +9,7 @@ import GobbleOverlay from "@/components/GobbleOverlay";
 import GobblePeek from "@/components/GobblePeek";
 import StreamingNumber from "@/components/StreamingNumber";
 import AuctionItem from "@/components/AuctionItem";
+import BuyOverlay from "@/components/BuyOverlay";
 import FlyingWarplet from "@/components/FlyingWarplet";
 import {
   MOCK_PRICE_START,
@@ -29,6 +30,16 @@ export default function Home() {
     w: number;
     h: number;
   } | null>(null);
+  // Buy overlay state
+  const [buyingFid, setBuyingFid] = useState<number | null>(null);
+  const [buyRect, setBuyRect] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  const [boughtFids, setBoughtFids] = useState<Set<number>>(new Set());
+
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const handleGobbleDone = useCallback(() => {
     setGobbling(false);
@@ -46,8 +57,30 @@ export default function Home() {
     setFlyingFid(selectedFid);
   }, [selectedFid, gobbling, flyingFid]);
 
+  const handleBuy = useCallback(
+    (fid: number, rect: { x: number; y: number; w: number; h: number }) => {
+      if (buyingFid) return;
+      setBuyingFid(fid);
+      setBuyRect(rect);
+    },
+    [buyingFid],
+  );
+
+  const handleBuyDone = useCallback(() => {
+    if (buyingFid) {
+      setBoughtFids((prev) => new Set(prev).add(buyingFid));
+    }
+    setBuyingFid(null);
+    setBuyRect(null);
+  }, [buyingFid]);
+
   return (
     <main className="min-h-screen relative overflow-hidden noise-overlay flex flex-col">
+      {/* Buy overlay — Silksong Void combat sequence */}
+      {buyingFid && buyRect && (
+        <BuyOverlay fid={buyingFid} startRect={buyRect} onDone={handleBuyDone} />
+      )}
+
       {/* Gobble overlay — canvas jaws on top of everything */}
       {gobbling && <GobbleOverlay onDone={handleGobbleDone} />}
 
@@ -246,9 +279,14 @@ export default function Home() {
             Dutch auction &mdash; price drops every second. Click to buy.
           </p>
 
-          <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 sm:gap-8">
             {MOCK_AUCTIONS.map((auction) => (
-              <AuctionItem key={auction.fid} auction={auction} />
+              <AuctionItem
+                key={auction.fid}
+                auction={auction}
+                bought={boughtFids.has(auction.fid)}
+                onBuy={handleBuy}
+              />
             ))}
           </div>
         </div>
