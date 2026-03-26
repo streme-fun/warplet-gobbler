@@ -9,7 +9,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        serif: ['var(--font-cinzel)', 'Cinzel', 'serif'],
+        serif: ['var(--font-eb-garamond)', 'EB Garamond', 'serif'],
       },
     },
   },

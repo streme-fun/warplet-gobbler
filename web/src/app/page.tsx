@@ -321,8 +321,7 @@ const PARALLAX_WARPLETS = [
   },
 ];
 
-// Vertical thorny stalks rising from the ground — sharp angular spurs, curving and twisting.
-// Each has a fill path (black silhouette) and a highlight path (gray rim-light on one edge).
+// Ground silhouette only — undulating terrain at bottom of viewport
 const ABYSS_TENDRILS: {
   id: number;
   swayDur: number;
@@ -332,176 +331,8 @@ const ABYSS_TENDRILS: {
   fill: string;
   highlight?: string;
 }[] = [
-  // Far left — tall stalk, tip converges to sharp point at top
   {
     id: 0,
-    swayDur: 11,
-    swayFrom: -1.5,
-    swayTo: 1,
-    swayDelay: 0,
-    fill: "M24,18 C8,65 2,115 10,165 C20,230 30,290 24,350 C16,420 22,480 28,530 C36,590 46,650 42,710 C36,790 40,860 44,900 L60,900 C52,850 48,780 55,700 C60,640 50,580 42,520 C36,470 30,410 38,340 C44,280 35,220 25,160 C18,115 22,70 30,20Z",
-    highlight:
-      "M30,20 C22,70 18,115 25,160 C35,220 44,280 38,340 C30,410 36,470 42,520 C50,580 60,640 55,700 C48,780 52,850 55,900",
-  },
-  // Far-left spur left — pointed tip
-  {
-    id: 1,
-    swayDur: 11,
-    swayFrom: -1.5,
-    swayTo: 1,
-    swayDelay: 0,
-    fill: "M36,400 C22,368 5,348 -20,335 C5,350 22,372 34,398Z",
-  },
-  // Far-left spur right — pointed tip
-  {
-    id: 2,
-    swayDur: 11,
-    swayFrom: -1.5,
-    swayTo: 1,
-    swayDelay: 0,
-    fill: "M48,555 C62,528 82,518 110,512 C82,520 63,530 48,550Z",
-    highlight: "M48,555 C62,528 82,518 110,512",
-  },
-
-  // Left-center — twisting S-curve, sharp tip
-  {
-    id: 3,
-    swayDur: 14,
-    swayFrom: -1,
-    swayTo: 2,
-    swayDelay: 2.5,
-    fill: "M219,35 C200,95 205,148 220,195 C205,255 198,318 206,368 C216,428 236,478 242,540 C248,610 232,670 222,740 C212,810 216,870 220,900 L240,900 C228,860 225,800 235,730 C245,660 260,600 255,530 C250,470 230,420 220,360 C212,310 218,250 235,190 C248,145 240,95 225,40Z",
-    highlight:
-      "M225,40 C240,95 248,145 235,190 C218,250 212,310 220,360 C230,420 250,470 255,530 C260,600 245,660 235,730 C225,800 228,860 230,900",
-  },
-  // Left-center spur left — pointed
-  {
-    id: 4,
-    swayDur: 14,
-    swayFrom: -1,
-    swayTo: 2,
-    swayDelay: 2.5,
-    fill: "M216,384 C192,355 162,342 125,338 C162,348 192,360 214,386Z",
-    highlight: "M216,384 C192,355 162,342 125,338",
-  },
-  // Left-center spur right — pointed
-  {
-    id: 5,
-    swayDur: 14,
-    swayFrom: -1,
-    swayTo: 2,
-    swayDelay: 2.5,
-    fill: "M250,562 C278,542 305,535 345,538 C305,540 278,548 252,566Z",
-  },
-
-  // Center-left — shorter stalk, sharp tip
-  {
-    id: 6,
-    swayDur: 10,
-    swayFrom: -2,
-    swayTo: 1,
-    swayDelay: 4,
-    fill: "M399,360 C382,410 385,458 400,498 C388,545 380,598 386,638 C394,688 402,738 396,790 C390,840 395,878 398,900 L420,900 C410,870 405,830 410,780 C415,730 408,680 400,630 C394,590 400,540 415,490 C425,455 418,410 405,365Z",
-    highlight:
-      "M405,365 C418,410 425,455 415,490 C400,540 394,590 400,630 C408,680 415,730 410,780 C405,830 410,870 412,900",
-  },
-  // Center-left spike — pointed
-  {
-    id: 7,
-    swayDur: 10,
-    swayFrom: -2,
-    swayTo: 1,
-    swayDelay: 4,
-    fill: "M406,644 C382,618 355,608 325,608 C358,614 382,622 404,646Z",
-  },
-
-  // Center — tallest stalk, prominent, sharp tip
-  {
-    id: 8,
-    swayDur: 13,
-    swayFrom: -0.8,
-    swayTo: 1.2,
-    swayDelay: 1,
-    fill: "M651,5 C632,82 636,152 650,215 C632,295 624,372 636,438 C652,520 664,600 656,680 C646,770 652,848 654,900 L680,900 C666,840 660,760 670,670 C678,590 665,510 650,430 C638,365 645,290 665,210 C680,150 672,85 658,10Z",
-    highlight:
-      "M658,10 C672,85 680,150 665,210 C645,290 638,365 650,430 C665,510 678,590 670,670 C660,760 666,840 668,900",
-  },
-  // Center thorn left — pointed
-  {
-    id: 9,
-    swayDur: 13,
-    swayFrom: -0.8,
-    swayTo: 1.2,
-    swayDelay: 1,
-    fill: "M644,454 C618,422 582,410 540,406 C582,416 618,428 642,456Z",
-    highlight: "M644,454 C618,422 582,410 540,406",
-  },
-  // Center thorn right — pointed
-  {
-    id: 10,
-    swayDur: 13,
-    swayFrom: -0.8,
-    swayTo: 1.2,
-    swayDelay: 1,
-    fill: "M676,304 C702,278 738,268 780,270 C738,274 705,282 678,306Z",
-  },
-
-  // Right-center — curved stalk, sharp tip
-  {
-    id: 11,
-    swayDur: 12,
-    swayFrom: -1,
-    swayTo: 1.5,
-    swayDelay: 3.5,
-    fill: "M986,180 C970,242 972,298 985,345 C968,405 962,470 972,528 C986,592 994,658 984,730 C974,805 978,862 980,900 L1000,900 C988,855 985,795 995,720 C1005,650 998,585 985,520 C975,465 980,400 1000,340 C1012,295 1005,245 992,185Z",
-    highlight:
-      "M992,185 C1005,245 1012,295 1000,340 C980,400 975,465 985,520 C998,585 1005,650 995,720 C985,795 988,855 990,900",
-  },
-  // Right-center spur — pointed
-  {
-    id: 12,
-    swayDur: 12,
-    swayFrom: -1,
-    swayTo: 1.5,
-    swayDelay: 3.5,
-    fill: "M982,544 C958,518 928,506 890,502 C928,510 958,522 980,546Z",
-    highlight: "M982,544 C958,518 928,506 890,502",
-  },
-
-  // Far right — tall stalk, sharp tip
-  {
-    id: 13,
-    swayDur: 10,
-    swayFrom: -1.5,
-    swayTo: 2,
-    swayDelay: 5,
-    fill: "M1298,0 C1305,38 1312,84 1322,135 C1335,205 1342,265 1330,318 C1315,388 1306,452 1316,508 C1328,572 1340,642 1332,710 C1322,790 1326,858 1328,900 L1350,900 C1338,850 1335,780 1345,700 C1352,635 1342,565 1330,500 C1320,445 1328,380 1345,310 C1356,260 1348,200 1335,130 C1325,80 1318,35 1305,0Z",
-    highlight:
-      "M1305,0 C1318,35 1325,80 1335,130 C1348,200 1356,260 1345,310 C1328,380 1320,445 1330,500 C1342,565 1352,635 1345,700 C1335,780 1338,850 1340,900",
-  },
-  // Far-right spur left — pointed
-  {
-    id: 14,
-    swayDur: 10,
-    swayFrom: -1.5,
-    swayTo: 2,
-    swayDelay: 5,
-    fill: "M1324,524 C1298,498 1265,486 1225,482 C1265,490 1298,502 1322,526Z",
-    highlight: "M1324,524 C1298,498 1265,486 1225,482",
-  },
-  // Far-right spur right — pointed
-  {
-    id: 15,
-    swayDur: 10,
-    swayFrom: -1.5,
-    swayTo: 2,
-    swayDelay: 5,
-    fill: "M1354,354 C1380,330 1412,322 1445,322 C1412,328 1382,335 1356,356Z",
-  },
-
-  // Ground silhouette — undulating terrain
-  {
-    id: 16,
     swayDur: 999,
     swayFrom: 0,
     swayTo: 0,
@@ -909,14 +740,6 @@ function ParallaxBackground() {
               filter: `grayscale(0.6) brightness(1.5)${w.blur ? ` blur(${w.blur}px)` : ""}`,
             }}
           />
-          <div
-            className="warplet-void-blob"
-            style={{
-              // @ts-expect-error CSS custom properties
-              "--blob-dur": `${10 + w.id * 2.5}s`,
-              "--blob-delay": `${w.id * 1.7}s`,
-            }}
-          />
         </div>
       ))}
     </div>
@@ -1005,6 +828,17 @@ function GobbleOverlay({ onDone }: { onDone: () => void }) {
       return pts;
     }
 
+    function strokeEdge(edge: { x: number; y: number }[]) {
+      cx!.strokeStyle = "rgba(0, 245, 255, 0.2)";
+      cx!.lineWidth = 1.5;
+      cx!.beginPath();
+      for (let i = 0; i < edge.length; i++) {
+        if (i === 0) cx!.moveTo(edge[i].x, edge[i].y);
+        else cx!.lineTo(edge[i].x, edge[i].y);
+      }
+      cx!.stroke();
+    }
+
     function drawUpperJaw() {
       const t = time * 0.01;
       const edge = jagEdge(topY, 1, 1);
@@ -1017,6 +851,7 @@ function GobbleOverlay({ onDone }: { onDone: () => void }) {
         cx!.lineTo(edge[i].x, edge[i].y);
       cx!.closePath();
       cx!.fill();
+      strokeEdge(edge);
 
       if (eyeA > 0.005) {
         const ey = topY - 65 + Math.sin(t * 0.6) * 2;
@@ -1053,6 +888,7 @@ function GobbleOverlay({ onDone }: { onDone: () => void }) {
       cx!.lineTo(-10, H + 10);
       cx!.closePath();
       cx!.fill();
+      strokeEdge(edge);
     }
 
     function drawDark() {
@@ -1064,7 +900,8 @@ function GobbleOverlay({ onDone }: { onDone: () => void }) {
 
     function update() {
       time++;
-      const jSpd = phase >= 3 && phase <= 5 ? 0.07 : phase === 6 ? 0.03 : 0.02;
+      // Phases 1-2: slow creep in; 3-5: chomp; 6: retreat
+      const jSpd = phase <= 2 ? 0.008 : phase >= 3 && phase <= 5 ? 0.07 : 0.03;
       topY = lerp(topY, topT, jSpd);
       botY = lerp(botY, botT, jSpd);
       dark = lerp(dark, darkT, 0.018);
@@ -1076,7 +913,7 @@ function GobbleOverlay({ onDone }: { onDone: () => void }) {
         eyeAT = 1;
         topT = -5;
         botT = H + 5;
-        if (pt > 180) {
+        if (pt > 300) {
           phase = 2;
           pt = 0;
         }
@@ -1169,10 +1006,154 @@ const MOCK_POT_START = 1247.38291746; // USDCx in pot at page load
 const MOCK_POT_RATE = 0.0823; // USDCx/sec streaming in (~7,110/day)
 const MOCK_POT_CAP = 2000; // pot capacity for fill bar
 const MOCK_PRICE_START = 891.42618; // current Dutch auction price
-const MOCK_PRICE_RATE = -0.0274; // price decay per second
+const MOCK_PRICE_RATE = 0.0274; // USDCx/sec streaming into pot
 const MOCK_PRICE_CEIL = 1100; // starting auction price (for fill %)
 const MOCK_FLOOR_SECS = 35243; // seconds until floor price (~9h 47m)
 const MOCK_GOBBLED = 37;
+
+/** Ambient gobbler peek — jaws creep in from edges every ~45s, then retreat. */
+function GobblePeek() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const cx = cv.getContext("2d");
+    if (!cx) return;
+
+    let W = window.innerWidth;
+    let H = window.innerHeight;
+    cv.width = W;
+    cv.height = H;
+
+    let cancelled = false;
+    let time = 0;
+    // Teeth extend 3-17px past topY/botY, so hide position must clear that
+    let topY = -40;
+    let botY = H + 40;
+    let topTarget = -40;
+    let botTarget = H + 40;
+    const CYCLE = 45 * 60; // ~45s at 60fps
+    const PEEK_IN = 180; // frames to hold peek
+    let timer = CYCLE - 600; // first peek after ~10s
+
+    function lerp(a: number, b: number, t: number) {
+      return a + (b - a) * t;
+    }
+    function sr(s: number) {
+      const v = Math.sin(s * 127.1 + 311.7) * 43758.5453;
+      return v - Math.floor(v);
+    }
+
+    function jagEdge(y: number, dir: number, seed: number) {
+      const t = time * 0.006;
+      const pts: { x: number; y: number }[] = [];
+      for (let x = -10; x <= W + 15; x += 10) {
+        const j = sr(Math.floor(x / 10) + seed * 100);
+        const h = (j * 14 + 3) * dir;
+        const sway = Math.sin(t * 0.5 + x * 0.012 + seed) * 2 * dir;
+        pts.push({ x, y: y + h + sway });
+        const mx = x + 5;
+        const mj = sr(Math.floor(mx / 10) + seed * 200 + 50);
+        const mh = (mj * 8 + 6) * dir;
+        pts.push({ x: mx, y: y + mh + sway });
+      }
+      return pts;
+    }
+
+    function frame() {
+      if (cancelled) return;
+      time++;
+      timer++;
+
+      // Peek: jaw edge at y=20 means teeth reach y=37, clearly visible
+      if (timer > CYCLE && timer <= CYCLE + 10) {
+        topTarget = 20;
+        botTarget = H - 20;
+      } else if (timer > CYCLE + PEEK_IN) {
+        topTarget = -40;
+        botTarget = H + 40;
+        if (topY < -35) timer = 0;
+      }
+
+      topY = lerp(topY, topTarget, 0.005);
+      botY = lerp(botY, botTarget, 0.005);
+
+      cx!.clearRect(0, 0, W, H);
+
+      if (topY > -38 || botY < H + 38) {
+        // Draw jaw fill
+        const topEdge = jagEdge(topY, 1, 1);
+        cx!.fillStyle = "#040404";
+        cx!.beginPath();
+        cx!.moveTo(-10, -10);
+        cx!.lineTo(W + 10, -10);
+        cx!.lineTo(W + 10, topY);
+        for (let i = topEdge.length - 1; i >= 0; i--)
+          cx!.lineTo(topEdge[i].x, topEdge[i].y);
+        cx!.closePath();
+        cx!.fill();
+
+        // Subtle cyan edge glow on top teeth
+        cx!.strokeStyle = "rgba(0, 245, 255, 0.15)";
+        cx!.lineWidth = 1.5;
+        cx!.beginPath();
+        for (let i = 0; i < topEdge.length; i++) {
+          if (i === 0) cx!.moveTo(topEdge[i].x, topEdge[i].y);
+          else cx!.lineTo(topEdge[i].x, topEdge[i].y);
+        }
+        cx!.stroke();
+
+        const botEdge = jagEdge(botY, -1, 5);
+        cx!.fillStyle = "#040404";
+        cx!.beginPath();
+        for (let i = 0; i < botEdge.length; i++) {
+          if (i === 0) cx!.moveTo(botEdge[i].x, botEdge[i].y);
+          else cx!.lineTo(botEdge[i].x, botEdge[i].y);
+        }
+        cx!.lineTo(W + 10, H + 10);
+        cx!.lineTo(-10, H + 10);
+        cx!.closePath();
+        cx!.fill();
+
+        // Subtle cyan edge glow on bottom teeth
+        cx!.beginPath();
+        for (let i = 0; i < botEdge.length; i++) {
+          if (i === 0) cx!.moveTo(botEdge[i].x, botEdge[i].y);
+          else cx!.lineTo(botEdge[i].x, botEdge[i].y);
+        }
+        cx!.stroke();
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    frame();
+
+    const onResize = () => {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      cv.width = W;
+      cv.height = H;
+      botY = H + 60;
+      botTarget = H + 60;
+    };
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 pointer-events-none"
+      style={{ width: "100vw", height: "100vh", zIndex: 1 }}
+    />
+  );
+}
 
 /** Streaming number — updates every frame via direct DOM writes, no re-renders. */
 function StreamingNumber({
@@ -1314,6 +1295,9 @@ export default function Home() {
       {/* Hollow Knight Abyss texture — always visible */}
       <AbyssBackground />
 
+      {/* Ambient gobbler peek — jaws hint at their presence */}
+      <GobblePeek />
+
       {/* Everything below fades out during gobble */}
       <div
         className="flex-1 flex flex-col transition-opacity duration-700"
@@ -1332,18 +1316,18 @@ export default function Home() {
         <nav className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-base-content/5">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-              <span className="text-primary text-xs sm:text-sm font-bold">
+              <span className="text-primary text-sm sm:text-base font-bold">
                 W
               </span>
             </div>
-            <span className="font-bold text-sm sm:text-lg tracking-tight">
-              Warplet<span className="text-primary">Gobbler</span>
+            <span className="font-semibold text-base sm:text-xl tracking-wide uppercase">
+              Warplet Gobbler
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
             <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
               <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <span className="text-xs text-success">Base</span>
+              <span className="text-sm text-success">Base</span>
             </div>
             <ConnectKitButton />
           </div>
@@ -1393,13 +1377,15 @@ export default function Home() {
 
           {/* Title */}
           <div className="text-center mt-4 sm:mt-6 animate-fade-up-delay-1">
-            <h1 className="text-2xl sm:text-5xl font-black tracking-widest uppercase">
+            <h1 className="text-3xl sm:text-7xl font-bold tracking-widest uppercase">
               Feed the <span className="text-primary">Gobbler</span>
             </h1>
-            <p className="mt-2 sm:mt-3 text-base-content/50 max-w-sm mx-auto text-xs sm:text-base">
-              Deposit a Warplet NFT to drain the pot.
-              <br className="hidden sm:block" />
-              Price falls over time &mdash; strike when the moment is right.
+            <p className="mt-2 sm:mt-3 text-base-content/50 max-w-md mx-auto text-base sm:text-xl">
+              Sell your Warplet to The Gobbler for its pot of $USDCx. <br />
+              Or wait until the pot grows...
+            </p>
+            <p className="sm:mt-1 text-base-content/50 max-w-lg mx-auto text-xs sm:text-lg">
+              ...and hope no one else steals your chance.
             </p>
           </div>
 
@@ -1407,20 +1393,20 @@ export default function Home() {
           <div className="mt-6 sm:mt-10 w-full max-w-sm animate-fade-up-delay-2">
             <div className="card bg-base-200/60 border border-primary/10 backdrop-blur-sm animate-card-glow">
               <div className="card-body items-center text-center gap-4 p-5 sm:p-6">
-                <p className="text-xs sm:text-sm text-base-content/50">
+                <p className="text-sm sm:text-base text-base-content/50">
                   The Gobbler will pay
                 </p>
-                <div className="text-2xl sm:text-3xl font-mono font-bold text-primary streaming-glow">
+                <div className="text-3xl sm:text-4xl font-mono font-semibold text-primary streaming-glow">
                   <StreamingNumber
                     start={MOCK_PRICE_START}
                     perSecond={MOCK_PRICE_RATE}
                     decimals={3}
                   />
-                  <span className="text-sm font-normal text-base-content/40 ml-2">
+                  <span className="text-base font-normal text-base-content/40 ml-2">
                     USDCx
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-base-content/50">
+                <p className="text-sm sm:text-base text-base-content/50">
                   for your Warplet
                 </p>
 
@@ -1428,7 +1414,7 @@ export default function Home() {
                   className="btn btn-primary w-full mt-1 hover:shadow-lg hover:shadow-primary/20 transition-shadow"
                   onClick={() => !gobbling && setGobbling(true)}
                 >
-                  Deposit Warplet
+                  Sell Warplet to The Gobbler
                 </button>
               </div>
             </div>
@@ -1437,7 +1423,7 @@ export default function Home() {
 
         {/* Minimal footer */}
         <footer className="relative z-10 py-4 px-4 sm:px-6 text-center">
-          <span className="text-xs text-base-content/20">
+          <span className="text-sm text-base-content/20">
             WarpletGobbler &mdash; built on Base
           </span>
         </footer>
