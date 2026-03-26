@@ -240,6 +240,11 @@ body {
   animation-delay: var(--blob-delay, 0s);
 }
 
+/* Streaming number glow — subtle pulse on the hero pot value */
+.streaming-glow {
+  text-shadow: 0 0 12px rgba(0, 245, 255, 0.3), 0 0 30px rgba(0, 245, 255, 0.1);
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
