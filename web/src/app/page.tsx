@@ -45,135 +45,150 @@ const PARALLAX_WARPLETS = [
   { id: 17, fid: 8, x: 82, y: 70, size: 95, opacity: 0.08, speed: 0.11, rotate: 14, blur: 0 },
 ];
 
-// Flat black SVG tendril paths — organic root/branch shapes that taper to points
-// Each tendril group is an SVG anchored to bottom, swaying slowly like underwater
-const TENDRIL_GROUPS: {
-  id: number; left: string; width: number; height: number;
-  swayDur: number; swayFrom: number; swayTo: number; swayDelay: number;
-  paths: string[];
+// Vertical thorny stalks rising from the ground — sharp angular spurs, curving and twisting.
+// Each has a fill path (black silhouette) and a highlight path (gray rim-light on one edge).
+const ABYSS_TENDRILS: {
+  id: number; swayDur: number; swayFrom: number; swayTo: number;
+  swayDelay: number; fill: string; highlight?: string;
 }[] = [
-  {
-    id: 0, left: "-2%", width: 200, height: 500,
-    swayDur: 10, swayFrom: -1.5, swayTo: 2, swayDelay: 0,
-    paths: [
-      // thick trunk splitting into branches
-      "M90,500 C88,420 75,350 80,280 C83,240 70,200 65,160 C62,130 55,90 48,40 L50,38 C58,85 66,125 68,155 C73,195 85,235 83,275 C78,345 92,415 95,500Z",
-      // left fork
-      "M75,300 C65,260 50,230 35,180 C28,155 15,120 5,70 L8,68 C20,115 32,150 40,175 C55,225 68,255 78,295Z",
-      // right twig
-      "M85,250 C95,220 110,190 120,140 C125,115 135,80 140,30 L143,32 C137,82 128,118 123,145 C113,195 98,225 88,255Z",
-      // small spur
-      "M60,180 C50,155 38,130 25,95 L28,93 C42,125 53,150 63,175Z",
-    ],
-  },
-  {
-    id: 1, left: "12%", width: 160, height: 450,
-    swayDur: 12, swayFrom: -2, swayTo: 1.5, swayDelay: 2,
-    paths: [
-      "M80,450 C78,380 70,310 75,250 C78,210 68,170 60,120 C55,85 45,45 38,0 L42,0 C50,42 58,82 64,115 C72,165 82,205 79,245 C74,305 82,375 85,450Z",
-      "M68,280 C55,240 40,200 25,140 C18,110 8,70 0,20 L4,18 C14,65 22,105 30,135 C45,195 58,235 72,275Z",
-      "M78,200 C88,170 100,135 108,85 L112,87 C104,138 92,175 82,205Z",
-    ],
-  },
-  {
-    id: 2, left: "30%", width: 140, height: 380,
-    swayDur: 9, swayFrom: -1, swayTo: 2.5, swayDelay: 4,
-    paths: [
-      "M70,380 C68,320 60,270 65,220 C68,185 58,145 50,100 C44,65 35,25 30,0 L34,0 C40,22 48,60 55,95 C63,140 72,180 69,215 C64,265 72,315 75,380Z",
-      "M58,250 C45,210 30,170 18,110 L22,108 C35,165 48,205 62,245Z",
-      "M68,180 C78,150 90,110 95,55 L99,57 C94,115 82,155 72,185Z",
-    ],
-  },
-  {
-    id: 3, left: "48%", width: 180, height: 520,
-    swayDur: 11, swayFrom: -2, swayTo: 1, swayDelay: 1,
-    paths: [
-      "M90,520 C88,440 78,370 85,300 C88,255 76,210 68,155 C62,110 50,55 42,0 L46,0 C55,52 66,105 72,150 C80,205 92,250 89,295 C82,365 92,435 95,520Z",
-      "M76,320 C60,270 42,225 25,155 C16,120 4,70 0,10 L4,8 C10,65 20,115 30,150 C48,220 64,265 80,315Z",
-      "M88,260 C100,225 115,180 125,120 C130,90 140,50 145,5 L149,7 C144,52 134,92 129,125 C119,185 104,230 92,265Z",
-      "M65,180 C52,145 35,110 20,60 L24,58 C40,105 55,140 68,175Z",
-    ],
-  },
-  {
-    id: 4, left: "65%", width: 150, height: 420,
-    swayDur: 13, swayFrom: -1.5, swayTo: 2, swayDelay: 3,
-    paths: [
-      "M75,420 C73,355 65,295 70,240 C73,200 62,160 55,115 C49,78 40,35 35,0 L39,0 C45,32 53,73 59,110 C67,155 77,195 74,235 C69,290 77,350 80,420Z",
-      "M63,270 C50,230 35,185 20,125 L24,123 C40,180 53,225 67,265Z",
-      "M73,200 C85,165 98,125 105,65 L109,67 C102,130 89,170 77,205Z",
-    ],
-  },
-  {
-    id: 5, left: "82%", width: 180, height: 480,
-    swayDur: 10, swayFrom: -2.5, swayTo: 1, swayDelay: 5,
-    paths: [
-      "M90,480 C88,400 80,340 85,275 C88,235 78,195 70,145 C64,105 55,55 48,0 L52,0 C60,50 68,100 74,140 C82,190 92,230 89,270 C84,335 92,395 95,480Z",
-      "M78,300 C65,255 48,210 30,145 C22,112 10,65 2,10 L6,8 C16,60 26,108 35,140 C52,205 68,250 82,295Z",
-      "M88,230 C100,195 115,150 122,85 L126,87 C119,155 104,200 92,235Z",
-      "M68,170 C55,135 40,95 28,45 L32,43 C45,90 58,130 72,165Z",
-    ],
-  },
-  {
-    id: 6, left: "95%", width: 160, height: 400,
-    swayDur: 9, swayFrom: -1, swayTo: 3, swayDelay: 2.5,
-    paths: [
-      "M80,400 C78,340 70,285 75,230 C78,195 68,155 60,110 C54,75 45,35 40,0 L44,0 C50,32 58,70 64,105 C72,150 82,190 79,225 C74,280 82,335 85,400Z",
-      "M68,260 C55,220 38,180 22,115 L26,113 C42,175 58,215 72,255Z",
-      "M78,190 C90,155 100,115 108,55 L112,57 C104,120 94,160 82,195Z",
-    ],
-  },
+  // Far left — tall curved stalk with thorn spurs, hooks left
+  { id: 0, swayDur: 11, swayFrom: -1.5, swayTo: 1, swayDelay: 0,
+    fill: "M60,900 L55,900 C52,850 48,780 55,700 C60,640 50,580 42,520 C36,470 30,410 38,340 C44,280 35,220 25,160 C18,115 22,70 30,20 L18,15 C8,65 2,115 10,165 C20,230 30,290 24,350 C16,420 22,480 28,530 C36,590 46,650 42,710 C36,790 40,860 44,900Z",
+    highlight: "M30,20 C22,70 18,115 25,160 C35,220 44,280 38,340 C30,410 36,470 42,520 C50,580 60,640 55,700 C48,780 52,850 55,900" },
+  // Far-left thorn spur branching left
+  { id: 1, swayDur: 11, swayFrom: -1.5, swayTo: 1, swayDelay: 0,
+    fill: "M38,400 C25,370 8,350 -15,335 L-18,342 C5,355 22,375 34,405Z" },
+  // Far-left thorn spur branching right
+  { id: 2, swayDur: 11, swayFrom: -1.5, swayTo: 1, swayDelay: 0,
+    fill: "M45,550 C60,525 80,515 105,510 L106,518 C82,522 63,530 48,555Z",
+    highlight: "M45,550 C60,525 80,515 105,510" },
+
+  // Left-center — twisting stalk curving right then left
+  { id: 3, swayDur: 14, swayFrom: -1, swayTo: 2, swayDelay: 2.5,
+    fill: "M240,900 L230,900 C228,860 225,800 235,730 C245,660 260,600 255,530 C250,470 230,420 220,360 C212,310 218,250 235,190 C248,145 240,95 225,40 L213,35 C200,95 205,148 220,195 C205,255 198,318 206,368 C216,428 236,478 242,540 C248,610 232,670 222,740 C212,810 216,870 220,900Z",
+    highlight: "M225,40 C240,95 248,145 235,190 C218,250 212,310 220,360 C230,420 250,470 255,530 C260,600 245,660 235,730 C225,800 228,860 230,900" },
+  // Left-center thorn — sharp spur going left
+  { id: 4, swayDur: 14, swayFrom: -1, swayTo: 2, swayDelay: 2.5,
+    fill: "M220,380 C195,355 165,345 130,340 L128,348 C162,352 190,362 214,386Z",
+    highlight: "M220,380 C195,355 165,345 130,340" },
+  // Left-center thorn — spur going right
+  { id: 5, swayDur: 14, swayFrom: -1, swayTo: 2, swayDelay: 2.5,
+    fill: "M248,560 C275,540 300,535 340,538 L341,546 C302,543 278,547 252,566Z" },
+
+  // Center-left — shorter jagged stalk
+  { id: 6, swayDur: 10, swayFrom: -2, swayTo: 1, swayDelay: 4,
+    fill: "M420,900 L412,900 C410,870 405,830 410,780 C415,730 408,680 400,630 C394,590 400,540 415,490 C425,455 418,410 405,365 L393,360 C382,410 385,458 400,498 C388,545 380,598 386,638 C394,688 402,738 396,790 C390,840 395,878 398,900Z",
+    highlight: "M405,365 C418,410 425,455 415,490 C400,540 394,590 400,630 C408,680 415,730 410,780 C405,830 410,870 412,900" },
+  // Center-left sharp spike
+  { id: 7, swayDur: 10, swayFrom: -2, swayTo: 1, swayDelay: 4,
+    fill: "M408,640 C385,615 360,608 330,610 L329,618 C358,616 382,622 404,646Z" },
+
+  // Center — tallest stalk, slight S-curve, prominent
+  { id: 8, swayDur: 13, swayFrom: -0.8, swayTo: 1.2, swayDelay: 1,
+    fill: "M680,900 L668,900 C666,840 660,760 670,670 C678,590 665,510 650,430 C638,365 645,290 665,210 C680,150 672,85 658,10 L645,5 C632,82 636,152 650,215 C632,295 624,372 636,438 C652,520 664,600 656,680 C646,770 652,848 654,900Z",
+    highlight: "M658,10 C672,85 680,150 665,210 C645,290 638,365 650,430 C665,510 678,590 670,670 C660,760 666,840 668,900" },
+  // Center thorn left
+  { id: 9, swayDur: 13, swayFrom: -0.8, swayTo: 1.2, swayDelay: 1,
+    fill: "M648,450 C620,420 585,410 545,408 L544,416 C582,418 616,428 642,456Z",
+    highlight: "M648,450 C620,420 585,410 545,408" },
+  // Center thorn right
+  { id: 10, swayDur: 13, swayFrom: -0.8, swayTo: 1.2, swayDelay: 1,
+    fill: "M672,300 C700,275 735,268 775,270 L776,278 C738,276 705,282 678,306Z" },
+
+  // Right-center — curved stalk hooking left
+  { id: 11, swayDur: 12, swayFrom: -1, swayTo: 1.5, swayDelay: 3.5,
+    fill: "M1000,900 L990,900 C988,855 985,795 995,720 C1005,650 998,585 985,520 C975,465 980,400 1000,340 C1012,295 1005,245 992,185 L980,180 C970,242 972,298 985,345 C968,405 962,470 972,528 C986,592 994,658 984,730 C974,805 978,862 980,900Z",
+    highlight: "M992,185 C1005,245 1012,295 1000,340 C980,400 975,465 985,520 C998,585 1005,650 995,720 C985,795 988,855 990,900" },
+  // Right-center spur
+  { id: 12, swayDur: 12, swayFrom: -1, swayTo: 1.5, swayDelay: 3.5,
+    fill: "M985,540 C960,515 930,505 895,502 L894,510 C928,513 955,522 980,546Z",
+    highlight: "M985,540 C960,515 930,505 895,502" },
+
+  // Far right — tall stalk curving left at top
+  { id: 13, swayDur: 10, swayFrom: -1.5, swayTo: 2, swayDelay: 5,
+    fill: "M1350,900 L1340,900 C1338,850 1335,780 1345,700 C1352,635 1342,565 1330,500 C1320,445 1328,380 1345,310 C1356,260 1348,200 1335,130 C1325,80 1318,35 1305,0 L1292,0 C1305,38 1312,84 1322,135 C1335,205 1342,265 1330,318 C1315,388 1306,452 1316,508 C1328,572 1340,642 1332,710 C1322,790 1326,858 1328,900Z",
+    highlight: "M1305,0 C1318,35 1325,80 1335,130 C1348,200 1356,260 1345,310 C1328,380 1320,445 1330,500 C1342,565 1352,635 1345,700 C1335,780 1338,850 1340,900" },
+  // Far-right spur left
+  { id: 14, swayDur: 10, swayFrom: -1.5, swayTo: 2, swayDelay: 5,
+    fill: "M1328,520 C1300,495 1268,485 1230,482 L1229,490 C1265,493 1295,502 1322,526Z",
+    highlight: "M1328,520 C1300,495 1268,485 1230,482" },
+  // Far-right spur right
+  { id: 15, swayDur: 10, swayFrom: -1.5, swayTo: 2, swayDelay: 5,
+    fill: "M1350,350 C1378,328 1408,320 1440,322 L1441,330 C1410,328 1382,335 1356,356Z" },
+
+  // Ground silhouette — flat dark terrain at bottom
+  { id: 16, swayDur: 999, swayFrom: 0, swayTo: 0, swayDelay: 0,
+    fill: "M-10,900 L-10,870 C60,865 130,858 200,862 C280,867 340,855 400,850 C480,844 540,848 620,855 C700,862 780,858 860,852 C940,846 1020,850 1100,856 C1180,862 1260,855 1340,848 C1380,845 1420,850 1460,858 L1460,900Z" },
 ];
 
-// Floating void particles — mix of black and white, drifting upward
+// Scattered void particles — mostly black dots of varying sizes, some white
 const VOID_PARTICLES = [
-  { id: 0, left: "6%", bottom: "5%", size: 3, color: "#000", opacity: 0.7, travel: -280, drift: 15, dur: 8, delay: 0 },
-  { id: 1, left: "18%", bottom: "12%", size: 2, color: "#fff", opacity: 0.3, travel: -200, drift: -20, dur: 6, delay: 1.5 },
-  { id: 2, left: "32%", bottom: "3%", size: 4, color: "#000", opacity: 0.6, travel: -350, drift: 25, dur: 10, delay: 3 },
-  { id: 3, left: "42%", bottom: "18%", size: 2, color: "#fff", opacity: 0.25, travel: -180, drift: -10, dur: 5.5, delay: 0.8 },
-  { id: 4, left: "55%", bottom: "8%", size: 3, color: "#000", opacity: 0.7, travel: -300, drift: -30, dur: 9, delay: 4.2 },
-  { id: 5, left: "65%", bottom: "15%", size: 2, color: "#fff", opacity: 0.35, travel: -160, drift: 18, dur: 6, delay: 2.5 },
-  { id: 6, left: "75%", bottom: "2%", size: 3, color: "#000", opacity: 0.65, travel: -260, drift: -22, dur: 7.5, delay: 1 },
-  { id: 7, left: "88%", bottom: "10%", size: 2, color: "#fff", opacity: 0.3, travel: -190, drift: 12, dur: 5, delay: 3.5 },
-  { id: 8, left: "25%", bottom: "22%", size: 2, color: "#000", opacity: 0.5, travel: -220, drift: 8, dur: 7, delay: 5 },
-  { id: 9, left: "50%", bottom: "1%", size: 5, color: "#000", opacity: 0.4, travel: -400, drift: -5, dur: 12, delay: 0.3 },
-  { id: 10, left: "78%", bottom: "20%", size: 2, color: "#fff", opacity: 0.2, travel: -150, drift: -15, dur: 5, delay: 6 },
-  { id: 11, left: "10%", bottom: "25%", size: 3, color: "#fff", opacity: 0.25, travel: -240, drift: 22, dur: 8, delay: 2 },
+  // Large black blobs
+  { id: 0, left: "5%", bottom: "30%", size: 8, color: "#000", opacity: 0.8, travel: -350, drift: 20, dur: 12, delay: 0 },
+  { id: 1, left: "22%", bottom: "25%", size: 10, color: "#000", opacity: 0.7, travel: -400, drift: -25, dur: 14, delay: 2 },
+  { id: 2, left: "48%", bottom: "20%", size: 9, color: "#000", opacity: 0.75, travel: -380, drift: 15, dur: 13, delay: 4 },
+  { id: 3, left: "72%", bottom: "28%", size: 7, color: "#000", opacity: 0.8, travel: -320, drift: -18, dur: 11, delay: 1 },
+  { id: 4, left: "90%", bottom: "22%", size: 8, color: "#000", opacity: 0.7, travel: -360, drift: 10, dur: 12, delay: 5 },
+  // Medium black dots
+  { id: 5, left: "8%", bottom: "15%", size: 5, color: "#000", opacity: 0.7, travel: -280, drift: 15, dur: 8, delay: 0.5 },
+  { id: 6, left: "18%", bottom: "35%", size: 4, color: "#000", opacity: 0.6, travel: -250, drift: -20, dur: 9, delay: 3 },
+  { id: 7, left: "32%", bottom: "10%", size: 6, color: "#000", opacity: 0.65, travel: -300, drift: 25, dur: 10, delay: 1.5 },
+  { id: 8, left: "42%", bottom: "40%", size: 5, color: "#000", opacity: 0.7, travel: -260, drift: -12, dur: 7, delay: 4.5 },
+  { id: 9, left: "55%", bottom: "8%", size: 4, color: "#000", opacity: 0.6, travel: -290, drift: -30, dur: 9, delay: 2.5 },
+  { id: 10, left: "65%", bottom: "32%", size: 6, color: "#000", opacity: 0.7, travel: -310, drift: 22, dur: 11, delay: 0.8 },
+  { id: 11, left: "78%", bottom: "12%", size: 5, color: "#000", opacity: 0.65, travel: -270, drift: -15, dur: 8, delay: 3.5 },
+  { id: 12, left: "88%", bottom: "38%", size: 4, color: "#000", opacity: 0.6, travel: -240, drift: 18, dur: 7, delay: 6 },
+  // Small black specks
+  { id: 13, left: "12%", bottom: "5%", size: 3, color: "#000", opacity: 0.5, travel: -200, drift: 8, dur: 6, delay: 1 },
+  { id: 14, left: "28%", bottom: "18%", size: 2, color: "#000", opacity: 0.55, travel: -180, drift: -10, dur: 5, delay: 3.2 },
+  { id: 15, left: "38%", bottom: "28%", size: 3, color: "#000", opacity: 0.5, travel: -220, drift: 14, dur: 6.5, delay: 5.5 },
+  { id: 16, left: "58%", bottom: "22%", size: 2, color: "#000", opacity: 0.6, travel: -190, drift: -8, dur: 5.5, delay: 0.3 },
+  { id: 17, left: "82%", bottom: "5%", size: 3, color: "#000", opacity: 0.5, travel: -210, drift: 12, dur: 6, delay: 2.8 },
+  { id: 18, left: "95%", bottom: "15%", size: 2, color: "#000", opacity: 0.55, travel: -175, drift: -20, dur: 5, delay: 4.8 },
+  // White/gray specks (sparse)
+  { id: 19, left: "15%", bottom: "42%", size: 2, color: "#fff", opacity: 0.2, travel: -160, drift: -12, dur: 6, delay: 1.5 },
+  { id: 20, left: "45%", bottom: "35%", size: 2, color: "#fff", opacity: 0.15, travel: -180, drift: 10, dur: 7, delay: 4 },
+  { id: 21, left: "70%", bottom: "45%", size: 2, color: "#fff", opacity: 0.2, travel: -150, drift: -8, dur: 5.5, delay: 6.5 },
+  { id: 22, left: "35%", bottom: "48%", size: 3, color: "#fff", opacity: 0.18, travel: -200, drift: 15, dur: 8, delay: 2.2 },
 ];
 
 function AbyssBackground() {
   return (
     <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-      {/* Tendril silhouettes — flat black SVGs anchored to bottom */}
-      {TENDRIL_GROUPS.map((g) => (
-        <div
-          key={g.id}
-          className="abyss-tendril-group"
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: g.left,
-            width: g.width,
-            height: g.height,
-            // @ts-expect-error CSS custom properties
-            "--sway-dur": `${g.swayDur}s`,
-            "--sway-from": `${g.swayFrom}deg`,
-            "--sway-to": `${g.swayTo}deg`,
-            "--sway-delay": `${g.swayDelay}s`,
-          }}
-        >
-          <svg
-            viewBox={`0 0 ${g.width} ${g.height}`}
-            style={{ width: "100%", height: "100%", overflow: "visible" }}
-            preserveAspectRatio="none"
+      {/* Full-viewport SVG — thorny stalks with rim-light highlights */}
+      <svg
+        viewBox="0 0 1440 900"
+        preserveAspectRatio="xMidYMax slice"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" }}
+      >
+        {ABYSS_TENDRILS.map((t) => (
+          <g
+            key={t.id}
+            className="abyss-tendril-group"
+            style={{
+              transformOrigin: "50% 100%",
+              // @ts-expect-error CSS custom properties
+              "--sway-dur": `${t.swayDur}s`,
+              "--sway-from": `${t.swayFrom}deg`,
+              "--sway-to": `${t.swayTo}deg`,
+              "--sway-delay": `${t.swayDelay}s`,
+            }}
           >
-            {g.paths.map((d, i) => (
-              <path key={i} d={d} fill="#000" />
-            ))}
-          </svg>
-        </div>
-      ))}
+            <path d={t.fill} fill="#000" />
+            {t.highlight && (
+              <path
+                d={t.highlight}
+                fill="none"
+                stroke="rgba(180,175,160,0.25)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            )}
+          </g>
+        ))}
+      </svg>
 
-      {/* Floating void particles */}
+      {/* Floating void particles — black & white dots */}
       {VOID_PARTICLES.map((p) => (
         <div
           key={p.id}
@@ -437,11 +452,12 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                      {/* Void mask — the Gobbler's face */}
+                      {/* Maw — open void consuming inward */}
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-primary">
-                        <path d="M12 2C7 2 3 6.5 3 11c0 3 1.5 5.5 4 7l1 3h8l1-3c2.5-1.5 4-4 4-7 0-4.5-4-9-9-9z" stroke="currentColor" strokeWidth="1.5"/>
-                        <ellipse cx="8.5" cy="10.5" rx="2" ry="2.5" fill="currentColor"/>
-                        <ellipse cx="15.5" cy="10.5" rx="2" ry="2.5" fill="currentColor"/>
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5"/>
+                        <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.3"/>
+                        <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                        <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4" stroke="currentColor" strokeWidth="1" opacity="0.3"/>
                       </svg>
                     </div>
                     <h2 className="card-title text-base sm:text-lg">The Gobbler</h2>
@@ -486,11 +502,11 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-secondary/10 flex items-center justify-center group-hover:bg-secondary/20 transition-colors">
-                      {/* Nail — the Knight's weapon */}
+                      {/* Gavel — stylized auction hammer */}
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-secondary">
-                        <path d="M12 2L9.5 8H11V18H13V8H14.5L12 2Z" fill="currentColor"/>
-                        <rect x="10" y="18" width="4" height="2" rx="0.5" fill="currentColor"/>
-                        <rect x="9" y="20" width="6" height="2" rx="0.5" fill="currentColor"/>
+                        <rect x="6" y="4" width="8" height="5" rx="1" transform="rotate(-30 10 6.5)" fill="currentColor" opacity="0.8"/>
+                        <line x1="12" y1="10" x2="17" y2="19" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        <line x1="5" y1="18" x2="19" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.4"/>
                       </svg>
                     </div>
                     <h2 className="card-title text-base sm:text-lg">Auction</h2>
@@ -534,12 +550,10 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
-                      {/* Soul vessel — glowing orb */}
+                      {/* Arcane flame — staking energy */}
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-accent">
-                        <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="1.5"/>
-                        <circle cx="12" cy="12" r="3.5" fill="currentColor" opacity="0.6"/>
-                        <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-                        <path d="M12 3V5M12 19V21M3 12H5M19 12H21" stroke="currentColor" strokeWidth="1" opacity="0.4"/>
+                        <path d="M12 3c0 0-5 5-5 10a5 5 0 0010 0C17 8 12 3 12 3z" stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M12 10c0 0-2 2-2 4a2 2 0 004 0c0-2-2-4-2-4z" fill="currentColor" opacity="0.5"/>
                       </svg>
                     </div>
                     <h2 className="card-title text-base sm:text-lg">Stake</h2>
