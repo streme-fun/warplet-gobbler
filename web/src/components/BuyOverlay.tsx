@@ -23,8 +23,9 @@ export default function BuyOverlay({
   useEffect(() => {
     const cv = canvasRef.current;
     if (!cv) return;
-    const ctx = cv.getContext("2d");
-    if (!ctx) return;
+    const maybeCtx = cv.getContext("2d");
+    if (!maybeCtx) return;
+    const ctx = maybeCtx;
 
     let W = window.innerWidth;
     let H = window.innerHeight;
