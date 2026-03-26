@@ -118,170 +118,170 @@ const PARTICLES = [
 
 // Parallax warplet field — scattered at different depths, each a unique warplet
 const PARALLAX_WARPLETS = [
-  // Back layer (slow, small, faint)
+  // Back layer (slow, heavy blur — out of focus)
   {
     id: 0,
     fid: 4,
     x: 5,
     y: 8,
-    size: 40,
-    opacity: 0.04,
+    size: 70,
+    opacity: 0.1,
     speed: 0.02,
     rotate: 12,
-    blur: 2,
+    blur: 6,
   },
   {
     id: 1,
     fid: 9,
     x: 25,
     y: 15,
-    size: 55,
-    opacity: 0.05,
+    size: 90,
+    opacity: 0.12,
     speed: 0.025,
     rotate: -8,
-    blur: 1.5,
+    blur: 5,
   },
   {
     id: 2,
     fid: 20,
     x: 70,
     y: 5,
-    size: 45,
-    opacity: 0.04,
+    size: 80,
+    opacity: 0.1,
     speed: 0.02,
     rotate: 20,
-    blur: 2,
+    blur: 6,
   },
   {
     id: 3,
     fid: 194,
     x: 85,
     y: 20,
-    size: 35,
-    opacity: 0.035,
+    size: 60,
+    opacity: 0.09,
     speed: 0.015,
     rotate: -15,
-    blur: 2.5,
+    blur: 7,
   },
   {
     id: 4,
     fid: 239,
     x: 50,
     y: 65,
-    size: 50,
-    opacity: 0.04,
+    size: 85,
+    opacity: 0.1,
     speed: 0.02,
     rotate: 5,
-    blur: 2,
+    blur: 6,
   },
   {
     id: 5,
     fid: 10,
     x: 15,
     y: 75,
-    size: 42,
-    opacity: 0.035,
+    size: 75,
+    opacity: 0.09,
     speed: 0.018,
     rotate: -22,
-    blur: 2,
+    blur: 5,
   },
   {
     id: 6,
     fid: 1000,
     x: 90,
     y: 55,
-    size: 38,
-    opacity: 0.04,
+    size: 65,
+    opacity: 0.1,
     speed: 0.022,
     rotate: 30,
-    blur: 2.5,
+    blur: 7,
   },
-  // Mid layer (medium speed, medium size)
+  // Mid layer (medium speed, mild blur)
   {
     id: 7,
     fid: 1,
     x: 12,
     y: 35,
-    size: 65,
-    opacity: 0.06,
+    size: 110,
+    opacity: 0.15,
     speed: 0.05,
     rotate: -5,
-    blur: 1,
+    blur: 3,
   },
   {
     id: 8,
     fid: 616,
     x: 42,
     y: 25,
-    size: 75,
-    opacity: 0.07,
+    size: 120,
+    opacity: 0.16,
     speed: 0.06,
     rotate: 10,
-    blur: 0.5,
+    blur: 2,
   },
   {
     id: 9,
     fid: 3,
     x: 78,
     y: 40,
-    size: 60,
-    opacity: 0.055,
+    size: 100,
+    opacity: 0.14,
     speed: 0.045,
     rotate: -18,
-    blur: 1,
+    blur: 3,
   },
   {
     id: 10,
     fid: 680,
     x: 55,
     y: 80,
-    size: 70,
-    opacity: 0.06,
+    size: 115,
+    opacity: 0.15,
     speed: 0.055,
     rotate: 15,
-    blur: 0.5,
+    blur: 2,
   },
   {
     id: 11,
     fid: 5,
     x: 30,
     y: 55,
-    size: 55,
-    opacity: 0.05,
+    size: 95,
+    opacity: 0.13,
     speed: 0.04,
     rotate: -12,
-    blur: 1,
+    blur: 3,
   },
   {
     id: 12,
     fid: 69,
     x: 92,
     y: 75,
-    size: 62,
-    opacity: 0.055,
+    size: 105,
+    opacity: 0.14,
     speed: 0.05,
     rotate: 8,
-    blur: 1,
+    blur: 2.5,
   },
   {
     id: 13,
     fid: 6,
     x: 62,
     y: 45,
-    size: 58,
-    opacity: 0.05,
+    size: 100,
+    opacity: 0.13,
     speed: 0.045,
     rotate: -8,
-    blur: 1,
+    blur: 3,
   },
-  // Front layer (faster, larger, slightly more visible)
+  // Front layer (fastest, largest, sharp — in focus)
   {
     id: 14,
     fid: 99,
     x: 8,
     y: 50,
-    size: 90,
-    opacity: 0.08,
+    size: 160,
+    opacity: 0.2,
     speed: 0.1,
     rotate: -3,
     blur: 0,
@@ -291,8 +291,8 @@ const PARALLAX_WARPLETS = [
     fid: 2,
     x: 65,
     y: 18,
-    size: 100,
-    opacity: 0.09,
+    size: 180,
+    opacity: 0.22,
     speed: 0.12,
     rotate: 7,
     blur: 0,
@@ -302,8 +302,8 @@ const PARALLAX_WARPLETS = [
     fid: 4567,
     x: 35,
     y: 85,
-    size: 85,
-    opacity: 0.07,
+    size: 150,
+    opacity: 0.18,
     speed: 0.09,
     rotate: -10,
     blur: 0,
@@ -313,8 +313,8 @@ const PARALLAX_WARPLETS = [
     fid: 8,
     x: 82,
     y: 70,
-    size: 95,
-    opacity: 0.08,
+    size: 170,
+    opacity: 0.2,
     speed: 0.11,
     rotate: 14,
     blur: 0,
@@ -737,7 +737,7 @@ function ParallaxBackground() {
               width: "100%",
               height: "100%",
               borderRadius: 8,
-              filter: `grayscale(0.6) brightness(1.5)${w.blur ? ` blur(${w.blur}px)` : ""}`,
+              filter: `brightness(1.3) saturate(1.2)${w.blur ? ` blur(${w.blur}px)` : ""}`,
             }}
           />
         </div>
@@ -1266,9 +1266,98 @@ function StatBar({
   );
 }
 
+/** Flies the selected warplet from its card position to viewport center. */
+function FlyingWarplet({
+  fid,
+  startRect,
+  onArrived,
+}: {
+  fid: number;
+  startRect: { x: number; y: number; w: number; h: number };
+  onArrived: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Force the browser to paint at start position, then transition to center
+    const el = ref.current;
+    if (!el) return;
+    // Start at card position
+    el.style.transform = `translate(${startRect.x}px, ${startRect.y}px)`;
+    el.style.width = `${startRect.w}px`;
+    el.style.height = `${startRect.h}px`;
+    el.style.opacity = "1";
+
+    // Next frame: animate to center
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const targetSize = Math.min(window.innerWidth * 0.7, 350);
+        const cx = (window.innerWidth - targetSize) / 2;
+        const cy = (window.innerHeight - targetSize) / 2;
+        el.style.transition =
+          "transform 0.8s cubic-bezier(0.22, 1, 0.36, 1), width 0.8s cubic-bezier(0.22, 1, 0.36, 1), height 0.8s cubic-bezier(0.22, 1, 0.36, 1)";
+        el.style.transform = `translate(${cx}px, ${cy}px)`;
+        el.style.width = `${targetSize}px`;
+        el.style.height = `${targetSize}px`;
+      });
+    });
+
+    const timer = setTimeout(onArrived, 900);
+    return () => clearTimeout(timer);
+  }, [startRect, onArrived]);
+
+  return (
+    <div
+      ref={ref}
+      className="fixed top-0 left-0 z-40 pointer-events-none"
+      style={{ opacity: 0 }}
+    >
+      <img
+        src={`/warplets/warplet-${fid}.png`}
+        alt=""
+        className="w-full h-full rounded-2xl"
+        draggable={false}
+      />
+    </div>
+  );
+}
+
+// Mock warplets the user "owns" — same fids as background
+const MY_WARPLETS = [
+  { fid: 1, name: "Warplet #1" },
+  { fid: 3, name: "Warplet #3" },
+  { fid: 69, name: "Warplet #69" },
+  { fid: 99, name: "Warplet #99" },
+  { fid: 616, name: "Warplet #616" },
+  { fid: 4567, name: "Warplet #4567" },
+];
+
 export default function Home() {
   const [gobbling, setGobbling] = useState(false);
-  const handleGobbleDone = useCallback(() => setGobbling(false), []);
+  const [selectedFid, setSelectedFid] = useState<number | null>(null);
+  const [flyingFid, setFlyingFid] = useState<number | null>(null);
+  const [flyRect, setFlyRect] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
+  const handleGobbleDone = useCallback(() => {
+    setGobbling(false);
+    setFlyingFid(null);
+    setFlyRect(null);
+    setSelectedFid(null);
+  }, []);
+
+  const handleSell = useCallback(() => {
+    if (!selectedFid || gobbling || flyingFid) return;
+    const el = cardRefs.current.get(selectedFid);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setFlyRect({ x: rect.left, y: rect.top, w: rect.width, h: rect.height });
+    setFlyingFid(selectedFid);
+  }, [selectedFid, gobbling, flyingFid]);
 
   return (
     <main className="min-h-screen relative overflow-hidden noise-overlay flex flex-col">
@@ -1276,20 +1365,24 @@ export default function Home() {
       {gobbling && <GobbleOverlay onDone={handleGobbleDone} />}
 
       {/* Centered warplet — fixed in viewport center during gobble */}
-      {gobbling && (
+      {gobbling && flyingFid && (
         <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
           <img
-            src="/warplet.png"
+            src={`/warplets/warplet-${flyingFid}.png`}
             alt=""
-            className="w-[280px] h-[280px] sm:w-[350px] sm:h-[350px] rounded-full animate-breathe"
-            style={{
-              maskImage: "radial-gradient(circle, black 55%, transparent 72%)",
-              WebkitMaskImage:
-                "radial-gradient(circle, black 55%, transparent 72%)",
-            }}
+            className="w-[280px] h-[280px] sm:w-[350px] sm:h-[350px] rounded-2xl animate-breathe"
             draggable={false}
           />
         </div>
+      )}
+
+      {/* Flying warplet — animates from card position to center */}
+      {flyingFid && flyRect && !gobbling && (
+        <FlyingWarplet
+          fid={flyingFid}
+          startRect={flyRect}
+          onArrived={() => setGobbling(true)}
+        />
       )}
 
       {/* Hollow Knight Abyss texture — always visible */}
@@ -1335,50 +1428,12 @@ export default function Home() {
 
         {/* Single-focus layout: Gobbler + Deposit */}
         <section className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
-          {/* The Gobbler */}
-          <div className="relative animate-fade-up">
-            {/* Pulse rings */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-40 h-40 sm:w-64 sm:h-64 rounded-full border border-primary/20 animate-pulse-ring" />
-              <div
-                className="absolute w-40 h-40 sm:w-64 sm:h-64 rounded-full border border-secondary/20 animate-pulse-ring"
-                style={{ animationDelay: "1s" }}
-              />
-              <div
-                className="absolute w-40 h-40 sm:w-64 sm:h-64 rounded-full border border-accent/10 animate-pulse-ring"
-                style={{ animationDelay: "2s" }}
-              />
-            </div>
-
-            {/* Particle effects - desktop only */}
-            <div className="absolute inset-0 hidden sm:block">
-              <Particles />
-            </div>
-
-            {/* The Warplet */}
-            <div
-              className="relative animate-breathe animate-chomp cursor-pointer select-none warplet-img"
-              onClick={() => !gobbling && setGobbling(true)}
-            >
-              <img
-                src="/warplet.png"
-                alt="The Warplet Gobbler"
-                className="relative z-10 rounded-full"
-                style={{
-                  maskImage:
-                    "radial-gradient(circle, black 55%, transparent 72%)",
-                  WebkitMaskImage:
-                    "radial-gradient(circle, black 55%, transparent 72%)",
-                }}
-                draggable={false}
-              />
-            </div>
-          </div>
-
           {/* Title */}
           <div className="text-center mt-4 sm:mt-6 animate-fade-up-delay-1">
             <h1 className="text-3xl sm:text-7xl font-bold tracking-widest uppercase">
-              Feed the <span className="text-primary">Gobbler</span>
+              THE ALWAYS HUNGRY
+              <br />
+              <span className="text-primary">WARPLET GOBBLER</span>
             </h1>
             <p className="mt-2 sm:mt-3 text-base-content/50 max-w-md mx-auto text-base sm:text-xl">
               Sell your Warplet to The Gobbler for its pot of $USDCx. <br />
@@ -1389,7 +1444,7 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Deposit card — just the price and the action */}
+          {/* Deposit card — warplet picker + price + action */}
           <div className="mt-6 sm:mt-10 w-full max-w-sm animate-fade-up-delay-2">
             <div className="card bg-base-200/60 border border-primary/10 backdrop-blur-sm animate-card-glow">
               <div className="card-body items-center text-center gap-4 p-5 sm:p-6">
@@ -1410,11 +1465,50 @@ export default function Home() {
                   for your Warplet
                 </p>
 
+                {/* Warplet picker grid */}
+                <div className="w-full pt-2">
+                  <p className="text-xs text-base-content/40 mb-2">
+                    Select a Warplet to sell
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {MY_WARPLETS.map((w) => (
+                      <button
+                        key={w.fid}
+                        ref={(el) => {
+                          if (el) cardRefs.current.set(w.fid, el);
+                          else cardRefs.current.delete(w.fid);
+                        }}
+                        onClick={() =>
+                          setSelectedFid(selectedFid === w.fid ? null : w.fid)
+                        }
+                        className={`relative rounded-xl overflow-hidden border-2 transition-all duration-200 ${
+                          selectedFid === w.fid
+                            ? "border-primary shadow-lg shadow-primary/30 scale-105"
+                            : "border-base-content/10 hover:border-base-content/25"
+                        } ${flyingFid === w.fid ? "opacity-0" : ""}`}
+                      >
+                        <img
+                          src={`/warplets/warplet-${w.fid}.png`}
+                          alt={w.name}
+                          className="w-full aspect-square object-cover"
+                          draggable={false}
+                        />
+                        <span className="absolute bottom-0 inset-x-0 text-[10px] py-0.5 bg-black/60 text-base-content/70">
+                          #{w.fid}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   className="btn btn-primary w-full mt-1 hover:shadow-lg hover:shadow-primary/20 transition-shadow"
-                  onClick={() => !gobbling && setGobbling(true)}
+                  disabled={!selectedFid || !!flyingFid}
+                  onClick={handleSell}
                 >
-                  Sell Warplet to The Gobbler
+                  {selectedFid
+                    ? `Sell Warplet #${selectedFid} to The Gobbler`
+                    : "Select a Warplet"}
                 </button>
               </div>
             </div>
