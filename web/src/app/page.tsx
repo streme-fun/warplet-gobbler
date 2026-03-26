@@ -20,9 +20,6 @@ const PARTICLES = [
   { id: 11, left: "40%", delay: "0.6s", size: 3, drift: "12px", duration: "3.3s", color: "#FF007A" },
 ];
 
-// Available warplet FIDs (verified from Vercel blob storage)
-const WARPLET_FIDS = [1, 2, 3, 4, 5, 6, 8, 9, 10, 20, 69, 99, 194, 239, 616, 680, 1000, 4567];
-
 // Parallax warplet field — scattered at different depths, each a unique warplet
 const PARALLAX_WARPLETS = [
   // Back layer (slow, small, faint)
@@ -48,14 +45,20 @@ const PARALLAX_WARPLETS = [
 ];
 
 function ParallaxBackground() {
-  const [scrollY, setScrollY] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
     const handleScroll = () => {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
-        setScrollY(window.scrollY);
+        const y = window.scrollY;
+        const children = containerRef.current?.children;
+        if (!children) return;
+        PARALLAX_WARPLETS.forEach((w, i) => {
+          (children[i] as HTMLElement).style.transform =
+            `translateY(${y * w.speed * -1}px) rotate(${w.rotate}deg)`;
+        });
       });
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -66,7 +69,7 @@ function ParallaxBackground() {
   }, []);
 
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+    <div ref={containerRef} className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
       {PARALLAX_WARPLETS.map((w) => (
         <img
           key={w.id}
@@ -81,8 +84,8 @@ function ParallaxBackground() {
             height: w.size,
             opacity: w.opacity,
             filter: `grayscale(0.6) brightness(1.5)${w.blur ? ` blur(${w.blur}px)` : ""}`,
-            transform: `translateY(${scrollY * w.speed * -1}px) rotate(${w.rotate}deg)`,
-            willChange: "transform",
+            transform: `rotate(${w.rotate}deg)`,
+            willChange: w.blur ? undefined : "transform",
             // @ts-expect-error CSS custom properties
             "--drift-duration": `${18 + w.id * 3}s`,
             "--drift-delay": `${w.id * -2.5}s`,
