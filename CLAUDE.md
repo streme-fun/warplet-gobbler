@@ -44,13 +44,26 @@ forge fmt             # format Solidity
 ## Architecture Notes
 
 ### Web (`web/`)
-- **App Router** — single page app at `src/app/page.tsx` (all UI lives here currently)
+- **App Router** — page shell at `src/app/page.tsx`, all UI components split into `src/components/`
+- **Components** (`src/components/`) — one file per component:
+  - `AbyssBackground.tsx` — ground silhouette SVG + floating void particles
+  - `ParallaxBackground.tsx` — depth-layered warplet field (back/mid/front layers)
+  - `Particles.tsx` — color particle effects around the gobbler
+  - `GobbleOverlay.tsx` — full-screen jaw chomp animation (canvas)
+  - `GobblePeek.tsx` — ambient jaw peek every ~45s (canvas)
+  - `StreamingNumber.tsx` — real-time ticking number (rAF, no re-renders)
+  - `CountdownTimer.tsx` — HH:MM:SS countdown display
+  - `StatBar.tsx` — labeled progress bar
+  - `AuctionWarpletCanvas.tsx` — canvas blob/tendrils + strike animation for auction items
+  - `AuctionItem.tsx` — auction card (uses AuctionWarpletCanvas + StreamingNumber)
+  - `FlyingWarplet.tsx` — fly-to-center transition animation
+- **Mock data** (`src/lib/mock-data.ts`) — all mock constants (prices, auctions, user warplets)
 - **Providers** (`src/app/providers.tsx`) — wagmi + ConnectKit + React Query, configured for Base chain only
 - **Contract addresses** (`src/lib/contracts.ts`) — placeholder zeros, update after deployment
 - **ABIs** go in `src/abi/` (copied from `contracts/out/`)
 - **Hooks** go in `src/hooks/` (wagmi hooks for contract interactions)
 - **Styling** — Tailwind CSS 3 + daisyUI with a custom `warplet` dark theme. All custom animations (breathing glow, parallax, abyss tendrils, void particles) are in `globals.css`
-- **Font** — Cinzel (Google Fonts via `next/font`)
+- **Font** — EB Garamond (Google Fonts via `next/font`)
 - **Path alias** — `@/*` maps to `./src/*`
 - **Webpack config** (`next.config.js`) — polyfill exclusions for web3 libs (fs, net, tls, pino-pretty, lokijs, encoding)
 
