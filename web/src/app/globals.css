@@ -69,6 +69,63 @@ body {
   100% { width: var(--fill, 65%); }
 }
 
+/* Warplet get-eaten animation (triggered by shadow creature) */
+@keyframes warplet-get-eaten {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  /* startled wobble */
+  15% {
+    transform: scale(1.06) rotate(-3deg);
+    opacity: 1;
+  }
+  25% {
+    transform: scale(0.97) rotate(2deg);
+    opacity: 1;
+  }
+  /* trembles as creature looms */
+  35% {
+    transform: scale(1.02) rotate(-1deg);
+    opacity: 1;
+  }
+  42% {
+    transform: scale(0.98) rotate(1.5deg);
+    opacity: 0.9;
+  }
+  /* gets dragged in */
+  52% {
+    transform: scale(0.4) translateY(25px);
+    opacity: 0.5;
+  }
+  58% {
+    transform: scale(0.1) translateY(45px);
+    opacity: 0.15;
+  }
+  62% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  /* gone while creature digests */
+  88% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  /* pops back after creature leaves */
+  96% {
+    transform: scale(1.06);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.warplet-being-eaten {
+  animation: warplet-get-eaten 3.5s ease-in-out forwards !important;
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;

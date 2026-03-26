@@ -1,7 +1,7 @@
 "use client";
 
 import { ConnectKitButton } from "connectkit";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 /* eslint-disable @next/next/no-img-element */
 
 // Deterministic particle positions to avoid hydration mismatch
@@ -79,7 +79,125 @@ function StatBar({
   );
 }
 
+function ShadowCreature({ active }: { active: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const eyesRef = useRef<SVGGElement>(null);
+
+  useEffect(() => {
+    if (!active || !containerRef.current) return;
+    const el = containerRef.current;
+    const eyeEl = eyesRef.current;
+
+    // Web Animations API — reliable JS-driven animation
+    const bodyAnim = el.animate([
+      { transform: 'translateY(100%) scale(0.2)', opacity: 0 },
+      { transform: 'translateY(20%) scale(0.6)', opacity: 1, offset: 0.12 },
+      { transform: 'translateY(-5%) scale(1.0)', opacity: 1, offset: 0.3 },
+      { transform: 'translateY(-8%) scale(1.02)', opacity: 1, offset: 0.38 },
+      { transform: 'translateY(-10%) scaleX(1.25) scaleY(0.85)', opacity: 1, offset: 0.46 },
+      { transform: 'translateY(0%) scaleX(0.92) scaleY(1.15)', opacity: 1, offset: 0.54 },
+      { transform: 'translateY(0%) scale(1.05)', opacity: 1, offset: 0.64 },
+      { transform: 'translateY(0%) scale(1.0)', opacity: 1, offset: 0.72 },
+      { transform: 'translateY(50%) scale(0.5)', opacity: 0.7, offset: 0.86 },
+      { transform: 'translateY(120%) scale(0)', opacity: 0 },
+    ], { duration: 3500, easing: 'ease-in-out', fill: 'forwards' });
+
+    const eyeAnim = eyeEl?.animate([
+      { opacity: 0 },
+      { opacity: 0, offset: 0.18 },
+      { opacity: 1, offset: 0.25 },
+      { opacity: 1, offset: 0.68 },
+      { opacity: 0, offset: 0.76 },
+      { opacity: 0 },
+    ], { duration: 3500, easing: 'linear', fill: 'forwards' });
+
+    return () => { bodyAnim.cancel(); eyeAnim?.cancel(); };
+  }, [active]);
+
+  if (!active) return null;
+
+  const FILL = "#1e1a35";
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
+        width: '200%',
+        height: '200%',
+        marginLeft: '-100%',
+        marginTop: '-100%',
+        zIndex: 20,
+        pointerEvents: 'none',
+        opacity: 0,
+      }}
+    >
+      <svg viewBox="0 0 200 240" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+        <defs>
+          <filter id="goo" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
+            <feColorMatrix in="blur" type="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" result="goo" />
+            <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+          </filter>
+          <filter id="void-aura" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+            <feColorMatrix in="blur" type="matrix"
+              values="0 0 0 0 0.48  0 0 0 0 0.38  0 0 0 0 1  0 0 0 0.9 0" result="glow" />
+            <feMerge>
+              <feMergeNode in="glow" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="eye-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="3" result="glow" />
+            <feMerge>
+              <feMergeNode in="glow" />
+              <feMergeNode in="glow" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <g filter="url(#void-aura)">
+          <g filter="url(#goo)">
+            <ellipse cx="100" cy="95" rx="60" ry="55" fill={FILL} />
+            <circle cx="70" cy="80" r="35" fill={FILL} />
+            <circle cx="130" cy="80" r="35" fill={FILL} />
+            <circle cx="100" cy="115" r="40" fill={FILL} />
+            <circle cx="45" cy="100" r="22" fill={FILL} />
+            <circle cx="155" cy="100" r="22" fill={FILL} />
+            <ellipse cx="55" cy="148" rx="12" ry="24" fill={FILL} />
+            <ellipse cx="80" cy="158" rx="10" ry="30" fill={FILL} />
+            <ellipse cx="100" cy="152" rx="14" ry="27" fill={FILL} />
+            <ellipse cx="120" cy="158" rx="10" ry="30" fill={FILL} />
+            <ellipse cx="145" cy="148" rx="12" ry="24" fill={FILL} />
+            <circle cx="80" cy="192" r="6" fill={FILL} />
+            <circle cx="120" cy="196" r="5" fill={FILL} />
+            <circle cx="100" cy="188" r="7" fill={FILL} />
+            <circle cx="75" cy="48" r="18" fill={FILL} />
+            <circle cx="100" cy="42" r="16" fill={FILL} />
+            <circle cx="125" cy="48" r="18" fill={FILL} />
+          </g>
+        </g>
+        <g ref={eyesRef} filter="url(#eye-glow)" style={{ opacity: 0 }}>
+          <ellipse cx="80" cy="80" rx="11" ry="15" fill="white" />
+          <ellipse cx="120" cy="80" rx="11" ry="15" fill="white" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 export default function Home() {
+  const [isGobbling, setIsGobbling] = useState(false);
+
+  const handleGobble = () => {
+    if (isGobbling) return;
+    setIsGobbling(true);
+    setTimeout(() => setIsGobbling(false), 3500);
+  };
+
   return (
     <main className="min-h-screen relative overflow-hidden noise-overlay">
       {/* Warplet tiled background texture */}
@@ -132,8 +250,16 @@ export default function Home() {
             <Particles />
           </div>
 
+          {/* Shadow creature — outside warplet div so parent transform doesn't affect it */}
+          <ShadowCreature active={isGobbling} />
+
           {/* The Warplet */}
-          <div className="relative animate-breathe animate-chomp cursor-pointer select-none warplet-img">
+          <div
+            className={`relative cursor-pointer select-none warplet-img ${
+              isGobbling ? "warplet-being-eaten" : "animate-breathe animate-chomp"
+            }`}
+            onClick={handleGobble}
+          >
             <img
               src="/warplet.png"
               alt="The Warplet Gobbler"
@@ -221,7 +347,10 @@ export default function Home() {
                   />
                 </div>
 
-                <button className="btn btn-primary btn-sm mt-1 sm:mt-2 group-hover:shadow-lg group-hover:shadow-primary/20 transition-shadow">
+                <button
+                  className="btn btn-primary btn-sm mt-1 sm:mt-2 group-hover:shadow-lg group-hover:shadow-primary/20 transition-shadow"
+                  onClick={handleGobble}
+                >
                   Deposit Warplet
                 </button>
               </div>
