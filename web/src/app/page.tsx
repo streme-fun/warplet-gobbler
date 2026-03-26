@@ -37,11 +37,12 @@ const PARALLAX_WARPLETS = [
   { id: 10, fid: 680, x: 55, y: 80, size: 70, opacity: 0.06, speed: 0.055, rotate: 15, blur: 0.5 },
   { id: 11, fid: 5, x: 30, y: 55, size: 55, opacity: 0.05, speed: 0.04, rotate: -12, blur: 1 },
   { id: 12, fid: 69, x: 92, y: 75, size: 62, opacity: 0.055, speed: 0.05, rotate: 8, blur: 1 },
+  { id: 13, fid: 6, x: 62, y: 45, size: 58, opacity: 0.05, speed: 0.045, rotate: -8, blur: 1 },
   // Front layer (faster, larger, slightly more visible)
-  { id: 13, fid: 99, x: 8, y: 50, size: 90, opacity: 0.08, speed: 0.1, rotate: -3, blur: 0 },
-  { id: 14, fid: 2, x: 65, y: 18, size: 100, opacity: 0.09, speed: 0.12, rotate: 7, blur: 0 },
-  { id: 15, fid: 4567, x: 35, y: 85, size: 85, opacity: 0.07, speed: 0.09, rotate: -10, blur: 0 },
-  { id: 16, fid: 8, x: 82, y: 70, size: 95, opacity: 0.08, speed: 0.11, rotate: 14, blur: 0 },
+  { id: 14, fid: 99, x: 8, y: 50, size: 90, opacity: 0.08, speed: 0.1, rotate: -3, blur: 0 },
+  { id: 15, fid: 2, x: 65, y: 18, size: 100, opacity: 0.09, speed: 0.12, rotate: 7, blur: 0 },
+  { id: 16, fid: 4567, x: 35, y: 85, size: 85, opacity: 0.07, speed: 0.09, rotate: -10, blur: 0 },
+  { id: 17, fid: 8, x: 82, y: 70, size: 95, opacity: 0.08, speed: 0.11, rotate: 14, blur: 0 },
 ];
 
 function ParallaxBackground() {
