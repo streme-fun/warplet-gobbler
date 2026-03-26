@@ -1,11 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
-  safelist: [
-    "bg-primary/20", "border-primary/30", "text-primary",
-    "bg-secondary/20", "border-secondary/30", "text-secondary",
-    "bg-accent/20", "border-accent/30", "text-accent",
-  ],
   theme: {
     extend: {},
   },
