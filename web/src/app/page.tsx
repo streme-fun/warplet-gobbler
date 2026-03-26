@@ -45,76 +45,154 @@ const PARALLAX_WARPLETS = [
   { id: 17, fid: 8, x: 82, y: 70, size: 95, opacity: 0.08, speed: 0.11, rotate: 14, blur: 0 },
 ];
 
-// Void tendrils — dark wisps rising from the bottom edge
-const TENDRILS = [
-  { id: 0, left: "5%", w: 30, h: 160, blur: 10, dur: 9, sway: 7, delay: 0 },
-  { id: 1, left: "15%", w: 50, h: 220, blur: 6, dur: 11, sway: 5, delay: 1.5 },
-  { id: 2, left: "28%", w: 35, h: 180, blur: 9, dur: 8, sway: 8, delay: 3 },
-  { id: 3, left: "42%", w: 60, h: 250, blur: 5, dur: 12, sway: 6, delay: 0.8 },
-  { id: 4, left: "55%", w: 25, h: 140, blur: 12, dur: 7, sway: 9, delay: 4.2 },
-  { id: 5, left: "68%", w: 45, h: 200, blur: 7, dur: 10, sway: 5.5, delay: 2 },
-  { id: 6, left: "78%", w: 55, h: 230, blur: 6, dur: 13, sway: 7, delay: 1 },
-  { id: 7, left: "90%", w: 35, h: 170, blur: 10, dur: 9, sway: 6, delay: 3.5 },
+// Flat black SVG tendril paths — organic root/branch shapes that taper to points
+// Each tendril group is an SVG anchored to bottom, swaying slowly like underwater
+const TENDRIL_GROUPS: {
+  id: number; left: string; width: number; height: number;
+  swayDur: number; swayFrom: number; swayTo: number; swayDelay: number;
+  paths: string[];
+}[] = [
+  {
+    id: 0, left: "-2%", width: 200, height: 500,
+    swayDur: 10, swayFrom: -1.5, swayTo: 2, swayDelay: 0,
+    paths: [
+      // thick trunk splitting into branches
+      "M90,500 C88,420 75,350 80,280 C83,240 70,200 65,160 C62,130 55,90 48,40 L50,38 C58,85 66,125 68,155 C73,195 85,235 83,275 C78,345 92,415 95,500Z",
+      // left fork
+      "M75,300 C65,260 50,230 35,180 C28,155 15,120 5,70 L8,68 C20,115 32,150 40,175 C55,225 68,255 78,295Z",
+      // right twig
+      "M85,250 C95,220 110,190 120,140 C125,115 135,80 140,30 L143,32 C137,82 128,118 123,145 C113,195 98,225 88,255Z",
+      // small spur
+      "M60,180 C50,155 38,130 25,95 L28,93 C42,125 53,150 63,175Z",
+    ],
+  },
+  {
+    id: 1, left: "12%", width: 160, height: 450,
+    swayDur: 12, swayFrom: -2, swayTo: 1.5, swayDelay: 2,
+    paths: [
+      "M80,450 C78,380 70,310 75,250 C78,210 68,170 60,120 C55,85 45,45 38,0 L42,0 C50,42 58,82 64,115 C72,165 82,205 79,245 C74,305 82,375 85,450Z",
+      "M68,280 C55,240 40,200 25,140 C18,110 8,70 0,20 L4,18 C14,65 22,105 30,135 C45,195 58,235 72,275Z",
+      "M78,200 C88,170 100,135 108,85 L112,87 C104,138 92,175 82,205Z",
+    ],
+  },
+  {
+    id: 2, left: "30%", width: 140, height: 380,
+    swayDur: 9, swayFrom: -1, swayTo: 2.5, swayDelay: 4,
+    paths: [
+      "M70,380 C68,320 60,270 65,220 C68,185 58,145 50,100 C44,65 35,25 30,0 L34,0 C40,22 48,60 55,95 C63,140 72,180 69,215 C64,265 72,315 75,380Z",
+      "M58,250 C45,210 30,170 18,110 L22,108 C35,165 48,205 62,245Z",
+      "M68,180 C78,150 90,110 95,55 L99,57 C94,115 82,155 72,185Z",
+    ],
+  },
+  {
+    id: 3, left: "48%", width: 180, height: 520,
+    swayDur: 11, swayFrom: -2, swayTo: 1, swayDelay: 1,
+    paths: [
+      "M90,520 C88,440 78,370 85,300 C88,255 76,210 68,155 C62,110 50,55 42,0 L46,0 C55,52 66,105 72,150 C80,205 92,250 89,295 C82,365 92,435 95,520Z",
+      "M76,320 C60,270 42,225 25,155 C16,120 4,70 0,10 L4,8 C10,65 20,115 30,150 C48,220 64,265 80,315Z",
+      "M88,260 C100,225 115,180 125,120 C130,90 140,50 145,5 L149,7 C144,52 134,92 129,125 C119,185 104,230 92,265Z",
+      "M65,180 C52,145 35,110 20,60 L24,58 C40,105 55,140 68,175Z",
+    ],
+  },
+  {
+    id: 4, left: "65%", width: 150, height: 420,
+    swayDur: 13, swayFrom: -1.5, swayTo: 2, swayDelay: 3,
+    paths: [
+      "M75,420 C73,355 65,295 70,240 C73,200 62,160 55,115 C49,78 40,35 35,0 L39,0 C45,32 53,73 59,110 C67,155 77,195 74,235 C69,290 77,350 80,420Z",
+      "M63,270 C50,230 35,185 20,125 L24,123 C40,180 53,225 67,265Z",
+      "M73,200 C85,165 98,125 105,65 L109,67 C102,130 89,170 77,205Z",
+    ],
+  },
+  {
+    id: 5, left: "82%", width: 180, height: 480,
+    swayDur: 10, swayFrom: -2.5, swayTo: 1, swayDelay: 5,
+    paths: [
+      "M90,480 C88,400 80,340 85,275 C88,235 78,195 70,145 C64,105 55,55 48,0 L52,0 C60,50 68,100 74,140 C82,190 92,230 89,270 C84,335 92,395 95,480Z",
+      "M78,300 C65,255 48,210 30,145 C22,112 10,65 2,10 L6,8 C16,60 26,108 35,140 C52,205 68,250 82,295Z",
+      "M88,230 C100,195 115,150 122,85 L126,87 C119,155 104,200 92,235Z",
+      "M68,170 C55,135 40,95 28,45 L32,43 C45,90 58,130 72,165Z",
+    ],
+  },
+  {
+    id: 6, left: "95%", width: 160, height: 400,
+    swayDur: 9, swayFrom: -1, swayTo: 3, swayDelay: 2.5,
+    paths: [
+      "M80,400 C78,340 70,285 75,230 C78,195 68,155 60,110 C54,75 45,35 40,0 L44,0 C50,32 58,70 64,105 C72,150 82,190 79,225 C74,280 82,335 85,400Z",
+      "M68,260 C55,220 38,180 22,115 L26,113 C42,175 58,215 72,255Z",
+      "M78,190 C90,155 100,115 108,55 L112,57 C104,120 94,160 82,195Z",
+    ],
+  },
 ];
 
-// Void motes — tiny dark particles drifting upward
-const VOID_MOTES = [
-  { id: 0, left: "8%", bottom: "5%", size: 3, color: "#1a1030", peak: 0.5, travel: -250, drift: 20, dur: 7, delay: 0 },
-  { id: 1, left: "20%", bottom: "15%", size: 2, color: "#150d28", peak: 0.3, travel: -180, drift: -15, dur: 5, delay: 1.2 },
-  { id: 2, left: "35%", bottom: "8%", size: 4, color: "#1e1540", peak: 0.4, travel: -300, drift: 25, dur: 9, delay: 2.5 },
-  { id: 3, left: "45%", bottom: "20%", size: 2, color: "#12091f", peak: 0.35, travel: -200, drift: -30, dur: 6, delay: 0.5 },
-  { id: 4, left: "58%", bottom: "3%", size: 3, color: "#1a1030", peak: 0.45, travel: -280, drift: 10, dur: 8, delay: 3.8 },
-  { id: 5, left: "70%", bottom: "12%", size: 2, color: "#150d28", peak: 0.3, travel: -160, drift: -20, dur: 5.5, delay: 1.8 },
-  { id: 6, left: "82%", bottom: "6%", size: 3, color: "#1e1540", peak: 0.5, travel: -220, drift: 35, dur: 7.5, delay: 4 },
-  { id: 7, left: "92%", bottom: "18%", size: 2, color: "#12091f", peak: 0.35, travel: -190, drift: -12, dur: 6.5, delay: 2 },
-  { id: 8, left: "50%", bottom: "2%", size: 5, color: "#0d0818", peak: 0.25, travel: -350, drift: 8, dur: 11, delay: 0.3 },
-  { id: 9, left: "25%", bottom: "25%", size: 2, color: "#1a1030", peak: 0.3, travel: -150, drift: -18, dur: 5, delay: 5 },
+// Floating void particles — mix of black and white, drifting upward
+const VOID_PARTICLES = [
+  { id: 0, left: "6%", bottom: "5%", size: 3, color: "#000", opacity: 0.7, travel: -280, drift: 15, dur: 8, delay: 0 },
+  { id: 1, left: "18%", bottom: "12%", size: 2, color: "#fff", opacity: 0.3, travel: -200, drift: -20, dur: 6, delay: 1.5 },
+  { id: 2, left: "32%", bottom: "3%", size: 4, color: "#000", opacity: 0.6, travel: -350, drift: 25, dur: 10, delay: 3 },
+  { id: 3, left: "42%", bottom: "18%", size: 2, color: "#fff", opacity: 0.25, travel: -180, drift: -10, dur: 5.5, delay: 0.8 },
+  { id: 4, left: "55%", bottom: "8%", size: 3, color: "#000", opacity: 0.7, travel: -300, drift: -30, dur: 9, delay: 4.2 },
+  { id: 5, left: "65%", bottom: "15%", size: 2, color: "#fff", opacity: 0.35, travel: -160, drift: 18, dur: 6, delay: 2.5 },
+  { id: 6, left: "75%", bottom: "2%", size: 3, color: "#000", opacity: 0.65, travel: -260, drift: -22, dur: 7.5, delay: 1 },
+  { id: 7, left: "88%", bottom: "10%", size: 2, color: "#fff", opacity: 0.3, travel: -190, drift: 12, dur: 5, delay: 3.5 },
+  { id: 8, left: "25%", bottom: "22%", size: 2, color: "#000", opacity: 0.5, travel: -220, drift: 8, dur: 7, delay: 5 },
+  { id: 9, left: "50%", bottom: "1%", size: 5, color: "#000", opacity: 0.4, travel: -400, drift: -5, dur: 12, delay: 0.3 },
+  { id: 10, left: "78%", bottom: "20%", size: 2, color: "#fff", opacity: 0.2, travel: -150, drift: -15, dur: 5, delay: 6 },
+  { id: 11, left: "10%", bottom: "25%", size: 3, color: "#fff", opacity: 0.25, travel: -240, drift: 22, dur: 8, delay: 2 },
 ];
 
 function AbyssBackground() {
   return (
-    <div className="fixed inset-0 abyss-gradient pointer-events-none" style={{ zIndex: -1 }}>
-      {/* Void tendrils */}
-      {TENDRILS.map((t) => (
+    <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+      {/* Tendril silhouettes — flat black SVGs anchored to bottom */}
+      {TENDRIL_GROUPS.map((g) => (
         <div
-          key={t.id}
-          className="abyss-tendril"
+          key={g.id}
+          className="abyss-tendril-group"
           style={{
-            left: t.left,
+            position: "absolute",
+            bottom: 0,
+            left: g.left,
+            width: g.width,
+            height: g.height,
             // @ts-expect-error CSS custom properties
-            "--tendril-w": `${t.w}px`,
-            "--tendril-h": `${t.h}px`,
-            "--tendril-blur": `${t.blur}px`,
-            "--tendril-dur": `${t.dur}s`,
-            "--sway-dur": `${t.sway}s`,
-            "--tendril-delay": `${t.delay}s`,
+            "--sway-dur": `${g.swayDur}s`,
+            "--sway-from": `${g.swayFrom}deg`,
+            "--sway-to": `${g.swayTo}deg`,
+            "--sway-delay": `${g.swayDelay}s`,
+          }}
+        >
+          <svg
+            viewBox={`0 0 ${g.width} ${g.height}`}
+            style={{ width: "100%", height: "100%", overflow: "visible" }}
+            preserveAspectRatio="none"
+          >
+            {g.paths.map((d, i) => (
+              <path key={i} d={d} fill="#000" />
+            ))}
+          </svg>
+        </div>
+      ))}
+
+      {/* Floating void particles */}
+      {VOID_PARTICLES.map((p) => (
+        <div
+          key={p.id}
+          className="void-particle"
+          style={{
+            left: p.left,
+            bottom: p.bottom,
+            width: p.size,
+            height: p.size,
+            backgroundColor: p.color,
+            // @ts-expect-error CSS custom properties
+            "--p-opacity": p.opacity,
+            "--p-travel": `${p.travel}px`,
+            "--p-drift": `${p.drift}px`,
+            "--p-dur": `${p.dur}s`,
+            "--p-delay": `${p.delay}s`,
           }}
         />
       ))}
-
-      {/* Void motes */}
-      {VOID_MOTES.map((m) => (
-        <div
-          key={m.id}
-          className="void-mote"
-          style={{
-            left: m.left,
-            bottom: m.bottom,
-            width: m.size,
-            height: m.size,
-            backgroundColor: m.color,
-            // @ts-expect-error CSS custom properties
-            "--mote-peak": m.peak,
-            "--mote-travel": `${m.travel}px`,
-            "--mote-drift": `${m.drift}px`,
-            "--mote-dur": `${m.dur}s`,
-            "--mote-delay": `${m.delay}s`,
-          }}
-        />
-      ))}
-
-      {/* Floor glow — breathing darkness at the bottom */}
-      <div className="abyss-floor-glow" />
     </div>
   );
 }
@@ -146,11 +224,8 @@ function ParallaxBackground() {
   return (
     <div ref={containerRef} className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
       {PARALLAX_WARPLETS.map((w) => (
-        <img
+        <div
           key={w.id}
-          src={`/warplets/warplet-${w.fid}.png`}
-          alt=""
-          draggable={false}
           className="absolute warplet-parallax-item"
           style={{
             left: `${w.x}%`,
@@ -158,14 +233,33 @@ function ParallaxBackground() {
             width: w.size,
             height: w.size,
             opacity: w.opacity,
-            filter: `grayscale(0.6) brightness(1.5)${w.blur ? ` blur(${w.blur}px)` : ""}`,
             transform: `rotate(${w.rotate}deg)`,
             willChange: w.blur ? undefined : "transform",
             // @ts-expect-error CSS custom properties
             "--drift-duration": `${18 + w.id * 3}s`,
             "--drift-delay": `${w.id * -2.5}s`,
           }}
-        />
+        >
+          <img
+            src={`/warplets/warplet-${w.fid}.png`}
+            alt=""
+            draggable={false}
+            style={{
+              width: "100%",
+              height: "100%",
+              borderRadius: 8,
+              filter: `grayscale(0.6) brightness(1.5)${w.blur ? ` blur(${w.blur}px)` : ""}`,
+            }}
+          />
+          <div
+            className="warplet-void-blob"
+            style={{
+              // @ts-expect-error CSS custom properties
+              "--blob-dur": `${10 + w.id * 2.5}s`,
+              "--blob-delay": `${w.id * 1.7}s`,
+            }}
+          />
+        </div>
       ))}
     </div>
   );
@@ -342,10 +436,13 @@ export default function Home() {
               <div className="card-body gap-3 sm:gap-4 p-4 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg sm:text-xl group-hover:bg-primary/20 transition-colors">
-                      <span role="img" aria-label="gobbler">
-                        &#x1F924;
-                      </span>
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                      {/* Void mask — the Gobbler's face */}
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-primary">
+                        <path d="M12 2C7 2 3 6.5 3 11c0 3 1.5 5.5 4 7l1 3h8l1-3c2.5-1.5 4-4 4-7 0-4.5-4-9-9-9z" stroke="currentColor" strokeWidth="1.5"/>
+                        <ellipse cx="8.5" cy="10.5" rx="2" ry="2.5" fill="currentColor"/>
+                        <ellipse cx="15.5" cy="10.5" rx="2" ry="2.5" fill="currentColor"/>
+                      </svg>
                     </div>
                     <h2 className="card-title text-base sm:text-lg">The Gobbler</h2>
                   </div>
@@ -388,10 +485,13 @@ export default function Home() {
               <div className="card-body gap-3 sm:gap-4 p-4 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-secondary/10 flex items-center justify-center text-lg sm:text-xl group-hover:bg-secondary/20 transition-colors">
-                      <span role="img" aria-label="auction">
-                        &#x2694;&#xFE0F;
-                      </span>
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-secondary/10 flex items-center justify-center group-hover:bg-secondary/20 transition-colors">
+                      {/* Nail — the Knight's weapon */}
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-secondary">
+                        <path d="M12 2L9.5 8H11V18H13V8H14.5L12 2Z" fill="currentColor"/>
+                        <rect x="10" y="18" width="4" height="2" rx="0.5" fill="currentColor"/>
+                        <rect x="9" y="20" width="6" height="2" rx="0.5" fill="currentColor"/>
+                      </svg>
                     </div>
                     <h2 className="card-title text-base sm:text-lg">Auction</h2>
                   </div>
@@ -433,10 +533,14 @@ export default function Home() {
               <div className="card-body gap-3 sm:gap-4 p-4 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent/10 flex items-center justify-center text-lg sm:text-xl group-hover:bg-accent/20 transition-colors">
-                      <span role="img" aria-label="stake">
-                        &#x1F4A0;
-                      </span>
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
+                      {/* Soul vessel — glowing orb */}
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-accent">
+                        <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="1.5"/>
+                        <circle cx="12" cy="12" r="3.5" fill="currentColor" opacity="0.6"/>
+                        <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                        <path d="M12 3V5M12 19V21M3 12H5M19 12H21" stroke="currentColor" strokeWidth="1" opacity="0.4"/>
+                      </svg>
                     </div>
                     <h2 className="card-title text-base sm:text-lg">Stake</h2>
                   </div>
