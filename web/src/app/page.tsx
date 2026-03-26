@@ -1,462 +1,302 @@
 "use client";
 
 import { ConnectKitButton } from "connectkit";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import AbyssBackground from "@/components/AbyssBackground";
+import ParallaxBackground from "@/components/ParallaxBackground";
+import Particles from "@/components/Particles";
+import GobbleOverlay from "@/components/GobbleOverlay";
+import GobblePeek from "@/components/GobblePeek";
+import StreamingNumber from "@/components/StreamingNumber";
+import AuctionItem from "@/components/AuctionItem";
+import BuyOverlay from "@/components/BuyOverlay";
+import FlyingWarplet from "@/components/FlyingWarplet";
+import {
+  MOCK_PRICE_START,
+  MOCK_PRICE_RATE,
+  MOCK_AUCTIONS,
+  MY_WARPLETS,
+} from "@/lib/mock-data";
+
 /* eslint-disable @next/next/no-img-element */
 
-// Deterministic particle positions to avoid hydration mismatch
-const PARTICLES = [
-  { id: 0, left: "20%", delay: "0s", size: 3, drift: "-10px", duration: "2.5s", color: "#00F5FF" },
-  { id: 1, left: "35%", delay: "0.5s", size: 4, drift: "15px", duration: "3s", color: "#7B61FF" },
-  { id: 2, left: "50%", delay: "1s", size: 2, drift: "-20px", duration: "2.8s", color: "#FF007A" },
-  { id: 3, left: "65%", delay: "1.5s", size: 5, drift: "25px", duration: "3.2s", color: "#00F5FF" },
-  { id: 4, left: "80%", delay: "2s", size: 3, drift: "-15px", duration: "2.6s", color: "#7B61FF" },
-  { id: 5, left: "25%", delay: "0.8s", size: 4, drift: "10px", duration: "3.5s", color: "#FF007A" },
-  { id: 6, left: "45%", delay: "2.2s", size: 2, drift: "-25px", duration: "2.4s", color: "#00F5FF" },
-  { id: 7, left: "70%", delay: "0.3s", size: 3, drift: "20px", duration: "3.1s", color: "#7B61FF" },
-  { id: 8, left: "30%", delay: "1.8s", size: 5, drift: "-5px", duration: "2.9s", color: "#FF007A" },
-  { id: 9, left: "55%", delay: "2.5s", size: 2, drift: "30px", duration: "3.4s", color: "#00F5FF" },
-  { id: 10, left: "75%", delay: "1.2s", size: 4, drift: "-18px", duration: "2.7s", color: "#7B61FF" },
-  { id: 11, left: "40%", delay: "0.6s", size: 3, drift: "12px", duration: "3.3s", color: "#FF007A" },
-];
+export default function Home() {
+  const [gobbling, setGobbling] = useState(false);
+  const [selectedFid, setSelectedFid] = useState<number | null>(null);
+  const [flyingFid, setFlyingFid] = useState<number | null>(null);
+  const [flyRect, setFlyRect] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  // Buy overlay state
+  const [buyingFid, setBuyingFid] = useState<number | null>(null);
+  const [buyRect, setBuyRect] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  const [boughtFids, setBoughtFids] = useState<Set<number>>(new Set());
 
-// Parallax warplet field — scattered at different depths, each a unique warplet
-const PARALLAX_WARPLETS = [
-  // Back layer (slow, small, faint)
-  { id: 0, fid: 4, x: 5, y: 8, size: 40, opacity: 0.04, speed: 0.02, rotate: 12, blur: 2 },
-  { id: 1, fid: 9, x: 25, y: 15, size: 55, opacity: 0.05, speed: 0.025, rotate: -8, blur: 1.5 },
-  { id: 2, fid: 20, x: 70, y: 5, size: 45, opacity: 0.04, speed: 0.02, rotate: 20, blur: 2 },
-  { id: 3, fid: 194, x: 85, y: 20, size: 35, opacity: 0.035, speed: 0.015, rotate: -15, blur: 2.5 },
-  { id: 4, fid: 239, x: 50, y: 65, size: 50, opacity: 0.04, speed: 0.02, rotate: 5, blur: 2 },
-  { id: 5, fid: 10, x: 15, y: 75, size: 42, opacity: 0.035, speed: 0.018, rotate: -22, blur: 2 },
-  { id: 6, fid: 1000, x: 90, y: 55, size: 38, opacity: 0.04, speed: 0.022, rotate: 30, blur: 2.5 },
-  // Mid layer (medium speed, medium size)
-  { id: 7, fid: 1, x: 12, y: 35, size: 65, opacity: 0.06, speed: 0.05, rotate: -5, blur: 1 },
-  { id: 8, fid: 616, x: 42, y: 25, size: 75, opacity: 0.07, speed: 0.06, rotate: 10, blur: 0.5 },
-  { id: 9, fid: 3, x: 78, y: 40, size: 60, opacity: 0.055, speed: 0.045, rotate: -18, blur: 1 },
-  { id: 10, fid: 680, x: 55, y: 80, size: 70, opacity: 0.06, speed: 0.055, rotate: 15, blur: 0.5 },
-  { id: 11, fid: 5, x: 30, y: 55, size: 55, opacity: 0.05, speed: 0.04, rotate: -12, blur: 1 },
-  { id: 12, fid: 69, x: 92, y: 75, size: 62, opacity: 0.055, speed: 0.05, rotate: 8, blur: 1 },
-  { id: 13, fid: 6, x: 62, y: 45, size: 58, opacity: 0.05, speed: 0.045, rotate: -8, blur: 1 },
-  // Front layer (faster, larger, slightly more visible)
-  { id: 14, fid: 99, x: 8, y: 50, size: 90, opacity: 0.08, speed: 0.1, rotate: -3, blur: 0 },
-  { id: 15, fid: 2, x: 65, y: 18, size: 100, opacity: 0.09, speed: 0.12, rotate: 7, blur: 0 },
-  { id: 16, fid: 4567, x: 35, y: 85, size: 85, opacity: 0.07, speed: 0.09, rotate: -10, blur: 0 },
-  { id: 17, fid: 8, x: 82, y: 70, size: 95, opacity: 0.08, speed: 0.11, rotate: 14, blur: 0 },
-];
-
-function ParallaxBackground() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number>(0);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        const y = window.scrollY;
-        const children = containerRef.current?.children;
-        if (!children) return;
-        PARALLAX_WARPLETS.forEach((w, i) => {
-          (children[i] as HTMLElement).style.transform =
-            `translateY(${y * w.speed * -1}px) rotate(${w.rotate}deg)`;
-        });
-      });
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      cancelAnimationFrame(rafRef.current);
-    };
+  const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
+  const handleGobbleDone = useCallback(() => {
+    setGobbling(false);
+    setFlyingFid(null);
+    setFlyRect(null);
+    setSelectedFid(null);
   }, []);
 
-  return (
-    <div ref={containerRef} className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
-      {PARALLAX_WARPLETS.map((w) => (
-        <img
-          key={w.id}
-          src={`/warplets/warplet-${w.fid}.png`}
-          alt=""
-          draggable={false}
-          className="absolute warplet-parallax-item"
-          style={{
-            left: `${w.x}%`,
-            top: `${w.y}%`,
-            width: w.size,
-            height: w.size,
-            opacity: w.opacity,
-            filter: `grayscale(0.6) brightness(1.5)${w.blur ? ` blur(${w.blur}px)` : ""}`,
-            transform: `rotate(${w.rotate}deg)`,
-            willChange: w.blur ? undefined : "transform",
-            // @ts-expect-error CSS custom properties
-            "--drift-duration": `${18 + w.id * 3}s`,
-            "--drift-delay": `${w.id * -2.5}s`,
-          }}
-        />
-      ))}
-    </div>
+  const handleSell = useCallback(() => {
+    if (!selectedFid || gobbling || flyingFid) return;
+    const el = cardRefs.current.get(selectedFid);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setFlyRect({ x: rect.left, y: rect.top, w: rect.width, h: rect.height });
+    setFlyingFid(selectedFid);
+  }, [selectedFid, gobbling, flyingFid]);
+
+  const handleBuy = useCallback(
+    (fid: number, rect: { x: number; y: number; w: number; h: number }) => {
+      if (buyingFid) return;
+      setBuyingFid(fid);
+      setBuyRect(rect);
+    },
+    [buyingFid],
   );
-}
 
-function Particles() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
+  const handleBuyDone = useCallback(() => {
+    if (buyingFid) {
+      setBoughtFids((prev) => new Set(prev).add(buyingFid));
+    }
+    setBuyingFid(null);
+    setBuyRect(null);
+  }, [buyingFid]);
 
   return (
-    <>
-      {PARTICLES.map((p) => (
-        <span
-          key={p.id}
-          className="particle"
-          style={{
-            left: p.left,
-            bottom: "10%",
-            width: p.size,
-            height: p.size,
-            backgroundColor: p.color,
-            animationDelay: p.delay,
-            animationDuration: p.duration,
-            // @ts-expect-error CSS custom property
-            "--drift": p.drift,
-          }}
+    <main className="min-h-screen relative overflow-hidden noise-overlay flex flex-col">
+      {/* Buy overlay — Silksong Void combat sequence */}
+      {buyingFid && buyRect && (
+        <BuyOverlay fid={buyingFid} startRect={buyRect} onDone={handleBuyDone} />
+      )}
+
+      {/* Gobble overlay — canvas jaws on top of everything */}
+      {gobbling && <GobbleOverlay onDone={handleGobbleDone} />}
+
+      {/* Centered warplet — fixed in viewport center during gobble */}
+      {gobbling && flyingFid && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+          <img
+            src={`/warplets/warplet-${flyingFid}.png`}
+            alt=""
+            className="w-[280px] h-[280px] sm:w-[350px] sm:h-[350px] rounded-2xl animate-breathe"
+            draggable={false}
+          />
+        </div>
+      )}
+
+      {/* Flying warplet — animates from card position to center */}
+      {flyingFid && flyRect && !gobbling && (
+        <FlyingWarplet
+          fid={flyingFid}
+          startRect={flyRect}
+          onArrived={() => setGobbling(true)}
         />
-      ))}
-    </>
-  );
-}
+      )}
 
-function StatBar({
-  label,
-  value,
-  fill,
-  color,
-}: {
-  label: string;
-  value: string;
-  fill: number;
-  color: string;
-}) {
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-xs">
-        <span className="text-base-content/50">{label}</span>
-        <span className="font-mono text-base-content/80">{value}</span>
-      </div>
-      <div className="h-1.5 bg-base-100 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full drain-bar"
-          style={{
-            backgroundColor: color,
-            // @ts-expect-error CSS custom property
-            "--fill": `${fill}%`,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
+      {/* Hollow Knight Abyss texture — always visible */}
+      <AbyssBackground />
 
-export default function Home() {
-  return (
-    <main className="min-h-screen relative overflow-hidden noise-overlay">
-      {/* Parallax warplet background */}
-      <ParallaxBackground />
+      {/* Ambient gobbler peek — jaws hint at their presence */}
+      <GobblePeek />
 
-      {/* Background gradient orbs */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-secondary/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/3 rounded-full blur-3xl" />
-      </div>
+      {/* Everything below fades out during gobble */}
+      <div
+        className="flex-1 flex flex-col transition-opacity duration-700"
+        style={{ opacity: gobbling ? 0 : 1 }}
+      >
+        {/* Parallax warplet background */}
+        <ParallaxBackground />
 
-      {/* Nav */}
-      <nav className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-base-content/5">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-            <span className="text-primary text-xs sm:text-sm font-bold">W</span>
-          </div>
-          <span className="font-bold text-sm sm:text-lg tracking-tight">
-            Warplet<span className="text-primary">Gobbler</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-            <span className="text-xs text-success">Base</span>
-          </div>
-          <ConnectKitButton />
-        </div>
-      </nav>
-
-      {/* Hero: The Warplet */}
-      <section className="relative z-10 flex flex-col items-center pt-6 sm:pt-12 pb-4 sm:pb-8 px-4 sm:px-6">
-        <div className="relative animate-fade-up">
-          {/* Pulse rings behind the warplet */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-40 h-40 sm:w-64 sm:h-64 rounded-full border border-primary/20 animate-pulse-ring" />
-            <div
-              className="absolute w-40 h-40 sm:w-64 sm:h-64 rounded-full border border-secondary/20 animate-pulse-ring"
-              style={{ animationDelay: "1s" }}
-            />
-            <div
-              className="absolute w-40 h-40 sm:w-64 sm:h-64 rounded-full border border-accent/10 animate-pulse-ring"
-              style={{ animationDelay: "2s" }}
-            />
-          </div>
-
-          {/* Particle effects - desktop only */}
-          <div className="absolute inset-0 hidden sm:block">
-            <Particles />
-          </div>
-
-          {/* The Warplet */}
-          <div className="relative animate-breathe animate-chomp cursor-pointer select-none warplet-img">
-            <img
-              src="/warplet.png"
-              alt="The Warplet Gobbler"
-              className="relative z-10 rounded-full"
-              style={{
-                maskImage: "radial-gradient(circle, black 55%, transparent 72%)",
-                WebkitMaskImage: "radial-gradient(circle, black 55%, transparent 72%)",
-              }}
-              draggable={false}
-            />
-          </div>
+        {/* Background gradient orbs */}
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/3 right-1/3 w-80 h-80 bg-secondary/3 rounded-full blur-3xl" />
         </div>
 
-        {/* Title area */}
-        <div className="text-center mt-4 sm:mt-6 animate-fade-up-delay-1">
-          <h1 className="text-2xl sm:text-5xl font-black tracking-tight">
-            Feed the <span className="text-primary">Gobbler</span>
-          </h1>
-          <p className="mt-2 sm:mt-3 text-base-content/50 max-w-md mx-auto text-xs sm:text-base">
-            Dutch auction flywheel powered by Superfluid streams.
-            <br />
-            Deposit Warplets. Drain the pot. Earn $STRAT.
-          </p>
-        </div>
-
-        {/* Quick stats ribbon */}
-        <div className="stats-ribbon justify-center mt-4 sm:mt-8 animate-fade-up-delay-2 w-full sm:gap-6">
-          {[
-            { label: "Pot", value: "---" },
-            { label: "Gobbled", value: "---" },
-            { label: "Staked", value: "---" },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="flex flex-col sm:flex-row items-center gap-0.5 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-base-200/50 border border-base-content/5 backdrop-blur-sm flex-1 sm:flex-initial"
-            >
-              <span className="text-base sm:text-2xl font-mono font-bold text-primary">
-                {stat.value}
+        {/* Nav */}
+        <nav className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-base-content/5">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+              <span className="text-primary text-sm sm:text-base font-bold">
+                W
               </span>
-              <span className="text-[10px] sm:text-xs text-base-content/40">{stat.label}</span>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Feature cards */}
-      <section className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 pb-10 sm:pb-16 pt-2 sm:pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-          {/* The Gobbler */}
-          <div className="animate-fade-up-delay-1 group">
-            <div className="card bg-base-200/60 border border-primary/10 backdrop-blur-sm animate-card-glow hover:border-primary/30 transition-colors duration-300">
-              <div className="card-body gap-3 sm:gap-4 p-4 sm:p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg sm:text-xl group-hover:bg-primary/20 transition-colors">
-                      <span role="img" aria-label="gobbler">
-                        &#x1F924;
-                      </span>
-                    </div>
-                    <h2 className="card-title text-base sm:text-lg">The Gobbler</h2>
-                  </div>
-                  <div className="badge badge-primary badge-outline badge-sm">
-                    LIVE
-                  </div>
-                </div>
-
-                <p className="text-xs sm:text-sm text-base-content/50 leading-relaxed">
-                  USDCx streams into the pot via Superfluid. Deposit a Warplet
-                  NFT to drain it &mdash; price falls over time as a Dutch
-                  auction.
-                </p>
-
-                <div className="space-y-3 mt-1 sm:mt-2">
-                  <StatBar
-                    label="Pot filled"
-                    value="-- USDCx"
-                    fill={65}
-                    color="#00F5FF"
-                  />
-                  <StatBar
-                    label="Time to floor"
-                    value="--:--:--"
-                    fill={40}
-                    color="#7B61FF"
-                  />
-                </div>
-
-                <button className="btn btn-primary btn-sm mt-1 sm:mt-2 group-hover:shadow-lg group-hover:shadow-primary/20 transition-shadow">
-                  Deposit Warplet
-                </button>
-              </div>
+            <span className="font-semibold text-base sm:text-xl tracking-wide uppercase">
+              Warplet Gobbler
+            </span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <span className="text-sm text-success">Base</span>
             </div>
+            <ConnectKitButton />
+          </div>
+        </nav>
+
+        {/* Single-focus layout: Gobbler + Deposit */}
+        <section className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
+          {/* Title */}
+          <div className="text-center mt-4 sm:mt-6 animate-fade-up-delay-1">
+            <h1 className="text-3xl sm:text-7xl font-bold tracking-widest uppercase">
+              THE ALWAYS HUNGRY
+              <br />
+              <span className="text-primary">WARPLET GOBBLER</span>
+            </h1>
+            <p className="mt-2 sm:mt-3 text-base-content/50 max-w-md mx-auto text-base sm:text-xl">
+              Sell your Warplet to The Gobbler for its pot of $USDCx. <br />
+              Or wait until the pot grows...
+            </p>
+            <p className="sm:mt-1 text-base-content/50 max-w-lg mx-auto text-xs sm:text-lg">
+              ...and hope no one else steals your chance.
+            </p>
           </div>
 
-          {/* Auction */}
-          <div className="animate-fade-up-delay-2 group">
-            <div className="card bg-base-200/60 border border-secondary/10 backdrop-blur-sm hover:border-secondary/30 transition-colors duration-300">
-              <div className="card-body gap-3 sm:gap-4 p-4 sm:p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-secondary/10 flex items-center justify-center text-lg sm:text-xl group-hover:bg-secondary/20 transition-colors">
-                      <span role="img" aria-label="auction">
-                        &#x2694;&#xFE0F;
-                      </span>
-                    </div>
-                    <h2 className="card-title text-base sm:text-lg">Auction</h2>
-                  </div>
-                  <div className="badge badge-secondary badge-outline badge-sm">
-                    BID
-                  </div>
-                </div>
-
-                <p className="text-xs sm:text-sm text-base-content/50 leading-relaxed">
-                  Gobbled Warplets go to auction. Bid $STRAT to win them.
-                  Proceeds flow back to stakers.
+          {/* Deposit card — warplet picker + price + action */}
+          <div className="mt-6 sm:mt-10 w-full max-w-sm animate-fade-up-delay-2">
+            <div className="card bg-base-200/60 border border-primary/10 backdrop-blur-sm animate-card-glow">
+              <div className="card-body items-center text-center gap-4 p-5 sm:p-6">
+                <p className="text-sm sm:text-base text-base-content/50">
+                  The Gobbler will pay
                 </p>
-
-                <div className="mt-1 sm:mt-2 p-3 rounded-xl bg-base-300/50 border border-base-content/5">
-                  <div className="text-xs text-base-content/40 mb-1">
-                    Current High Bid
-                  </div>
-                  <div className="text-xl sm:text-2xl font-mono font-bold text-secondary">
-                    -- <span className="text-sm font-normal">$STRAT</span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 mt-1 sm:mt-2">
-                  <input
-                    type="number"
-                    placeholder="Bid amount"
-                    className="input input-bordered input-sm flex-1 bg-base-300/50"
-                    disabled
+                <div className="text-3xl sm:text-4xl font-mono font-semibold text-primary streaming-glow">
+                  <StreamingNumber
+                    start={MOCK_PRICE_START}
+                    perSecond={MOCK_PRICE_RATE}
+                    decimals={3}
                   />
-                  <button className="btn btn-secondary btn-sm">Bid</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Staking */}
-          <div className="animate-fade-up-delay-3 group">
-            <div className="card bg-base-200/60 border border-accent/10 backdrop-blur-sm hover:border-accent/30 transition-colors duration-300">
-              <div className="card-body gap-3 sm:gap-4 p-4 sm:p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent/10 flex items-center justify-center text-lg sm:text-xl group-hover:bg-accent/20 transition-colors">
-                      <span role="img" aria-label="stake">
-                        &#x1F4A0;
-                      </span>
-                    </div>
-                    <h2 className="card-title text-base sm:text-lg">Stake</h2>
-                  </div>
-                  <div className="badge badge-accent badge-outline badge-sm">
-                    EARN
-                  </div>
-                </div>
-
-                <p className="text-xs sm:text-sm text-base-content/50 leading-relaxed">
-                  Stake $STRAT to earn a share of auction proceeds. The longer
-                  you stake, the more you earn.
-                </p>
-
-                <div className="grid grid-cols-2 gap-3 mt-1 sm:mt-2">
-                  <div className="p-2 sm:p-3 rounded-xl bg-base-300/50 border border-base-content/5">
-                    <div className="text-xs text-base-content/40 mb-1">
-                      Your Stake
-                    </div>
-                    <div className="text-base sm:text-lg font-mono font-bold">--</div>
-                  </div>
-                  <div className="p-2 sm:p-3 rounded-xl bg-base-300/50 border border-base-content/5">
-                    <div className="text-xs text-base-content/40 mb-1">
-                      Rewards
-                    </div>
-                    <div className="text-base sm:text-lg font-mono font-bold text-accent">
-                      --
-                    </div>
-                  </div>
-                </div>
-
-                <button className="btn btn-accent btn-sm mt-1 sm:mt-2 group-hover:shadow-lg group-hover:shadow-accent/20 transition-shadow">
-                  Stake $STRAT
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* How it works */}
-        <div className="mt-10 sm:mt-16 text-center animate-fade-up">
-          <h2 className="text-lg sm:text-xl font-bold mb-6 sm:mb-8 text-base-content/70">
-            How the Flywheel Works
-          </h2>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-2 text-sm">
-            {[
-              {
-                step: "1",
-                text: "USDCx streams into pot",
-                color: "primary",
-              },
-              { step: "2", text: "Deposit Warplet, drain pot", color: "primary" },
-              {
-                step: "3",
-                text: "Gobbled Warplet goes to auction",
-                color: "secondary",
-              },
-              {
-                step: "4",
-                text: "$STRAT bids fund stakers",
-                color: "accent",
-              },
-            ].map((item, i) => (
-              <div key={item.step} className="flex items-center gap-2">
-                <div
-                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-${item.color}/20 border border-${item.color}/30 flex items-center justify-center text-xs font-bold text-${item.color} shrink-0`}
-                >
-                  {item.step}
-                </div>
-                <span className="text-xs sm:text-sm text-base-content/60">{item.text}</span>
-                {i < 3 && (
-                  <span className="hidden sm:inline text-base-content/20 mx-2">
-                    &rarr;
+                  <span className="text-base font-normal text-base-content/40 ml-2">
+                    USDCx
                   </span>
-                )}
+                </div>
+                <p className="text-sm sm:text-base text-base-content/50">
+                  for your Warplet
+                </p>
+
+                {/* Warplet picker grid */}
+                <div className="w-full pt-2">
+                  <p className="text-xs text-base-content/40 mb-2">
+                    Select a Warplet to sell
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {MY_WARPLETS.map((w) => (
+                      <button
+                        key={w.fid}
+                        ref={(el) => {
+                          if (el) cardRefs.current.set(w.fid, el);
+                          else cardRefs.current.delete(w.fid);
+                        }}
+                        onClick={() =>
+                          setSelectedFid(selectedFid === w.fid ? null : w.fid)
+                        }
+                        className={`relative rounded-xl overflow-hidden border-2 transition-all duration-200 ${
+                          selectedFid === w.fid
+                            ? "border-primary shadow-lg shadow-primary/30 scale-105"
+                            : "border-base-content/10 hover:border-base-content/25"
+                        } ${flyingFid === w.fid ? "opacity-0" : ""}`}
+                      >
+                        <img
+                          src={`/warplets/warplet-${w.fid}.png`}
+                          alt={w.name}
+                          className="w-full aspect-square object-cover"
+                          draggable={false}
+                        />
+                        <span className="absolute bottom-0 inset-x-0 text-[10px] py-0.5 bg-black/60 text-base-content/70">
+                          #{w.fid}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  className="btn btn-primary w-full mt-1 hover:shadow-lg hover:shadow-primary/20 transition-shadow"
+                  disabled={!selectedFid || !!flyingFid}
+                  onClick={handleSell}
+                >
+                  {selectedFid
+                    ? `Sell Warplet #${selectedFid} to The Gobbler`
+                    : "Select a Warplet"}
+                </button>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Scroll prompt — Buy Warplet */}
+        <div className="relative z-10 pb-8 flex flex-col items-center">
+          <button
+            onClick={() =>
+              document
+                .getElementById("auction")
+                ?.scrollIntoView({ behavior: "smooth" })
+            }
+            className="group flex flex-col items-center gap-1 text-secondary/60 hover:text-secondary transition-colors"
+          >
+            <span className="text-sm sm:text-base tracking-widest uppercase">
+              Buy Warplet
+            </span>
+            <svg
+              className="w-5 h-5 animate-bounce"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+      {/* end gobble fade wrapper */}
+
+      {/* === Auction Section === */}
+      <section
+        id="auction"
+        className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 py-12 sm:py-20"
+      >
+        <div className="w-full max-w-4xl rounded-2xl bg-base-200/40 border border-secondary/10 backdrop-blur-sm p-6 sm:p-10">
+          <h2 className="text-xl sm:text-3xl font-bold tracking-widest uppercase mb-1">
+            Gobbled Warplets
+          </h2>
+          <p className="text-sm text-base-content/40 mb-6 sm:mb-8">
+            Dutch auction &mdash; price drops every second. Click to buy.
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 sm:gap-8">
+            {MOCK_AUCTIONS.map((auction) => (
+              <AuctionItem
+                key={auction.fid}
+                auction={auction}
+                bought={boughtFids.has(auction.fid)}
+                onBuy={handleBuy}
+              />
             ))}
           </div>
         </div>
-      </section>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-base-content/5 py-4 sm:py-6 px-4 sm:px-6">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 text-xs text-base-content/30">
-          <span>WarpletGobbler &mdash; built on Base</span>
-          <div className="flex gap-4">
-            <span className="hover:text-primary cursor-pointer transition-colors">
-              Contracts
-            </span>
-            <span className="hover:text-primary cursor-pointer transition-colors">
-              Docs
-            </span>
-            <span className="hover:text-primary cursor-pointer transition-colors">
-              GitHub
-            </span>
-          </div>
-        </div>
-      </footer>
+        <footer className="mt-12 sm:mt-16 text-center">
+          <span className="text-sm text-base-content/20">
+            WarpletGobbler &mdash; built on Base
+          </span>
+        </footer>
+      </section>
     </main>
   );
 }

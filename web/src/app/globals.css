@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-eb-garamond), "EB Garamond", serif;
 }
 
 /* Warplet breathing glow */
@@ -125,10 +125,20 @@ body {
   animation: drain-fill 2s ease-out 1s both;
 }
 
-/* Subtle noise texture overlay */
+/* Noise texture overlay — heavier grain for depth */
 .noise-overlay {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
   background-size: 256px 256px;
+}
+
+/* Dark vignette — draws the eye to center content */
+.noise-overlay::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0,0,0,0.6) 100%);
 }
 
 /* Parallax warplet items */
@@ -140,7 +150,6 @@ body {
 }
 
 .warplet-parallax-item {
-  border-radius: 8px;
   mix-blend-mode: lighten;
   animation: warplet-drift var(--drift-duration, 20s) ease-in-out infinite;
   animation-delay: var(--drift-delay, 0s);
@@ -159,6 +168,18 @@ body {
   }
 }
 
+.warplet-img-sm img {
+  width: 120px;
+  height: 120px;
+}
+
+@media (min-width: 640px) {
+  .warplet-img-sm img {
+    width: 180px;
+    height: 180px;
+  }
+}
+
 /* Stats ribbon: force row on mobile */
 .stats-ribbon {
   display: flex;
@@ -166,12 +187,92 @@ body {
   gap: 0.5rem;
 }
 
+/* === Hollow Knight Abyss === */
+
+/* Slow viscous sway — like tendrils underwater */
+@keyframes tendril-sway {
+  0%, 100% { transform: rotate(var(--sway-from, -2deg)); }
+  50% { transform: rotate(var(--sway-to, 2deg)); }
+}
+
+.abyss-tendril-group {
+  animation: tendril-sway var(--sway-dur, 8s) ease-in-out infinite;
+  animation-delay: var(--sway-delay, 0s);
+  transform-origin: bottom center;
+}
+
+/* Floating void particles (black & white) */
+@keyframes void-particle-float {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  12% { opacity: var(--p-opacity, 0.6); }
+  88% { opacity: var(--p-opacity, 0.6); }
+  100% {
+    transform: translateY(var(--p-travel, -200px)) translateX(var(--p-drift, 20px));
+    opacity: 0;
+  }
+}
+
+.void-particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: void-particle-float var(--p-dur, 7s) ease-in-out infinite;
+  animation-delay: var(--p-delay, 0s);
+}
+
+/* Void blob that emerges from warplets periodically */
+@keyframes void-blob-emerge {
+  0%, 70% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  78% {
+    transform: scale(0.3);
+    opacity: 0.7;
+  }
+  85% {
+    transform: scale(1.1) translateY(-8px);
+    opacity: 0.9;
+  }
+  92% {
+    transform: scale(0.8) translateY(-20px);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(0) translateY(-35px);
+    opacity: 0;
+  }
+}
+
+.warplet-void-blob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-left: -12px;
+  margin-top: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50% 45% 50% 40%;
+  background: #000;
+  pointer-events: none;
+  animation: void-blob-emerge var(--blob-dur, 12s) ease-in-out infinite;
+  animation-delay: var(--blob-delay, 0s);
+}
+
+/* Streaming number glow — subtle pulse on the hero pot value */
+.streaming-glow {
+  text-shadow: 0 0 12px rgba(0, 245, 255, 0.3), 0 0 30px rgba(0, 245, 255, 0.1);
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #13111C;
+  background: #08070D;
 }
 ::-webkit-scrollbar-thumb {
   background: #7B61FF;
