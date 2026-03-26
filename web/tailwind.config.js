@@ -7,7 +7,11 @@ module.exports = {
     "bg-accent/20", "border-accent/30", "text-accent",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        serif: ['var(--font-cinzel)', 'Cinzel', 'serif'],
+      },
+    },
   },
   plugins: [require("daisyui")],
   daisyui: {
