@@ -1,7 +1,7 @@
 "use client";
 
 import { ConnectKitButton } from "connectkit";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 /* eslint-disable @next/next/no-img-element */
 
 // Deterministic particle positions to avoid hydration mismatch
@@ -19,6 +19,83 @@ const PARTICLES = [
   { id: 10, left: "75%", delay: "1.2s", size: 4, drift: "-18px", duration: "2.7s", color: "#7B61FF" },
   { id: 11, left: "40%", delay: "0.6s", size: 3, drift: "12px", duration: "3.3s", color: "#FF007A" },
 ];
+
+// Parallax warplet field — scattered at different depths, each a unique warplet
+const PARALLAX_WARPLETS = [
+  // Back layer (slow, small, faint)
+  { id: 0, fid: 4, x: 5, y: 8, size: 40, opacity: 0.04, speed: 0.02, rotate: 12, blur: 2 },
+  { id: 1, fid: 9, x: 25, y: 15, size: 55, opacity: 0.05, speed: 0.025, rotate: -8, blur: 1.5 },
+  { id: 2, fid: 20, x: 70, y: 5, size: 45, opacity: 0.04, speed: 0.02, rotate: 20, blur: 2 },
+  { id: 3, fid: 194, x: 85, y: 20, size: 35, opacity: 0.035, speed: 0.015, rotate: -15, blur: 2.5 },
+  { id: 4, fid: 239, x: 50, y: 65, size: 50, opacity: 0.04, speed: 0.02, rotate: 5, blur: 2 },
+  { id: 5, fid: 10, x: 15, y: 75, size: 42, opacity: 0.035, speed: 0.018, rotate: -22, blur: 2 },
+  { id: 6, fid: 1000, x: 90, y: 55, size: 38, opacity: 0.04, speed: 0.022, rotate: 30, blur: 2.5 },
+  // Mid layer (medium speed, medium size)
+  { id: 7, fid: 1, x: 12, y: 35, size: 65, opacity: 0.06, speed: 0.05, rotate: -5, blur: 1 },
+  { id: 8, fid: 616, x: 42, y: 25, size: 75, opacity: 0.07, speed: 0.06, rotate: 10, blur: 0.5 },
+  { id: 9, fid: 3, x: 78, y: 40, size: 60, opacity: 0.055, speed: 0.045, rotate: -18, blur: 1 },
+  { id: 10, fid: 680, x: 55, y: 80, size: 70, opacity: 0.06, speed: 0.055, rotate: 15, blur: 0.5 },
+  { id: 11, fid: 5, x: 30, y: 55, size: 55, opacity: 0.05, speed: 0.04, rotate: -12, blur: 1 },
+  { id: 12, fid: 69, x: 92, y: 75, size: 62, opacity: 0.055, speed: 0.05, rotate: 8, blur: 1 },
+  { id: 13, fid: 6, x: 62, y: 45, size: 58, opacity: 0.05, speed: 0.045, rotate: -8, blur: 1 },
+  // Front layer (faster, larger, slightly more visible)
+  { id: 14, fid: 99, x: 8, y: 50, size: 90, opacity: 0.08, speed: 0.1, rotate: -3, blur: 0 },
+  { id: 15, fid: 2, x: 65, y: 18, size: 100, opacity: 0.09, speed: 0.12, rotate: 7, blur: 0 },
+  { id: 16, fid: 4567, x: 35, y: 85, size: 85, opacity: 0.07, speed: 0.09, rotate: -10, blur: 0 },
+  { id: 17, fid: 8, x: 82, y: 70, size: 95, opacity: 0.08, speed: 0.11, rotate: 14, blur: 0 },
+];
+
+function ParallaxBackground() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const children = containerRef.current?.children;
+        if (!children) return;
+        PARALLAX_WARPLETS.forEach((w, i) => {
+          (children[i] as HTMLElement).style.transform =
+            `translateY(${y * w.speed * -1}px) rotate(${w.rotate}deg)`;
+        });
+      });
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+      {PARALLAX_WARPLETS.map((w) => (
+        <img
+          key={w.id}
+          src={`/warplets/warplet-${w.fid}.png`}
+          alt=""
+          draggable={false}
+          className="absolute warplet-parallax-item"
+          style={{
+            left: `${w.x}%`,
+            top: `${w.y}%`,
+            width: w.size,
+            height: w.size,
+            opacity: w.opacity,
+            filter: `grayscale(0.6) brightness(1.5)${w.blur ? ` blur(${w.blur}px)` : ""}`,
+            transform: `rotate(${w.rotate}deg)`,
+            willChange: w.blur ? undefined : "transform",
+            // @ts-expect-error CSS custom properties
+            "--drift-duration": `${18 + w.id * 3}s`,
+            "--drift-delay": `${w.id * -2.5}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 function Particles() {
   const [mounted, setMounted] = useState(false);
@@ -82,8 +159,8 @@ function StatBar({
 export default function Home() {
   return (
     <main className="min-h-screen relative overflow-hidden noise-overlay">
-      {/* Warplet tiled background texture */}
-      <div className="warplet-watermark" />
+      {/* Parallax warplet background */}
+      <ParallaxBackground />
 
       {/* Background gradient orbs */}
       <div className="fixed inset-0 pointer-events-none">
