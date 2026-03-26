@@ -40,6 +40,8 @@ export default function BuyOverlay({
       H = window.innerHeight;
       cv.width = W;
       cv.height = H;
+      IMG_SIZE = Math.min(W * 0.21, 160);
+      IMG_HALF = IMG_SIZE / 2;
     };
     window.addEventListener("resize", onResize);
 
@@ -62,8 +64,8 @@ export default function BuyOverlay({
     const FADE_DELAY = 2.5; // after resolve starts
     const FADE_DURATION = 0.8;
 
-    const IMG_SIZE = Math.min(W * 0.21, 160);
-    const IMG_HALF = IMG_SIZE / 2;
+    let IMG_SIZE = Math.min(W * 0.21, 160);
+    let IMG_HALF = IMG_SIZE / 2;
 
     // ========== PHASE STATE ==========
     // 'flyin' → 'materialize' → 'idle' → 'hit1' → 'recover1' → 'hit2' → 'recover2' → 'finisher' → 'resolved' → 'fadeout'

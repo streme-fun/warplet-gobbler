@@ -1,27 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
-
-// Ground silhouette only — undulating terrain at bottom of viewport
-const ABYSS_TENDRILS: {
-  id: number;
-  swayDur: number;
-  swayFrom: number;
-  swayTo: number;
-  swayDelay: number;
-  fill: string;
-  highlight?: string;
-}[] = [
-  {
-    id: 0,
-    swayDur: 999,
-    swayFrom: 0,
-    swayTo: 0,
-    swayDelay: 0,
-    fill: "M-10,900 L-10,870 C60,865 130,858 200,862 C280,867 340,855 400,850 C480,844 540,848 620,855 C700,862 780,858 860,852 C940,846 1020,850 1100,856 C1180,862 1260,855 1340,848 C1380,845 1420,850 1460,858 L1460,900Z",
-  },
-];
-
 // Scattered void particles — mostly black dots of varying sizes, some white
 const VOID_PARTICLES = [
   // Large black blobs
@@ -56,35 +34,6 @@ const VOID_PARTICLES = [
 export default function AbyssBackground() {
   return (
     <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-      <svg
-        viewBox="0 0 1440 900"
-        preserveAspectRatio="xMidYMax slice"
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          overflow: "visible",
-        }}
-      >
-        {ABYSS_TENDRILS.map((t) => (
-          <g
-            key={t.id}
-            className="abyss-tendril-group"
-            style={{
-              transformOrigin: "50% 100%",
-              // @ts-expect-error CSS custom properties
-              "--sway-dur": `${t.swayDur}s`,
-              "--sway-from": `${t.swayFrom}deg`,
-              "--sway-to": `${t.swayTo}deg`,
-              "--sway-delay": `${t.swayDelay}s`,
-            }}
-          >
-            <path d={t.fill} fill="#000" />
-          </g>
-        ))}
-      </svg>
-
       {VOID_PARTICLES.map((p) => (
         <div
           key={p.id}
