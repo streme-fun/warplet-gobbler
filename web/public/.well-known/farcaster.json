@@ -1,10 +1,12 @@
 {
   "_comment": "TODO: populate accountAssociation with real values from Farcaster domain verification",
+
   "accountAssociation": {
-    "header": "",
-    "payload": "",
-    "signature": ""
+    "header": "eyJmaWQiOjQ0NjY5NywidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDgyYTY4YzM5NWM4MzVlNzJiMDYzMTFhRTY3ZjVBRjA3ZkI2YzQ2NTgifQ",
+    "payload": "eyJkb21haW4iOiJ3YXJwbGV0Z29iYmxlci5zdHJlbWUuZnVuIn0",
+    "signature": "bILOhtBmKDA2N2KWmfcND8aHEk27f9ctfzRg8mT3UckC47RtpGNM9hCHGLAUTIAPB2w/jeXvOwJ0/mtoumSDrBs="
   },
+
   "miniapp": {
     "version": "1",
     "name": "WarpletGobbler",
