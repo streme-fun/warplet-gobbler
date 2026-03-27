@@ -118,7 +118,9 @@ export default function Home() {
       )}
 
       {/* Gobble overlay — canvas jaws on top of everything */}
-      {gobbling && <GobbleOverlay onDone={handleGobbleDone} />}
+      {gobbling && (
+        <GobbleOverlay onDone={handleGobbleDone} payout={MOCK_PRICE_START} />
+      )}
 
       {/* Centered warplet — fixed in viewport center during gobble */}
       {gobbling && flyingFid && (
