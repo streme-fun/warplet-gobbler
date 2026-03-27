@@ -46,13 +46,16 @@ export default function BuyOverlay({
     };
     window.addEventListener("resize", onResize);
 
-    // Load warplet image
-    const img = new Image();
-    img.src = `/warplets/warplet-${fid}.png`;
-    let imgLoaded = false;
-    img.onload = () => {
-      imgLoaded = true;
-    };
+    // Load images
+    const eggImg = new Image();
+    eggImg.src = "/egg-closed.png";
+    let eggLoaded = false;
+    eggImg.onload = () => { eggLoaded = true; };
+
+    const warpletImg = new Image();
+    warpletImg.src = `/warplets/warplet-${fid}.png`;
+    let warpletLoaded = false;
+    warpletImg.onload = () => { warpletLoaded = true; };
 
     // ========== CONSTANTS ==========
     const HIT_DURATION = 0.6;
@@ -532,19 +535,17 @@ export default function BuyOverlay({
       ctx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
       ctx.fillRect(-20, -20, W + 40, H + 40);
 
-      // Fly-in: draw warplet animating from startRect to center
+      // Fly-in: draw egg animating from startRect to center
       if (phase === "flyin") {
         const p = easeOutExpo(Math.min(1, phaseTime / FLY_DURATION));
         const curX = flyFrom.x + (flyTo.x - flyFrom.x) * p;
         const curY = flyFrom.y + (flyTo.y - flyFrom.y) * p;
         const curSize = flyFrom.size + (flyTo.size - flyFrom.size) * p;
-        if (imgLoaded) {
-          const r = curSize * 0.12;
+        if (eggLoaded) {
+          const eggW = curSize;
+          const eggH = curSize * (360 / 693);
           ctx.save();
-          ctx.beginPath();
-          ctx.roundRect(curX - curSize / 2, curY - curSize / 2, curSize, curSize, r);
-          ctx.clip();
-          ctx.drawImage(img, curX - curSize / 2, curY - curSize / 2, curSize, curSize);
+          ctx.drawImage(eggImg, curX - eggW / 2, curY - eggH / 2, eggW, eggH);
           ctx.restore();
         }
         ctx.restore();
@@ -604,18 +605,32 @@ export default function BuyOverlay({
       // Prize glow
       drawPrizeGlow(cx, cy);
 
-      // Warplet image (always drawn at center after materialize)
-      if (imgLoaded) {
-        const imgAlpha =
-          phase === "materialize"
-            ? Math.min(1, phaseTime / (MATERIALIZE_DURATION * 0.5))
-            : 1;
+      // Image at center: egg during combat, crossfade to warplet after finisher
+      const showWarplet = phase === "finisher" && phaseTime > 2.0 || phase === "resolved";
+      const crossfade = phase === "finisher" ? Math.min(1, Math.max(0, (phaseTime - 2.0) / 1.0)) : phase === "resolved" ? 1 : 0;
+      const imgAlpha =
+        phase === "materialize"
+          ? Math.min(1, phaseTime / (MATERIALIZE_DURATION * 0.5))
+          : 1;
+
+      // Draw egg (fades out during crossfade) — native 693:360 aspect ratio
+      if (eggLoaded && crossfade < 1) {
+        const eggW = IMG_SIZE;
+        const eggH = IMG_SIZE * (360 / 693);
         ctx.save();
-        ctx.globalAlpha = imgAlpha * overlayAlpha;
+        ctx.globalAlpha = imgAlpha * (1 - crossfade) * overlayAlpha;
+        ctx.drawImage(eggImg, cx - eggW / 2, cy - eggH / 2, eggW, eggH);
+        ctx.restore();
+      }
+
+      // Draw warplet (fades in during crossfade)
+      if (warpletLoaded && showWarplet) {
+        ctx.save();
+        ctx.globalAlpha = imgAlpha * crossfade * overlayAlpha;
         ctx.beginPath();
         ctx.roundRect(cx - IMG_HALF, cy - IMG_HALF, IMG_SIZE, IMG_SIZE, IMG_SIZE * 0.12);
         ctx.clip();
-        ctx.drawImage(img, cx - IMG_HALF, cy - IMG_HALF, IMG_SIZE, IMG_SIZE);
+        ctx.drawImage(warpletImg, cx - IMG_HALF, cy - IMG_HALF, IMG_SIZE, IMG_SIZE);
         ctx.restore();
       }
 
