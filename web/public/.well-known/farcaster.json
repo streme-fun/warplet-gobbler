@@ -1,4 +1,5 @@
 {
+  "_comment": "TODO: populate accountAssociation with real values from Farcaster domain verification",
   "accountAssociation": {
     "header": "",
     "payload": "",

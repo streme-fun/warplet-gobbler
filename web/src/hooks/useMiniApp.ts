@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { sdk, type Context } from "@farcaster/miniapp-sdk";
-
-const isMiniApp =
-  typeof window !== "undefined" && window.parent !== window;
+import { isMiniApp } from "@/lib/miniapp";
 
 export function useMiniApp() {
   const [isLoaded, setIsLoaded] = useState(!isMiniApp);
@@ -38,5 +36,5 @@ export function useMiniApp() {
     sdk.actions.openUrl(url);
   }, []);
 
-  return { isLoaded, isMiniApp, context, sdk, close, openUrl };
+  return { isLoaded, isMiniApp, context, close, openUrl };
 }

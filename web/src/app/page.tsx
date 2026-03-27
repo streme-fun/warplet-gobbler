@@ -35,9 +35,11 @@ function MiniAppWalletButton() {
     );
   }
 
+  const connector = connectors[0];
   return (
     <button
-      onClick={() => connectors[0] && connect({ connector: connectors[0] })}
+      onClick={() => connector && connect({ connector })}
+      disabled={!connector}
       className="btn btn-primary btn-sm"
     >
       Connect Wallet

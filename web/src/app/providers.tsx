@@ -5,9 +5,7 @@ import { base } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
-
-const isMiniApp =
-  typeof window !== "undefined" && window.parent !== window;
+import { isMiniApp } from "@/lib/miniapp";
 
 const config = isMiniApp
   ? createConfig({
