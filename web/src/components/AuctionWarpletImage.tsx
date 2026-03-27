@@ -4,7 +4,7 @@
 
 export default function AuctionWarpletImage({ fid }: { fid: number }) {
   return (
-    <div className="group relative w-[200px] h-[200px] mx-auto rounded-xl border-2 border-transparent hover:border-secondary/40 hover:shadow-lg hover:shadow-secondary/10 hover:rotate-2 transition-all duration-300 overflow-hidden will-change-transform">
+    <div className="group relative w-full max-w-[200px] aspect-square mx-auto rounded-xl border-2 border-transparent hover:border-secondary/40 hover:shadow-lg hover:shadow-secondary/10 hover:rotate-2 transition-all duration-300 overflow-hidden will-change-transform">
       <img
         src={`/warplets/warplet-${fid}.png`}
         alt={`Warplet #${fid}`}
