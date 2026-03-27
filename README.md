@@ -80,3 +80,5 @@ cd contracts && forge test
 - [ ] Superfluid CFA vs GDA for treasury stream
 - [ ] Hook whitelisting timeline (launching without hook initially)
 - [ ] $STRAT initial supply and distribution
+- [ ] Streme Staking config (supply? lock? duration?)
+- [ ] Should $STRAT be used to _extend_ Staking rewards or _boost_ them? ( add to the pile or 2nd stream to the pool, respectively)
