@@ -339,10 +339,10 @@ export default function Home() {
           </div>
         </div>
 
-        <footer className="mt-12 sm:mt-16 text-center">
-          <span className="text-sm text-base-content/20">
-            WarpletGobbler &mdash; built on Base
-          </span>
+        <footer className="mt-12 sm:mt-16 text-center text-sm text-base-content/30 space-x-3">
+          <a href="https://opensea.io/collection/the-warplets-farcaster" target="_blank" rel="noopener noreferrer" className="hover:text-base-content/60 transition-colors">The Warplets</a>
+          <span>&middot;</span>
+          <a href="https://streme.fun" target="_blank" rel="noopener noreferrer" className="hover:text-base-content/60 transition-colors">Streme</a>
         </footer>
       </section>
     </main>
