@@ -8,9 +8,27 @@ const ebGaramond = EB_Garamond({
   variable: "--font-eb-garamond",
 });
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://warpletgobbler.xyz";
+
 export const metadata: Metadata = {
   title: "WarpletGobbler",
   description: "A PunkStrategy-style flywheel for Warplets using Superfluid streaming",
+  other: {
+    "fc:miniapp": JSON.stringify({
+      version: "1",
+      imageUrl: `${appUrl}/og-image.png`,
+      button: {
+        title: "Launch",
+        action: {
+          type: "launch_miniapp",
+          name: "WarpletGobbler",
+          url: appUrl,
+          splashImageUrl: `${appUrl}/splash.png`,
+          splashBackgroundColor: "#13111C",
+        },
+      },
+    }),
+  },
 };
 
 export default function RootLayout({

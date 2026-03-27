@@ -1,7 +1,9 @@
 "use client";
 
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { ConnectKitButton } from "connectkit";
 import { useCallback, useRef, useState } from "react";
+import { useMiniApp } from "@/hooks/useMiniApp";
 import AbyssBackground from "@/components/AbyssBackground";
 import ParallaxBackground from "@/components/ParallaxBackground";
 import Particles from "@/components/Particles";
@@ -20,7 +22,33 @@ import {
 
 /* eslint-disable @next/next/no-img-element */
 
+function MiniAppWalletButton() {
+  const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+
+  if (isConnected) {
+    return (
+      <button onClick={() => disconnect()} className="btn btn-outline btn-sm">
+        {address?.slice(0, 6)}...{address?.slice(-4)}
+      </button>
+    );
+  }
+
+  const connector = connectors[0];
+  return (
+    <button
+      onClick={() => connector && connect({ connector })}
+      disabled={!connector}
+      className="btn btn-primary btn-sm"
+    >
+      Connect Wallet
+    </button>
+  );
+}
+
 export default function Home() {
+  const { isLoaded, context, isMiniApp } = useMiniApp();
   const [gobbling, setGobbling] = useState(false);
   const [selectedFid, setSelectedFid] = useState<number | null>(null);
   const [flyingFid, setFlyingFid] = useState<number | null>(null);
@@ -73,6 +101,14 @@ export default function Home() {
     setBuyingFid(null);
     setBuyRect(null);
   }, [buyingFid]);
+
+  if (isMiniApp && !isLoaded) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="text-lg text-gray-400">Loading...</div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen relative overflow-hidden noise-overlay flex flex-col">
@@ -138,11 +174,16 @@ export default function Home() {
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
+            {context?.user && (
+              <span className="text-sm text-base-content/50">
+                {context.user.displayName ?? `FID ${context.user.fid}`}
+              </span>
+            )}
             <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
               <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
               <span className="text-sm text-success">Base</span>
             </div>
-            <ConnectKitButton />
+            {isMiniApp ? <MiniAppWalletButton /> : <ConnectKitButton />}
           </div>
         </nav>
 
