@@ -50,6 +50,7 @@ function MiniAppWalletButton() {
 export default function Home() {
   const { isLoaded, context, isMiniApp } = useMiniApp();
   const [gobbling, setGobbling] = useState(false);
+  const [warpletVisible, setWarpletVisible] = useState(true);
   const [selectedFid, setSelectedFid] = useState<number | null>(null);
   const [flyingFid, setFlyingFid] = useState<number | null>(null);
   const [flyRect, setFlyRect] = useState<{
@@ -69,11 +70,15 @@ export default function Home() {
   const [boughtFids, setBoughtFids] = useState<Set<number>>(new Set());
 
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
+  const handleChestReveal = useCallback(() => {
+    setWarpletVisible(false);
+  }, []);
   const handleGobbleDone = useCallback(() => {
     setGobbling(false);
     setFlyingFid(null);
     setFlyRect(null);
     setSelectedFid(null);
+    setWarpletVisible(true);
   }, []);
 
   const handleSell = useCallback(() => {
@@ -119,11 +124,11 @@ export default function Home() {
 
       {/* Gobble overlay — canvas jaws on top of everything */}
       {gobbling && (
-        <GobbleOverlay onDone={handleGobbleDone} payout={MOCK_PRICE_START} />
+        <GobbleOverlay onDone={handleGobbleDone} onChestReveal={handleChestReveal} payout={MOCK_PRICE_START} />
       )}
 
-      {/* Centered warplet — fixed in viewport center during gobble */}
-      {gobbling && flyingFid && (
+      {/* Centered warplet — fixed in viewport center during gobble, fades out when chest appears */}
+      {gobbling && flyingFid && warpletVisible && (
         <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
           <img
             src={`/warplets/warplet-${flyingFid}.png`}
