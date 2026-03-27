@@ -317,9 +317,13 @@ export default function Home() {
             </div>
 
             <button
-              className="btn btn-primary w-full max-w-sm mx-auto mt-3 hover:shadow-lg hover:shadow-primary/20 transition-shadow"
-              disabled={!selectedFid || !!flyingFid}
-              onClick={handleSell}
+              className={`btn w-full max-w-sm mx-auto mt-3 transition-shadow ${
+                selectedFid
+                  ? "btn-primary hover:shadow-lg hover:shadow-primary/20"
+                  : "border border-primary/30 text-primary/50 hover:border-primary/50 hover:text-primary/70"
+              }`}
+              disabled={!!flyingFid}
+              onClick={selectedFid ? handleSell : undefined}
             >
               {selectedFid
                 ? `Sell Warplet #${selectedFid}`
@@ -441,7 +445,7 @@ export default function Home() {
           {/* Bulk random buy */}
           <div className="mt-8 pt-6 border-t border-base-content/5 text-center">
             <p className="text-xs text-base-content/40 mb-3">Feeling lucky?</p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="flex flex-row items-center justify-center gap-3">
               {[3, 5].map((n) => {
                 const sorted = [...MOCK_AUCTIONS].sort(
                   (a, b) => b.priceStart - a.priceStart,
