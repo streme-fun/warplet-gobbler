@@ -372,35 +372,61 @@ export default function Home() {
             Buy the Gobbler&apos;s Warplet remains — the price drops every
             second.
             <br />
-            Receive the original Warplet NFT, a Gobbled Warplet NFT, and
-            Superfluid $SUP.
+            Receive a Warplet NFT, a Gobbled Warplet NFT, and Superfluid $SUP.
           </p>
 
           {/* You receive breakdown */}
           <div className="flex items-center justify-center gap-3 sm:gap-5 mb-8 sm:mb-10">
             <div className="flex flex-col items-center gap-1.5">
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-base-content/10">
-                <img src="/warplet.png" alt="Original Warplet" className="w-full h-full object-cover" draggable={false} />
+                <img
+                  src="/warplet.png"
+                  alt="Original Warplet"
+                  className="w-full h-full object-cover"
+                  draggable={false}
+                />
               </div>
-              <span className="text-[10px] sm:text-xs text-base-content/50">Original Warplet</span>
+              <span className="text-[10px] sm:text-xs text-base-content/50">
+                Warplet
+              </span>
             </div>
-            <span className="text-lg sm:text-xl text-base-content/20 font-light mt-[-1rem]">+</span>
+            <span className="text-lg sm:text-xl text-base-content/20 font-light mt-[-1rem]">
+              +
+            </span>
             <div className="flex flex-col items-center gap-1.5">
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-base-content/10">
-                <img src="/gobbled-warplet.jpg" alt="Gobbled Warplet" className="w-full h-full object-cover" draggable={false} />
+                <img
+                  src="/gobbled-warplet.jpg"
+                  alt="Gobbled Warplet"
+                  className="w-full h-full object-cover"
+                  draggable={false}
+                />
               </div>
-              <span className="text-[10px] sm:text-xs text-base-content/50">Gobbled Warplet</span>
+              <span className="text-[10px] sm:text-xs text-base-content/50">
+                Gobbled Warplet
+              </span>
             </div>
-            <span className="text-lg sm:text-xl text-base-content/20 font-light mt-[-1rem]">+</span>
+            <span className="text-lg sm:text-xl text-base-content/20 font-light mt-[-1rem]">
+              +
+            </span>
             <div className="flex flex-col items-center gap-1.5">
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-base-content/10">
-                <img src="/sup.png" alt="$SUP" className="w-full h-full object-contain" draggable={false} />
+                <img
+                  src="/sup.png"
+                  alt="$SUP"
+                  className="w-full h-full object-contain"
+                  draggable={false}
+                />
               </div>
-              <span className="text-[10px] sm:text-xs text-base-content/50">Superfluid $SUP</span>
+              <span className="text-[10px] sm:text-xs text-base-content/50">
+                Superfluid $SUP
+              </span>
             </div>
           </div>
 
-          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mb-4">Warplets for Sale</h3>
+          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mb-4">
+            Warplets for Sale
+          </h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 sm:gap-8">
             {MOCK_AUCTIONS.map((auction) => (
               <AuctionItem
@@ -417,7 +443,9 @@ export default function Home() {
             <p className="text-xs text-base-content/40 mb-3">Feeling lucky?</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               {[3, 5].map((n) => {
-                const sorted = [...MOCK_AUCTIONS].sort((a, b) => b.priceStart - a.priceStart);
+                const sorted = [...MOCK_AUCTIONS].sort(
+                  (a, b) => b.priceStart - a.priceStart,
+                );
                 const top = sorted.slice(0, Math.min(n, sorted.length));
                 const maxStart = top.reduce((s, a) => s + a.priceStart, 0);
                 const maxRate = top.reduce((s, a) => s + a.priceRate, 0);
