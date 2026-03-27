@@ -16,7 +16,7 @@ export default function AuctionItem({
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
 
-  const handleClick = () => {
+  const handleBuy = () => {
     if (bought || !onBuy || !btnRef.current) return;
     const rect = btnRef.current.getBoundingClientRect();
     onBuy(auction.fid, { x: rect.left, y: rect.top, w: rect.width, h: rect.height });
@@ -24,14 +24,9 @@ export default function AuctionItem({
 
   return (
     <div className="flex flex-col items-center gap-1.5">
-      <button
-        ref={btnRef}
-        className="w-full cursor-pointer disabled:cursor-default"
-        disabled={bought}
-        onClick={handleClick}
-      >
+      <div className="w-full">
         <AuctionWarpletImage fid={auction.fid} />
-      </button>
+      </div>
 
       <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded-full border border-base-content/10 text-base-content/60">
         Warplet #{auction.fid}
@@ -46,11 +41,24 @@ export default function AuctionItem({
               start={auction.priceStart}
               perSecond={auction.priceRate}
               decimals={3}
+              min={auction.floor}
             />{" "}
             <span className="text-base-content/40">$STRAT</span>
           </>
         )}
       </div>
+
+      {bought ? (
+        <span className="text-xs text-base-content/30">Purchased</span>
+      ) : (
+        <button
+          ref={btnRef}
+          onClick={handleBuy}
+          className="w-3/4 mt-1 py-1.5 rounded-lg border border-secondary/40 text-secondary text-xs sm:text-sm font-medium hover:bg-secondary/10 hover:border-secondary transition-colors"
+        >
+          Buy
+        </button>
+      )}
     </div>
   );
 }

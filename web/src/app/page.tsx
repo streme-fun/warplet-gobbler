@@ -119,12 +119,20 @@ export default function Home() {
     <main className="min-h-screen relative overflow-hidden noise-overlay flex flex-col">
       {/* Buy overlay — Silksong Void combat sequence */}
       {buyingFid && buyRect && (
-        <BuyOverlay fid={buyingFid} startRect={buyRect} onDone={handleBuyDone} />
+        <BuyOverlay
+          fid={buyingFid}
+          startRect={buyRect}
+          onDone={handleBuyDone}
+        />
       )}
 
       {/* Gobble overlay — canvas jaws on top of everything */}
       {gobbling && (
-        <GobbleOverlay onDone={handleGobbleDone} onChestReveal={handleChestReveal} payout={MOCK_PRICE_START} />
+        <GobbleOverlay
+          onDone={handleGobbleDone}
+          onChestReveal={handleChestReveal}
+          payout={MOCK_PRICE_START}
+        />
       )}
 
       {/* Centered warplet — fixed in viewport center during gobble, fades out when chest appears */}
@@ -195,95 +203,132 @@ export default function Home() {
         </nav>
 
         {/* Single-focus layout: Gobbler + Deposit */}
-        <section className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
+        <section className="relative z-10 flex-1 flex flex-col items-center px-4 sm:px-6 pt-16 sm:pt-24 pb-8 sm:pb-12">
           {/* Title */}
-          <div className="text-center mt-4 sm:mt-6 animate-fade-up-delay-1">
-            <h1 className="text-3xl sm:text-7xl font-bold tracking-widest uppercase">
-              THE ALWAYS HUNGRY
+          <div className="text-center animate-fade-up-delay-1">
+            <h2>Sell your Warplet to</h2>
+            <h1 className="text-3xl sm:text-6xl font-bold tracking-widest uppercase">
+              THE INSATIABLE
               <br />
               <span className="text-primary">WARPLET GOBBLER</span>
             </h1>
-            <p className="mt-2 sm:mt-3 text-base-content/50 max-w-md mx-auto text-base sm:text-xl">
-              Sell your Warplet to The Gobbler for its pot of $USDCx. <br />
-              Or wait until the pot grows...
-            </p>
-            <p className="sm:mt-1 text-base-content/50 max-w-lg mx-auto text-xs sm:text-lg">
-              ...and hope no one else steals your chance.
-            </p>
           </div>
 
-          {/* Deposit card — warplet picker + price + action */}
-          <div className="mt-6 sm:mt-10 w-full max-w-sm animate-fade-up-delay-2">
-            <div className="card bg-base-200/60 border border-primary/10 backdrop-blur-sm animate-card-glow">
-              <div className="card-body items-center text-center gap-4 p-5 sm:p-6">
-                <p className="text-sm sm:text-base text-base-content/50">
-                  The Gobbler will pay
-                </p>
-                <div className="text-3xl sm:text-4xl font-mono font-semibold text-primary streaming-glow">
-                  <StreamingNumber
-                    start={MOCK_PRICE_START}
-                    perSecond={MOCK_PRICE_RATE}
-                    decimals={3}
-                  />
-                  <span className="text-base font-normal text-base-content/40 ml-2">
-                    USDCx
-                  </span>
-                </div>
-                <p className="text-sm sm:text-base text-base-content/50">
-                  for your Warplet
-                </p>
+          {/* Price + picker + action — compact layout */}
+          <div className="mt-6 sm:mt-8 w-full max-w-2xl animate-fade-up-delay-2 text-center">
+            <p className="text-sm sm:text-base text-base-content/50">
+              The Gobbler will pay
+            </p>
+            <div className="text-4xl sm:text-6xl font-mono font-semibold text-primary streaming-glow">
+              <StreamingNumber
+                start={MOCK_PRICE_START}
+                perSecond={MOCK_PRICE_RATE}
+                decimals={3}
+              />
+              <span className="text-base font-normal text-base-content/40 ml-2">
+                USDCx
+              </span>
+            </div>
+            <p className="text-sm sm:text-base text-base-content/50">
+              for your warplet
+            </p>
 
-                {/* Warplet picker grid */}
-                <div className="w-full pt-2">
-                  <p className="text-xs text-base-content/40 mb-2">
-                    Select a Warplet to sell
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {MY_WARPLETS.map((w) => (
-                      <button
-                        key={w.fid}
-                        ref={(el) => {
-                          if (el) cardRefs.current.set(w.fid, el);
-                          else cardRefs.current.delete(w.fid);
-                        }}
-                        onClick={() =>
-                          setSelectedFid(selectedFid === w.fid ? null : w.fid)
-                        }
-                        className={`relative rounded-xl overflow-hidden border-2 transition-all duration-200 ${
-                          selectedFid === w.fid
-                            ? "border-primary shadow-lg shadow-primary/30 scale-105"
-                            : "border-base-content/10 hover:border-base-content/25"
-                        } ${flyingFid === w.fid ? "opacity-0" : ""}`}
-                      >
-                        <img
-                          src={`/warplets/warplet-${w.fid}.png`}
-                          alt={w.name}
-                          className="w-full aspect-square object-cover"
-                          draggable={false}
-                        />
-                        <span className="absolute bottom-0 inset-x-0 text-[10px] py-0.5 bg-black/60 text-base-content/70">
-                          #{w.fid}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+            {/* Warplet picker — horizontal scroll */}
+            <div className="w-full mt-4 max-w-lg m-auto">
+              <div className="flex items-center justify-between mb-2 ">
+                <p className="text-xs text-base-content/40">
+                  Select a Warplet to sell
+                </p>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => {
+                      const el = document.getElementById("warplet-scroll");
+                      if (el) el.scrollBy({ left: -300, behavior: "smooth" });
+                    }}
+                    className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const el = document.getElementById("warplet-scroll");
+                      if (el) el.scrollBy({ left: 300, behavior: "smooth" });
+                    }}
+                    className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  </button>
                 </div>
-
-                <button
-                  className="btn btn-primary w-full mt-1 hover:shadow-lg hover:shadow-primary/20 transition-shadow"
-                  disabled={!selectedFid || !!flyingFid}
-                  onClick={handleSell}
-                >
-                  {selectedFid
-                    ? `Sell Warplet #${selectedFid} to The Gobbler`
-                    : "Select a Warplet"}
-                </button>
+              </div>
+              <div
+                id="warplet-scroll"
+                className="flex gap-2 overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
+              >
+                {MY_WARPLETS.map((w) => (
+                  <button
+                    key={w.fid}
+                    ref={(el) => {
+                      if (el) cardRefs.current.set(w.fid, el);
+                      else cardRefs.current.delete(w.fid);
+                    }}
+                    onClick={() =>
+                      setSelectedFid(selectedFid === w.fid ? null : w.fid)
+                    }
+                    className={`relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border-2 snap-center transition-all duration-200 ${
+                      selectedFid === w.fid
+                        ? "border-primary shadow-lg shadow-primary/30"
+                        : "border-base-content/10 hover:border-base-content/25"
+                    } ${flyingFid === w.fid ? "opacity-0" : ""}`}
+                  >
+                    <img
+                      src={`/warplets/warplet-${w.fid}.png`}
+                      alt={w.name}
+                      className="w-full h-full object-cover"
+                      draggable={false}
+                    />
+                    <span className="absolute bottom-0 inset-x-0 text-[10px] py-0.5 bg-black/60 text-base-content/70">
+                      #{w.fid}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
+
+            <button
+              className="btn btn-primary w-full max-w-sm mx-auto mt-3 hover:shadow-lg hover:shadow-primary/20 transition-shadow"
+              disabled={!selectedFid || !!flyingFid}
+              onClick={handleSell}
+            >
+              {selectedFid
+                ? `Sell Warplet #${selectedFid}`
+                : "Select a Warplet"}
+            </button>
           </div>
         </section>
 
-        {/* Scroll prompt — Buy Warplet */}
+        {/* Scroll prompt — Buy Warplet
         <div className="relative z-10 pb-8 flex flex-col items-center">
           <button
             onClick={() =>
@@ -310,7 +355,7 @@ export default function Home() {
               />
             </svg>
           </button>
-        </div>
+        </div> */}
       </div>
       {/* end gobble fade wrapper */}
 
@@ -321,12 +366,41 @@ export default function Home() {
       >
         <div className="w-full max-w-4xl rounded-2xl bg-base-200/40 border border-secondary/10 backdrop-blur-sm p-6 sm:p-10">
           <h2 className="text-xl sm:text-3xl font-bold tracking-widest uppercase mb-1">
-            Gobbled Warplets
+            Buy Warplets from the Gobbler
           </h2>
           <p className="text-sm text-base-content/40 mb-6 sm:mb-8">
-            Dutch auction &mdash; price drops every second. Click to buy.
+            Buy the Gobbler&apos;s Warplet remains — the price drops every
+            second.
+            <br />
+            Receive the original Warplet NFT, a Gobbled Warplet NFT, and
+            Superfluid $SUP.
           </p>
 
+          {/* You receive breakdown */}
+          <div className="flex items-center justify-center gap-3 sm:gap-5 mb-8 sm:mb-10">
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-base-content/10">
+                <img src="/warplet.png" alt="Original Warplet" className="w-full h-full object-cover" draggable={false} />
+              </div>
+              <span className="text-[10px] sm:text-xs text-base-content/50">Original Warplet</span>
+            </div>
+            <span className="text-lg sm:text-xl text-base-content/20 font-light mt-[-1rem]">+</span>
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-base-content/10">
+                <img src="/gobbled-warplet.jpg" alt="Gobbled Warplet" className="w-full h-full object-cover" draggable={false} />
+              </div>
+              <span className="text-[10px] sm:text-xs text-base-content/50">Gobbled Warplet</span>
+            </div>
+            <span className="text-lg sm:text-xl text-base-content/20 font-light mt-[-1rem]">+</span>
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-base-content/10">
+                <img src="/sup.png" alt="$SUP" className="w-full h-full object-contain" draggable={false} />
+              </div>
+              <span className="text-[10px] sm:text-xs text-base-content/50">Superfluid $SUP</span>
+            </div>
+          </div>
+
+          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mb-4">Warplets for Sale</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 sm:gap-8">
             {MOCK_AUCTIONS.map((auction) => (
               <AuctionItem
@@ -337,12 +411,81 @@ export default function Home() {
               />
             ))}
           </div>
+
+          {/* Bulk random buy */}
+          <div className="mt-8 pt-6 border-t border-base-content/5 text-center">
+            <p className="text-xs text-base-content/40 mb-3">Feeling lucky?</p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              {[3, 5].map((n) => {
+                const sorted = [...MOCK_AUCTIONS].sort((a, b) => b.priceStart - a.priceStart);
+                const top = sorted.slice(0, Math.min(n, sorted.length));
+                const maxStart = top.reduce((s, a) => s + a.priceStart, 0);
+                const maxRate = top.reduce((s, a) => s + a.priceRate, 0);
+                const minFloor = top.reduce((s, a) => s + a.floor, 0);
+                return (
+                  <button
+                    key={n}
+                    className="px-4 py-2.5 rounded-lg border border-secondary/30 text-secondary text-sm font-medium hover:bg-secondary/10 hover:border-secondary transition-colors"
+                  >
+                    <span>Buy {n} Random</span>
+                    <span className="block text-[10px] text-base-content/40 font-mono mt-0.5">
+                      max{" "}
+                      <StreamingNumber
+                        start={maxStart}
+                        perSecond={maxRate}
+                        decimals={0}
+                        min={minFloor}
+                      />{" "}
+                      $STRAT
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        <footer className="mt-12 sm:mt-16 text-center text-sm text-base-content/30 space-x-3">
-          <a href="https://opensea.io/collection/the-warplets-farcaster" target="_blank" rel="noopener noreferrer" className="hover:text-base-content/60 transition-colors">The Warplets</a>
-          <span>&middot;</span>
-          <a href="https://streme.fun" target="_blank" rel="noopener noreferrer" className="hover:text-base-content/60 transition-colors">Streme</a>
+        <footer className="mt-12 sm:mt-16 pb-8 text-center text-sm text-base-content/30">
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 mb-6">
+            <a
+              href="https://opensea.io/collection/the-warplets-farcaster"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-base-content/60 transition-colors"
+            >
+              The Warplets
+            </a>
+            <a
+              href="https://streme.fun"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-base-content/60 transition-colors"
+            >
+              Streme
+            </a>
+            <a
+              href="https://www.geckoterminal.com/base/pools/0x0000000000000000000000000000000000000000"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-base-content/60 transition-colors"
+            >
+              Geckoterminal
+            </a>
+          </div>
+          <p className="max-w-lg mx-auto text-xs text-base-content/20 leading-relaxed">
+            WarpletGobbler has no affiliation with, and is not sponsored,
+            approved, or endorsed by, the official Warplets project or the
+            owners of the Warplets intellectual property. For more information
+            on Warplets, visit their collection at:{" "}
+            <a
+              href="https://opensea.io/collection/the-warplets-farcaster"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-base-content/40 transition-colors"
+            >
+              opensea.io/collection/the-warplets-farcaster
+            </a>
+          </p>
         </footer>
       </section>
     </main>

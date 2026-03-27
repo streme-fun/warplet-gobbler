@@ -4,13 +4,15 @@
 
 export default function AuctionWarpletImage({ fid }: { fid: number }) {
   return (
-    <div className="relative w-full flex items-center justify-center">
+    <div className="group relative w-[200px] h-[200px] mx-auto rounded-xl border-2 border-transparent hover:border-secondary/40 hover:shadow-lg hover:shadow-secondary/10 hover:rotate-2 transition-all duration-300 overflow-hidden will-change-transform">
       <img
         src={`/warplets/warplet-${fid}.png`}
         alt={`Warplet #${fid}`}
-        className="rounded-xl"
+        className="w-full rounded-[10px] block"
         draggable={false}
       />
+      {/* Shine sweep on hover */}
+      <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />
     </div>
   );
 }

@@ -7,11 +7,14 @@ export default function StreamingNumber({
   start,
   perSecond,
   decimals = 8,
+  min,
   className,
 }: {
   start: number;
   perSecond: number;
   decimals?: number;
+  /** Floor value — number won't go below this */
+  min?: number;
   className?: string;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -21,11 +24,12 @@ export default function StreamingNumber({
     let raf: number;
     function tick() {
       const elapsed = (performance.now() - t0) / 1000;
-      const val = start + elapsed * perSecond;
+      let val = start + elapsed * perSecond;
+      if (min !== undefined && val < min) val = min;
       if (ref.current) {
         const [whole, frac] = val.toFixed(decimals).split(".");
         const formatted = Number(whole).toLocaleString("en-US");
-        ref.current.textContent = `${formatted}.${frac}`;
+        ref.current.textContent = frac ? `${formatted}.${frac}` : formatted;
       }
       raf = requestAnimationFrame(tick);
     }
@@ -37,7 +41,7 @@ export default function StreamingNumber({
   const [w, f] = initial.split(".");
   return (
     <span ref={ref} className={className}>
-      {Number(w).toLocaleString("en-US")}.{f}
+      {Number(w).toLocaleString("en-US")}{f ? `.${f}` : ""}
     </span>
   );
 }
