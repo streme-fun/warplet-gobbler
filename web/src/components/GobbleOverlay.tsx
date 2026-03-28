@@ -37,7 +37,8 @@ export default function GobbleOverlay({
       W = window.innerWidth;
       H = window.innerHeight;
       MID = H / 2;
-      for (const cv of [bgCv!, gooCv!, topCv!]) {
+      for (const cv of [bgCv, gooCv, topCv]) {
+        if (!cv) continue;
         cv.width = W;
         cv.height = H;
       }
@@ -120,7 +121,7 @@ export default function GobbleOverlay({
     const SN = 16;
     const CPS = 30;
     const strands: {
-      x: number;
+      xf: number;
       br: number;
       wf: number;
       wa: number;
@@ -131,7 +132,7 @@ export default function GobbleOverlay({
     for (let i = 0; i < SN; i++) {
       const s = i * 137 + 42;
       strands.push({
-        x: W * 0.05 + sr(s) * W * 0.9,
+        xf: 0.05 + sr(s) * 0.9,
         br: 6 + sr(s + 11) * 9,
         wf: 0.25 + sr(s + 33) * 0.7,
         wa: 5 + sr(s + 55) * 16,
@@ -210,11 +211,12 @@ export default function GobbleOverlay({
         for (const s of strands) {
           const conn = gap < s.bd;
           // spawn droplets on break
+          const sx = s.xf * W;
           if (s.was && !conn) {
             const my = (te + be) / 2;
             for (let k = 0; k < 5; k++)
               spawnDrop(
-                s.x + (Math.random() - 0.5) * 10,
+                sx + (Math.random() - 0.5) * 10,
                 my + (k - 2) * 10,
                 s.br * 0.5
               );
@@ -238,7 +240,7 @@ export default function GobbleOverlay({
             const cy = te + dist * f + sag;
 
             // x: base + wobble strongest in middle
-            const cx_ = s.x + (wobble + jolt) * mid * 0.6;
+            const cx_ = sx + (wobble + jolt) * mid * 0.6;
 
             // radius: fat at ends, thin in middle; thins with stretch
             const endBoost = j === 0 || j === CPS - 1 ? 1.5 : 1;
@@ -425,7 +427,9 @@ export default function GobbleOverlay({
       ctx.restore();
     }
 
+    const MAX_SPARKLES = 200;
     function spawnSparkles(centerX: number, centerY: number) {
+      if (sparkles.length >= MAX_SPARKLES) return;
       for (let i = 0; i < 6; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 0.5 + Math.random() * 2;

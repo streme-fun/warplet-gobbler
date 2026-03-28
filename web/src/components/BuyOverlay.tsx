@@ -606,7 +606,7 @@ export default function BuyOverlay({
       drawPrizeGlow(cx, cy);
 
       // Image at center: egg during combat, crossfade to warplet after finisher
-      const showWarplet = phase === "finisher" && phaseTime > 2.0 || phase === "resolved";
+      const showWarplet = (phase === "finisher" && phaseTime > 2.0) || phase === "resolved";
       const crossfade = phase === "finisher" ? Math.min(1, Math.max(0, (phaseTime - 2.0) / 1.0)) : phase === "resolved" ? 1 : 0;
       const imgAlpha =
         phase === "materialize"

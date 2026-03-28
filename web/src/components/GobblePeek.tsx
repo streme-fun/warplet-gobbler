@@ -103,10 +103,11 @@ export default function GobblePeek() {
     frame();
 
     const onResize = () => {
+      if (!gooCv) return;
       W = window.innerWidth;
       H = window.innerHeight;
-      gooCv!.width = W;
-      gooCv!.height = H;
+      gooCv.width = W;
+      gooCv.height = H;
       botY = H + 40;
       botTarget = H + 40;
     };
