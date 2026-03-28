@@ -10,7 +10,8 @@ interface IDutchAuction {
 
     /// @notice Deposit a Warplet NFT and receive the full pot balance
     /// @param tokenId The Warplet token ID to deposit
-    function gobble(uint256 tokenId) external;
+    /// @param minPrice Minimum acceptable payout to protect from stale mempool price movement
+    function gobble(uint256 tokenId, uint256 minPrice) external;
 
     /// @notice Emitted when a Warplet is gobbled
     event Gobbled(address indexed seller, uint256 indexed tokenId, uint256 payout);

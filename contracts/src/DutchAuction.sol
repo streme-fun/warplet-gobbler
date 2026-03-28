@@ -24,9 +24,11 @@ contract DutchAuction is IDutchAuction {
         return paymentToken.balanceOf(address(this));
     }
 
-    function gobble(uint256 tokenId) external override {
+    function gobble(uint256 tokenId, uint256 minPrice) external override {
+        uint256 payout = currentPrice();
         warplets.safeTransferFrom(msg.sender, nftReserve, tokenId);
-        paymentToken.transferFrom(address(this), msg.sender, currentPrice());
-        emit Gobbled(msg.sender, tokenId, currentPrice());
+        require(payout >= minPrice, "Price is too low, try again later");
+        paymentToken.transfer(msg.sender, payout);
+        emit Gobbled(msg.sender, tokenId, payout);
     }
 }
