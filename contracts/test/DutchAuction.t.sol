@@ -46,7 +46,7 @@ contract DutchAuctionTest is Test {
 
     function test_constructor_sets_approval_for_recovery_wallet() public view {
         uint256 allowance = paymentToken.allowance(address(auction), recoveryWallet);
-        assertEq(allowance, 100 ether);
+        assertEq(allowance, type(uint256).max);
     }
 
     function test_currentPrice_returns_payment_token_balance() public view {

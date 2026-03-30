@@ -7,5 +7,8 @@
   },
   "lib/forge-std": {
     "rev": "c0f966cb111f621bfb283b2a388bc7be18953bba"
+  },
+  "lib/ethereum-contracts": {
+    "rev": "11465d885fd08957b76c7a1581236f124bef2ba0"
   }
 }

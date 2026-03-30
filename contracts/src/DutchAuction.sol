@@ -13,11 +13,13 @@ contract DutchAuction is IDutchAuction {
     IERC20 public immutable paymentToken;   // USDCx
     address public immutable nftReserve;    // Where gobbled Warplets go next
 
-    constructor(address _warplets, address _paymentToken, address _nftReserve, address _recoveryWallet) {
+    // @public
+    // _feeHandler gets an allowance to withdraw balance when switching to a new auction contract
+    constructor(address _warplets, address _paymentToken, address _nftReserve, address _feeHandler) {
         warplets = IERC721(_warplets);
         paymentToken = IERC20(_paymentToken);
         nftReserve = _nftReserve;
-        paymentToken.approve(_recoveryWallet, 100 ether);  // this account can recover up to 100 paymentToken if needed
+        paymentToken.approve(_feeHandler, type(uint256).max);
     }
 
     function currentPrice() public view returns (uint256) {
