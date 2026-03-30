@@ -5,6 +5,9 @@ node_modules/
 web/.next/
 web/out/
 
+# OpenNext / Cloudflare
+web/.open-next/
+
 # Foundry
 contracts/out/
 contracts/cache/

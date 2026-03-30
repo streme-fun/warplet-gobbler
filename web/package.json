@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:cloudflare": "opennextjs-cloudflare build",
-    "deploy:cloudflare": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "preview:cloudflare": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "build:cloudflare": "next build && opennextjs-cloudflare build",
+    "deploy:cloudflare": "next build && opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "preview:cloudflare": "next build && opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
