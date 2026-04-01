@@ -9,7 +9,11 @@ interface IAuctionSell {
     /// @param amount The $STRAT amount to bid
     function bid(uint256 amount) external;
 
-    /// @notice Settle the current auction — transfers NFT to winner, $STRAT to staking
+    /// @notice Settle the current auction and start the next from the queue (normal user path)
+    function settleCurrentAndCreateNewAuction() external;
+
+    /// @notice Settle the current auction only while the contract is paused (emergency / migration path).
+    ///         Does not start the next auction — use `settleCurrentAndCreateNewAuction` when unpaused.
     function settle() external;
 
     /// @notice Start a new auction with a gobbled Warplet

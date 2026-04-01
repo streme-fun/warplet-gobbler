@@ -1,38 +1,254 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {IAuctionSell} from "./interfaces/IAuctionSell.sol";
-
 /// @title AuctionSell
-/// @notice Highest-bidder auction for gobbled Warplets. Bids in $STRAT.
-/// @dev TODO: Mark to adapt from DegenDogs auction contract. Key decisions:
-///      - Auction duration (24h? 48h? configurable?)
-///      - Minimum bid / reserve price?
-///      - What happens if auction gets no bids? (return to gobbler? relist?)
-///      - $STRAT proceeds go to staking contract — direct transfer or stream?
-contract AuctionSell is IAuctionSell {
-    // address public immutable stratToken;     // $STRAT token
-    // address public immutable staking;        // Staking contract — receives auction proceeds
-    // address public immutable warplets;       // Warplets NFT contract
+/// @notice Nouns-style highest-bidder auction for Warplets. Bids in an ERC20 `bidToken`.
+/// @dev Adapted from NounsAuctionHouse / Zora AuctionHouse (see DegenDogs mission3 branch).
+///      NFTs are received via safeTransfer and queued FIFO; each new auction consumes the queue head.
 
-    function bid(uint256 /* amount */) external override {
-        revert("not implemented");
+import {IAuctionSell} from "./interfaces/IAuctionSell.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {IERC721} from "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
+import {IERC721Receiver} from "openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol";
+import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
+import {Pausable} from "openzeppelin-contracts/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+
+contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC721Receiver {
+    struct Auction {
+        uint256 tokenId;
+        uint256 amount;
+        uint256 startTime;
+        uint256 endTime;
+        address payable bidder;
+        bool settled;
     }
 
-    function settle() external override {
-        revert("not implemented");
+    IERC721 public immutable nft;
+    IERC20 public immutable bidToken;
+
+    address public proceedsRecipient;
+
+    uint256 public timeBuffer;
+    uint256 public reservePrice;
+    uint8 public minBidIncrementPercentage;
+    uint256 public duration;
+
+    Auction public auction;
+
+    uint256[] private _nftQueue;
+    uint256 private _queueHead;
+
+    event AuctionExtended(uint256 indexed tokenId, uint256 endTime);
+    event AuctionTimeBufferUpdated(uint256 timeBuffer);
+    event AuctionReservePriceUpdated(uint256 reservePrice);
+    event AuctionMinBidIncrementPercentageUpdated(uint8 minBidIncrementPercentage);
+    event ProceedsRecipientUpdated(address indexed recipient);
+
+    constructor(
+        IERC721 _nft,
+        IERC20 _bidToken,
+        address _proceedsRecipient,
+        uint256 _timeBuffer,
+        uint256 _reservePrice,
+        uint8 _minBidIncrementPercentage,
+        uint256 _duration,
+        address initialOwner
+    ) Ownable(initialOwner) {
+        require(address(_nft) != address(0) && address(_bidToken) != address(0), "AuctionSell: zero token");
+        require(_proceedsRecipient != address(0), "AuctionSell: zero proceeds");
+        nft = _nft;
+        bidToken = _bidToken;
+        proceedsRecipient = _proceedsRecipient;
+        timeBuffer = _timeBuffer;
+        reservePrice = _reservePrice;
+        minBidIncrementPercentage = _minBidIncrementPercentage;
+        duration = _duration;
+        _pause();
     }
 
-    function startAuction(uint256 /* tokenId */) external override {
-        revert("not implemented");
+    /// @inheritdoc IERC721Receiver
+    function onERC721Received(address, address, uint256 tokenId, bytes calldata)
+        external
+        override
+        returns (bytes4)
+    {
+        require(msg.sender == address(nft), "AuctionSell: only configured NFT");
+        _nftQueue.push(tokenId);
+        return IERC721Receiver.onERC721Received.selector;
     }
 
+    function queuedLength() external view returns (uint256) {
+        return _nftQueue.length - _queueHead;
+    }
+
+    function nextQueuedTokenId() external view returns (uint256) {
+        require(_nftQueue.length > _queueHead, "AuctionSell: empty queue");
+        return _nftQueue[_queueHead];
+    }
+
+    /// @inheritdoc IAuctionSell
+    function bid(uint256 amount) external override nonReentrant whenNotPaused {
+        Auction memory _auction = auction;
+
+        require(_auction.startTime != 0, "AuctionSell: no auction");
+        require(!_auction.settled, "AuctionSell: settled");
+        require(block.timestamp < _auction.endTime, "AuctionSell: expired");
+        require(amount >= reservePrice, "AuctionSell: below reserve");
+
+        if (_auction.amount > 0) {
+            require(
+                amount >= _auction.amount + ((_auction.amount * minBidIncrementPercentage) / 100),
+                "AuctionSell: bid too low"
+            );
+        }
+
+        address payable lastBidder = _auction.bidder;
+        uint256 lastAmount = _auction.amount;
+
+        require(bidToken.transferFrom(msg.sender, address(this), amount), "AuctionSell: pull failed");
+
+        if (lastBidder != address(0)) {
+            require(bidToken.transfer(lastBidder, lastAmount), "AuctionSell: refund failed");
+        }
+
+        auction.amount = amount;
+        auction.bidder = payable(msg.sender);
+
+        bool extended = _auction.endTime - block.timestamp < timeBuffer;
+        if (extended) {
+            auction.endTime = block.timestamp + timeBuffer;
+        }
+
+        emit BidPlaced(_auction.tokenId, msg.sender, amount);
+
+        if (extended) {
+            emit AuctionExtended(_auction.tokenId, auction.endTime);
+        }
+    }
+
+    /// @inheritdoc IAuctionSell
+    function settle() external override nonReentrant whenPaused {
+        _settleAuction();
+    }
+
+    /// @inheritdoc IAuctionSell
+    function settleCurrentAndCreateNewAuction() external override nonReentrant whenNotPaused {
+        _settleAuction();
+        if (_nftQueue.length > _queueHead) {
+            _startAuctionFromQueueHead();
+        }
+    }
+
+    /// @inheritdoc IAuctionSell
+    function startAuction(uint256 tokenId) external override nonReentrant whenNotPaused {
+        require(auction.startTime == 0 || auction.settled, "AuctionSell: auction live");
+        require(_nftQueue.length > _queueHead, "AuctionSell: empty queue");
+        require(tokenId == _nftQueue[_queueHead], "AuctionSell: not next in queue");
+        _startAuctionFromQueueHead();
+    }
+
+    /// @inheritdoc IAuctionSell
     function currentAuction()
         external
-        pure
+        view
         override
-        returns (uint256, address, uint256, uint256)
+        returns (uint256 tokenId, address highBidder, uint256 highBid, uint256 endTime)
     {
-        revert("not implemented");
+        if (auction.startTime == 0 || auction.settled) {
+            return (0, address(0), 0, 0);
+        }
+        return (auction.tokenId, auction.bidder, auction.amount, auction.endTime);
+    }
+
+    function extendAuction() external nonReentrant whenNotPaused {
+        Auction memory _auction = auction;
+
+        require(_auction.amount == 0, "AuctionSell: has bids");
+        require(block.timestamp >= _auction.endTime, "AuctionSell: still live");
+        require(_auction.startTime != 0 && !_auction.settled, "AuctionSell: no auction");
+
+        auction.endTime = block.timestamp + duration;
+
+        emit AuctionExtended(_auction.tokenId, auction.endTime);
+    }
+
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner nonReentrant {
+        _unpause();
+
+        if (auction.startTime == 0 || auction.settled) {
+            if (_nftQueue.length > _queueHead) {
+                _startAuctionFromQueueHead();
+            }
+        }
+    }
+
+    function setTimeBuffer(uint256 _timeBuffer) external onlyOwner {
+        timeBuffer = _timeBuffer;
+        emit AuctionTimeBufferUpdated(_timeBuffer);
+    }
+
+    function setReservePrice(uint256 _reservePrice) external onlyOwner {
+        reservePrice = _reservePrice;
+        emit AuctionReservePriceUpdated(_reservePrice);
+    }
+
+    function setMinBidIncrementPercentage(uint8 _minBidIncrementPercentage) external onlyOwner {
+        minBidIncrementPercentage = _minBidIncrementPercentage;
+        emit AuctionMinBidIncrementPercentageUpdated(_minBidIncrementPercentage);
+    }
+
+    function setProceedsRecipient(address _proceedsRecipient) external onlyOwner {
+        require(_proceedsRecipient != address(0), "AuctionSell: zero proceeds");
+        proceedsRecipient = _proceedsRecipient;
+        emit ProceedsRecipientUpdated(_proceedsRecipient);
+    }
+
+    function _startAuctionFromQueueHead() internal {
+        require(_nftQueue.length > _queueHead, "AuctionSell: empty queue");
+
+        uint256 tokenId = _nftQueue[_queueHead];
+        ++_queueHead;
+
+        require(nft.ownerOf(tokenId) == address(this), "AuctionSell: not holding NFT");
+
+        uint256 startTime = block.timestamp;
+        uint256 endTime = startTime + duration;
+
+        auction = Auction({
+            tokenId: tokenId,
+            amount: 0,
+            startTime: startTime,
+            endTime: endTime,
+            bidder: payable(address(0)),
+            settled: false
+        });
+
+        emit AuctionStarted(tokenId, endTime);
+    }
+
+    function _settleAuction() internal {
+        Auction memory _auction = auction;
+
+        require(_auction.amount > 0, "AuctionSell: needs bids");
+        require(_auction.startTime != 0, "AuctionSell: not begun");
+        require(!_auction.settled, "AuctionSell: already settled");
+        require(block.timestamp >= _auction.endTime, "AuctionSell: not complete");
+
+        auction.settled = true;
+
+        if (_auction.bidder == address(0)) {
+            nft.transferFrom(address(this), owner(), _auction.tokenId);
+        } else {
+            nft.transferFrom(address(this), _auction.bidder, _auction.tokenId);
+        }
+
+        require(bidToken.transfer(proceedsRecipient, _auction.amount), "AuctionSell: proceeds failed");
+
+        emit AuctionSettled(_auction.tokenId, _auction.bidder, _auction.amount);
     }
 }
