@@ -128,8 +128,8 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         uint256 amount,
         bytes calldata /*userData*/,
         bytes calldata /*operatorData*/
-    ) external override {
-        require(msg.sender == address(bidToken), "Invalid token");
+    ) external override nonReentrant whenNotPaused {
+        require(msg.sender == address(bidToken), "AuctionSell: only configured token");
         _bid(amount, from);
     }
     
@@ -151,12 +151,13 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         address payable lastBidder = _auction.bidder;
         uint256 lastAmount = _auction.amount;
 
+        
+        auction.amount = amount;
+        auction.bidder = payable(from);
+        
         if (lastBidder != address(0)) {
             require(bidToken.transfer(lastBidder, lastAmount), "AuctionSell: refund failed");
         }
-
-        auction.amount = amount;
-        auction.bidder = payable(from);
 
         bool extended = _auction.endTime - block.timestamp < timeBuffer;
         if (extended) {
