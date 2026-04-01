@@ -5,12 +5,23 @@ import {Test} from "forge-std/Test.sol";
 import {FeeHandler} from "../../src/FeeHandler.sol";
 import {DutchAuction} from "../../src/DutchAuction.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @dev Minimal collection so `DutchAuction` can be constructed on the fork (gobble is unused here).
 contract ForkWarplet721 is ERC721 {
     constructor() ERC721("ForkWarplet", "FWP") {}
+}
+
+contract NoopLPFactory {
+    function claimRewards(address) external {}
+}
+
+contract NoopStremeZap {
+    function zap(address, uint256, uint256, address) external payable returns (uint256 amountOut) {
+        return 0;
+    }
 }
 
 /// @notice Fork tests against Base mainnet: real `ISuperToken` (streme) from env; auction is deployed locally.
@@ -23,15 +34,11 @@ contract ForkWarplet721 is ERC721 {
     ///      With zero cash balance, swap path is skipped — enough to exercise access control
 ///      and flow updates against a real SuperToken.
 contract FeeHandlerForkTest is Test {
-    string internal constant DEFAULT_BASE_RPC_URL = "https://mainnet.base.org";
-    address internal constant UNISWAP_SINGLETON = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
-
-    /// @notice Native Streme SuperToken on Base used as default for fork tests.
-    address internal constant STREME_SUPERTOKEN_BASE = 0x3042b035325393F3d72390C7E5d51F26fe1F0e61;
-    address internal constant STREME_LP_FACTORY_V4_BASE = 0x341FaEe049DC78F437B00FbCcC33020fa252A957;
-
-    /// @notice Canonical Base WETH (18 decimals).
-    address internal constant WETH_BASE = 0x4200000000000000000000000000000000000006;
+    /// @notice Native Base USDC (6 decimals).
+    address internal constant USDC_BASE = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    /// @notice Interim Base SuperToken default provided by project owner.
+    address internal constant DEFAULT_STREME_SUPERTOKEN = 0x3042b035325393F3d72390C7E5d51F26fe1F0e61;
+    address internal constant DEFAULT_LP_FACTORY_V4 = 0x341FaEe049DC78F437B00FbCcC33020fa252A957;
 
     uint256 internal constant TARGET_DURATION = 7 days;
     uint256 internal constant MIN_TOKEN_OUT = 0;
@@ -56,7 +63,7 @@ contract FeeHandlerForkTest is Test {
 
     /// @dev Load fork + deploy; mark `ready` when we can run integration tests.
     function setUp() public {
-        string memory rpc = vm.envOr("BASE_RPC_URL", DEFAULT_BASE_RPC_URL);
+        string memory rpc = vm.envOr("BASE_RPC_URL", string("https://mainnet.base.org"));
 
         uint256 pin = vm.envOr("FEE_HANDLER_FORK_BLOCK", uint256(0));
         if (pin != 0) vm.createSelectFork(rpc, pin);
@@ -64,19 +71,18 @@ contract FeeHandlerForkTest is Test {
 
         forkCreated = true;
 
-        streme = vm.envOr("FEE_HANDLER_FORK_STREME", STREME_SUPERTOKEN_BASE);
-        if (streme == address(0)) {
-            ready = false;
-            return;
-        }
+        streme = vm.envOr("FEE_HANDLER_FORK_STREME", DEFAULT_STREME_SUPERTOKEN);
 
         cash = vm.envOr("FEE_HANDLER_FORK_CASH", WETH_BASE);
 
         admin = makeAddr("feeHandlerForkAdmin");
         rebalancer = makeAddr("feeHandlerForkRebalancer");
         stranger = makeAddr("feeHandlerForkStranger");
-        lpFactory = vm.envOr("FEE_HANDLER_FORK_LP_FACTORY", STREME_LP_FACTORY_V4_BASE);
-        stremeZap = vm.envOr("FEE_HANDLER_FORK_STREME_ZAP", makeAddr("feeHandlerForkZapNoop"));
+        NoopLPFactory noopFactory = new NoopLPFactory();
+        lpFactory = vm.envOr("FEE_HANDLER_FORK_LP_FACTORY", address(noopFactory));
+
+        NoopStremeZap noopZap = new NoopStremeZap();
+        stremeZap = vm.envOr("FEE_HANDLER_FORK_STREME_ZAP", address(noopZap));
 
         vm.label(admin, "admin");
         vm.label(rebalancer, "rebalancer");
@@ -175,11 +181,9 @@ contract FeeHandlerForkTest is Test {
         assertEq(handler.targetDuration(), newDur);
     }
 
-    /// @notice Uses live fork balances by transferring from Uniswap singleton.
+    /// @notice Validate formula against live handler balance to avoid storage-layout assumptions for SuperTokens.
     function test_previewFlowRate_matches_balance_over_duration() public requiresIntegration {
-        uint256 amount = 1_000 ether;
-        _stealTokensFromSingleton(streme, address(handler), amount);
-
+        uint256 amount = IERC20(streme).balanceOf(address(handler));
         int96 expected = int96(int256(amount / TARGET_DURATION));
         assertEq(handler.previewFlowRate(), expected);
     }
