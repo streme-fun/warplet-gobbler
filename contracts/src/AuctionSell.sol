@@ -273,11 +273,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
 
         auction.settled = true;
 
-        if (_auction.bidder == address(0)) {
-            nft.transferFrom(address(this), owner(), _auction.tokenId);
-        } else {
-            nft.transferFrom(address(this), _auction.bidder, _auction.tokenId);
-        }
+        nft.transferFrom(address(this), _auction.bidder, _auction.tokenId);
 
         require(bidToken.transfer(proceedsRecipient, _auction.amount), "AuctionSell: proceeds failed");
 
