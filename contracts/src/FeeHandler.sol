@@ -13,13 +13,14 @@ interface ILPFactoryv4 {
 
 /// @dev Streme `StremeZapUniversal.swapTokenForStreme` — v4 single-hop swap into `stremeCoin`.
 interface IStremeZapUniversal {
-    function swapTokenForStreme(address tokenIn, address stremeCoin, uint256 amountIn, uint256 amountOutMin, address recipient)
+    function zap(address stremeCoin, uint256 amountIn, uint256 amountOutMin, address stakingContract)
         external
+        payable
         returns (uint256 amountOut);
 }
 
 /// @title FeeHandler
-/// @notice Collects locker fees (cash + token), swaps cash via `StremeZapUniversal`, streams streme to the auction.
+/// @notice Collects locker fees (weth + token), swaps weth via `StremeZapUniversal`, streams streme to the auction.
 /// @dev `DEFAULT_ADMIN_ROLE` configures auction/stream settings. `REBALANCER_ROLE` may call `rebalance` and `rebalanceFlowRate`.
 contract FeeHandler is AccessControl {
     using SafeERC20 for IERC20;
@@ -28,12 +29,12 @@ contract FeeHandler is AccessControl {
     bytes32 public constant REBALANCER_ROLE = keccak256("REBALANCER_ROLE");
     uint256 public immutable MIN_TOKEN_OUT;
 
-    IERC20 public immutable cashToken;
+    IERC20 public immutable weth;
     ISuperToken public immutable stremeToken;
     ILPFactoryv4 public immutable lpFactory;
 
     address public auction;
-    /// @notice Streme universal zap — performs v4 `cashToken` -> `stremeToken` swap into this contract.
+    /// @notice Streme universal zap — performs v4 `weth` -> `stremeToken` swap into this contract.
     IStremeZapUniversal public immutable stremeZap;
 
     bool public streamActive;
@@ -41,11 +42,11 @@ contract FeeHandler is AccessControl {
     /// @notice Number of seconds used for flow-rate targeting: flowRate = balance / targetDuration.
     uint256 public targetDuration;
 
-    event CashSwapped(address indexed zap, uint256 cashIn, uint256 tokenOut);
+    event WethSwapped(address indexed zap, uint256 wethIn, uint256 tokenOut);
     event RewardsClaimedAndSwapped(
         address indexed caller,
-        uint256 cashClaimed,
-        uint256 cashSwapped,
+        uint256 wethClaimed,
+        uint256 wethSwapped,
         uint256 stremeOut
     );
     event AuctionUpdated(address indexed oldAuction, address indexed newAuction);
@@ -61,7 +62,7 @@ contract FeeHandler is AccessControl {
     error UnauthorizedRebalance();
 
     constructor(
-        address _cashToken,
+        address _weth,
         address _stremeToken,
         address _lpFactory,
         address _auction,
@@ -72,13 +73,13 @@ contract FeeHandler is AccessControl {
         uint256 _minTokenOut
     ) {
         if (
-            _cashToken == address(0) || _stremeToken == address(0) || _lpFactory == address(0)
+            _weth == address(0) || _stremeToken == address(0) || _lpFactory == address(0)
                 || _auction == address(0) || _stremeZap == address(0) || _admin == address(0)
         ) revert ZeroAddress();
-        if (_cashToken == _stremeToken) revert IdenticalPoolCurrencies();
+        if (_weth == _stremeToken) revert IdenticalPoolCurrencies();
         if (_targetDuration == 0) revert InvalidDuration();
 
-        cashToken = IERC20(_cashToken);
+        weth = IERC20(_weth);
         stremeToken = ISuperToken(_stremeToken);
         lpFactory = ILPFactoryv4(_lpFactory);
         auction = _auction;
@@ -91,6 +92,8 @@ contract FeeHandler is AccessControl {
         if (_rebalancer != address(0)) {
             _grantRole(REBALANCER_ROLE, _rebalancer);
         }
+
+        weth.forceApprove(address(stremeZap), type(uint256).max);
     }
 
     modifier onlyRebalancerOrAdmin() {
@@ -129,13 +132,13 @@ contract FeeHandler is AccessControl {
         streamActive = true;
     }
 
-    /// @notice Claim rewards, swap cash to streme (no `minTokenOut`), then update the auction stream rate.
+    /// @notice Claim rewards, swap weth to streme (no `minTokenOut`), then update the auction stream rate.
     function rebalance() external onlyRebalancerOrAdmin {
-        _claimRewardsAndSwapCashToToken(0);
+        _claimRewardsAndSwapWethToToken(0);
         _rebalanceFlowRate();
     }
 
-    /// @notice Anyone can rebalance flow rate from current cash balance.
+    /// @notice Anyone can rebalance flow rate from current weth balance.
     function rebalanceFlowRate() external {
         if (!streamActive) revert StreamNotActive();
         _rebalanceFlowRate();
@@ -147,39 +150,35 @@ contract FeeHandler is AccessControl {
         emit FlowRateRebalanced(auction, nextRate);
     }
 
-    /// @notice Permissionless harvest path: claim rewards from LP factory, then swap all cash to streme.
-    function claimRewardsAndSwapCashToToken() external {
-        _claimRewardsAndSwapCashToToken(MIN_TOKEN_OUT);
+    /// @notice Permissionless harvest path: claim rewards from LP factory, then swap all weth to streme.
+    function claimRewardsAndSwapWethToToken() external {
+        _claimRewardsAndSwapWethToToken(MIN_TOKEN_OUT);
     }
 
-    function _claimRewardsAndSwapCashToToken(uint256 minTokenOut) internal {
-        uint256 cashBeforeClaim = cashToken.balanceOf(address(this));
+    function _claimRewardsAndSwapWethToToken(uint256 minTokenOut) internal {
+        uint256 wethBeforeClaim = weth.balanceOf(address(this));
         lpFactory.claimRewards(address(stremeToken));
-        uint256 cashAfterClaim = cashToken.balanceOf(address(this));
-        uint256 cashClaimed = cashAfterClaim - cashBeforeClaim;
+        uint256 wethAfterClaim = weth.balanceOf(address(this));
+        uint256 wethClaimed = wethAfterClaim - wethBeforeClaim;
 
         uint256 stremeBeforeSwap = stremeToken.balanceOf(address(this));
-        uint256 cashBeforeSwap = cashToken.balanceOf(address(this));
+        uint256 wethBeforeSwap = weth.balanceOf(address(this));
 
-        if (cashBeforeSwap > 0) {
-            _swapCashToToken(cashBeforeSwap, stremeBeforeSwap, minTokenOut);
+        if (wethBeforeSwap > 0) {
+            _swapWethToToken(wethBeforeSwap, stremeBeforeSwap, minTokenOut);
         }
 
-        uint256 cashSwapped = cashBeforeSwap - cashToken.balanceOf(address(this));
+        uint256 wethSwapped = wethBeforeSwap - weth.balanceOf(address(this));
         uint256 stremeOut = stremeToken.balanceOf(address(this)) - stremeBeforeSwap;
-        emit RewardsClaimedAndSwapped(msg.sender, cashClaimed, cashSwapped, stremeOut);
+        emit RewardsClaimedAndSwapped(msg.sender, wethClaimed, wethSwapped, stremeOut);
     }
 
-    function _swapCashToToken(uint256 cashBefore, uint256 tokenBefore, uint256 minTokenOut) internal {
-        if (cashBefore > type(uint128).max) revert AmountInTooLarge();
-
-        cashToken.forceApprove(address(stremeZap), cashBefore);
-        stremeZap.swapTokenForStreme(address(cashToken), address(stremeToken), cashBefore, minTokenOut, address(this));
-        cashToken.forceApprove(address(stremeZap), 0);
-
-        uint256 cashIn = cashBefore - cashToken.balanceOf(address(this));
+    function _swapWethToToken(uint256 wethBefore, uint256 tokenBefore, uint256 minTokenOut) internal {
+        if (wethBefore > type(uint128).max) revert AmountInTooLarge();
+        stremeZap.zap(address(stremeToken), uint256(wethBefore), minTokenOut, address(this)){value: 0};
+        uint256 wethIn = wethBefore - weth.balanceOf(address(this));
         uint256 tokenOut = stremeToken.balanceOf(address(this)) - tokenBefore;
-        emit CashSwapped(address(stremeZap), cashIn, tokenOut);
+        emit WethSwapped(address(stremeZap), wethIn, tokenOut);
     }
 
     function previewFlowRate() external view returns (int96) {
