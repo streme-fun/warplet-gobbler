@@ -14,7 +14,18 @@ import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {Pausable} from "openzeppelin-contracts/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
-contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC721Receiver {
+interface IERC777Recipient {
+    function tokensReceived(
+        address operator,
+        address from,
+        address to,
+        uint256 amount,
+        bytes calldata userData,
+        bytes calldata operatorData
+    ) external;
+}
+
+contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC721Receiver, IERC777Recipient {
     struct Auction {
         uint256 tokenId;
         uint256 amount;
@@ -65,6 +76,23 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         minBidIncrementPercentage = _minBidIncrementPercentage;
         duration = _duration;
         _pause();
+        // Register this contract as an ERC1820 implementer for the ERC777TokensRecipient interface
+        // (i.e., ERC1820: "ERC777TokensRecipient" = keccak256("ERC777TokensRecipient"))
+        // Allows contract to safely receive ERC777 tokens
+
+        address _ERC1820_REGISTRY = 0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24;
+        bytes32 _TOKENS_RECIPIENT_INTERFACE_HASH = keccak256("ERC777TokensRecipient");
+
+        // solhint-disable-next-line avoid-low-level-calls
+        (bool ok, ) = _ERC1820_REGISTRY.call(
+            abi.encodeWithSignature(
+                "setInterfaceImplementer(address,bytes32,address)",
+                address(this),
+                _TOKENS_RECIPIENT_INTERFACE_HASH,
+                address(this)
+            )
+        );
+        require(ok, "AuctionSell: ERC1820 registration failed");
     }
 
     /// @inheritdoc IERC721Receiver
@@ -89,6 +117,23 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
 
     /// @inheritdoc IAuctionSell
     function bid(uint256 amount) external override nonReentrant whenNotPaused {
+        require(bidToken.transferFrom(msg.sender, address(this), amount), "AuctionSell: pull failed");
+        _bid(amount, msg.sender);
+    }
+
+    function tokensReceived(
+        address /*operator*/,
+        address from,
+        address /*to*/,
+        uint256 amount,
+        bytes calldata /*userData*/,
+        bytes calldata /*operatorData*/
+    ) external override {
+        require(msg.sender == address(bidToken), "Invalid token");
+        _bid(amount, from);
+    }
+    
+    function _bid(uint256 amount, address from) internal {
         Auction memory _auction = auction;
 
         require(_auction.startTime != 0, "AuctionSell: no auction");
@@ -106,21 +151,19 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         address payable lastBidder = _auction.bidder;
         uint256 lastAmount = _auction.amount;
 
-        require(bidToken.transferFrom(msg.sender, address(this), amount), "AuctionSell: pull failed");
-
         if (lastBidder != address(0)) {
             require(bidToken.transfer(lastBidder, lastAmount), "AuctionSell: refund failed");
         }
 
         auction.amount = amount;
-        auction.bidder = payable(msg.sender);
+        auction.bidder = payable(from);
 
         bool extended = _auction.endTime - block.timestamp < timeBuffer;
         if (extended) {
             auction.endTime = block.timestamp + timeBuffer;
         }
 
-        emit BidPlaced(_auction.tokenId, msg.sender, amount);
+        emit BidPlaced(_auction.tokenId, from, amount);
 
         if (extended) {
             emit AuctionExtended(_auction.tokenId, auction.endTime);

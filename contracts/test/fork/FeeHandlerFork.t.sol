@@ -6,6 +6,7 @@ import {FeeHandler} from "../../src/FeeHandler.sol";
 import {DutchAuction} from "../../src/DutchAuction.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @dev Minimal collection so `DutchAuction` can be constructed on the fork (gobble is unused here).
 contract ForkWarplet721 is ERC721 {
@@ -18,12 +19,19 @@ contract ForkWarplet721 is ERC721 {
 ///      (the same asset `FeeHandler` streams via `ISuperToken.flow`). Plain ERC-20s will not work.
 ///      Integration tests skip when env is incomplete (`vm.skip`).
 ///
-///      `lpFactory` / `stremeZap` default to bare EOAs when unset: `claimRewards` is a no-op success,
-///      and with zero cash balance the swap path is skipped — enough to exercise access control
+    ///      `lpFactory` defaults to real Streme LPFactoryV4 on Base and `stremeZap` to a bare EOA when unset.
+    ///      With zero cash balance, swap path is skipped — enough to exercise access control
 ///      and flow updates against a real SuperToken.
 contract FeeHandlerForkTest is Test {
-    /// @notice Native Base USDC (6 decimals).
-    address internal constant USDC_BASE = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    string internal constant DEFAULT_BASE_RPC_URL = "https://mainnet.base.org";
+    address internal constant UNISWAP_SINGLETON = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
+
+    /// @notice Native Streme SuperToken on Base used as default for fork tests.
+    address internal constant STREME_SUPERTOKEN_BASE = 0x3042b035325393F3d72390C7E5d51F26fe1F0e61;
+    address internal constant STREME_LP_FACTORY_V4_BASE = 0x341FaEe049DC78F437B00FbCcC33020fa252A957;
+
+    /// @notice Canonical Base WETH (18 decimals).
+    address internal constant WETH_BASE = 0x4200000000000000000000000000000000000006;
 
     uint256 internal constant TARGET_DURATION = 7 days;
     uint256 internal constant MIN_TOKEN_OUT = 0;
@@ -48,12 +56,7 @@ contract FeeHandlerForkTest is Test {
 
     /// @dev Load fork + deploy; mark `ready` when we can run integration tests.
     function setUp() public {
-        string memory rpc = vm.envOr("BASE_RPC_URL", string(""));
-        if (bytes(rpc).length == 0) {
-            forkCreated = false;
-            ready = false;
-            return;
-        }
+        string memory rpc = vm.envOr("BASE_RPC_URL", DEFAULT_BASE_RPC_URL);
 
         uint256 pin = vm.envOr("FEE_HANDLER_FORK_BLOCK", uint256(0));
         if (pin != 0) vm.createSelectFork(rpc, pin);
@@ -61,18 +64,18 @@ contract FeeHandlerForkTest is Test {
 
         forkCreated = true;
 
-        streme = vm.envOr("FEE_HANDLER_FORK_STREME", address(0));
+        streme = vm.envOr("FEE_HANDLER_FORK_STREME", STREME_SUPERTOKEN_BASE);
         if (streme == address(0)) {
             ready = false;
             return;
         }
 
-        cash = vm.envOr("FEE_HANDLER_FORK_CASH", USDC_BASE);
+        cash = vm.envOr("FEE_HANDLER_FORK_CASH", WETH_BASE);
 
         admin = makeAddr("feeHandlerForkAdmin");
         rebalancer = makeAddr("feeHandlerForkRebalancer");
         stranger = makeAddr("feeHandlerForkStranger");
-        lpFactory = vm.envOr("FEE_HANDLER_FORK_LP_FACTORY", makeAddr("feeHandlerForkLpNoop"));
+        lpFactory = vm.envOr("FEE_HANDLER_FORK_LP_FACTORY", STREME_LP_FACTORY_V4_BASE);
         stremeZap = vm.envOr("FEE_HANDLER_FORK_STREME_ZAP", makeAddr("feeHandlerForkZapNoop"));
 
         vm.label(admin, "admin");
@@ -125,11 +128,6 @@ contract FeeHandlerForkTest is Test {
         _;
     }
 
-    function test_fork_skippedWithoutRpc() public {
-        if (forkCreated) vm.skip(true);
-        assertTrue(bytes(vm.envOr("BASE_RPC_URL", string(""))).length == 0, "set BASE_RPC_URL to run fork tests");
-    }
-
     function test_roles_grantedOnDeploy() public requiresIntegration {
         bytes32 adminRole = handler.DEFAULT_ADMIN_ROLE();
         bytes32 rebalancerRole = handler.REBALANCER_ROLE();
@@ -163,10 +161,10 @@ contract FeeHandlerForkTest is Test {
     }
 
     function test_stranger_cannot_setTargetDuration() public requiresIntegration {
-        vm.prank(stranger);
         vm.expectRevert(
             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, handler.DEFAULT_ADMIN_ROLE())
         );
+        vm.prank(stranger);
         handler.setTargetDuration(TARGET_DURATION + 1);
     }
 
@@ -177,12 +175,21 @@ contract FeeHandlerForkTest is Test {
         assertEq(handler.targetDuration(), newDur);
     }
 
-    /// @notice Uses Foundry `deal` on fork state — real SuperToken balance field updated.
+    /// @notice Uses live fork balances by transferring from Uniswap singleton.
     function test_previewFlowRate_matches_balance_over_duration() public requiresIntegration {
         uint256 amount = 1_000 ether;
-        deal(streme, address(handler), amount);
+        _stealTokensFromSingleton(streme, address(handler), amount);
 
         int96 expected = int96(int256(amount / TARGET_DURATION));
         assertEq(handler.previewFlowRate(), expected);
+    }
+
+    function _stealTokensFromSingleton(address token, address to, uint256 amount) internal {
+        uint256 bal = IERC20(token).balanceOf(UNISWAP_SINGLETON);
+        require(bal >= amount, "fork: singleton insufficient token");
+
+        vm.prank(UNISWAP_SINGLETON);
+        bool ok = IERC20(token).transfer(to, amount);
+        require(ok, "fork: singleton transfer failed");
     }
 }
