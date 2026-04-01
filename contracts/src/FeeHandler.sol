@@ -139,6 +139,7 @@ contract FeeHandler is AccessControl {
     }
 
     /// @notice Anyone can rebalance flow rate from current weth balance.
+    /// @dev This function is intentionally permissionless to allow anyone to rebalance flow rate from current weth balance.
     function rebalanceFlowRate() external {
         if (!streamActive) revert StreamNotActive();
         _rebalanceFlowRate();
@@ -175,7 +176,7 @@ contract FeeHandler is AccessControl {
 
     function _swapWethToToken(uint256 wethBefore, uint256 tokenBefore, uint256 minTokenOut) internal {
         if (wethBefore > type(uint128).max) revert AmountInTooLarge();
-        stremeZap.zap(address(stremeToken), uint256(wethBefore), minTokenOut, address(this)){value: 0};
+        stremeZap.zap{value: 0}(address(stremeToken), uint256(wethBefore), minTokenOut, address(this));
         uint256 wethIn = wethBefore - weth.balanceOf(address(this));
         uint256 tokenOut = stremeToken.balanceOf(address(this)) - tokenBefore;
         emit WethSwapped(address(stremeZap), wethIn, tokenOut);
