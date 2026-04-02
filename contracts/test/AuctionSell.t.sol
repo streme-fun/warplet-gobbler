@@ -159,32 +159,35 @@ contract AuctionSellTest is Test {
         vm.expectEmit(true, true, false, true, address(sell));
         emit QueueBumped(alice, t3, fee);
         vm.prank(address(bidToken));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, uint256(2)), "");
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
 
         assertEq(sell.nextQueuedTokenId(), t3);
         (uint256 activeId,,,,,) = sell.auction();
         assertEq(t1, activeId);
     }
 
-    function test_tokensReceived_bump_main_head_goes_to_priority_stack() public {
+    function test_bump_second_position_moves_to_front_with_prev_hint() public {
         _mintAndSendToSell(owner);
         uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
 
         vm.prank(owner);
         sell.unpause();
         assertEq(sell.nextQueuedTokenId(), t2);
-        assertEq(sell.priorityQueueLength(), 0);
 
         uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, uint256(1)), "");
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
 
-        assertEq(sell.priorityQueueLength(), 1);
-        assertEq(sell.nextQueuedTokenId(), t2);
+        assertEq(sell.nextQueuedTokenId(), t3);
+        uint256[] memory q = sell.getQueuedTokenIds();
+        assertEq(q.length, 2);
+        assertEq(q[0], t3);
+        assertEq(q[1], t2);
     }
 
-    function test_priority_stack_is_LIFO_for_next_auction() public {
+    function test_last_bumper_is_next_in_line_after_settle() public {
         _mintAndSendToSell(owner);
         uint256 t2 = _mintAndSendToSell(owner);
         uint256 t3 = _mintAndSendToSell(owner);
@@ -195,11 +198,11 @@ contract AuctionSellTest is Test {
         uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee * 2);
         vm.prank(address(bidToken));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, uint256(1)), "");
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
         vm.prank(address(bidToken));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, uint256(1)), "");
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, t3), "");
 
-        assertEq(sell.nextQueuedTokenId(), t3);
+        assertEq(sell.nextQueuedTokenId(), t2);
 
         vm.prank(alice);
         sell.bid(RESERVE_PRICE);
@@ -207,21 +210,21 @@ contract AuctionSellTest is Test {
         sell.settleCurrentAndCreateNewAuction();
 
         (uint256 activeId,,,) = sell.currentAuction();
-        assertEq(activeId, t3);
+        assertEq(activeId, t2);
     }
 
     function test_tokensReceived_bump_revert_if_not_in_queue() public {
         uint256 t1 = _mintAndSendToSell(owner);
-        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
         vm.prank(owner);
         sell.unpause();
 
         uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
-        vm.expectRevert(bytes("AuctionSell: bad queue index"));
-        // Slot 1 holds t2; (t1, 1) does not match — t1 is in the live auction, not in the main tail
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t1, uint256(1)), "");
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        // t1 is in the live auction; queue is only t2 — next[t2] != t1
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t1, t2), "");
     }
 
     function test_tokensReceived_bump_revert_when_paused() public {
@@ -240,7 +243,7 @@ contract AuctionSellTest is Test {
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         vm.expectPartialRevert(Pausable.EnforcedPause.selector);
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, uint256(2)), "");
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
     }
 
     function test_tokensReceived_with_32byte_userData_and_non_fee_amount_is_bid() public {
@@ -651,9 +654,9 @@ contract AuctionSellTest is Test {
         assertTrue(sell.paused());
     }
 
-    /* ========== compactQueue ========== */
+    /* ========== mapping queue: no compaction needed ========== */
 
-    function test_compactQueue_shifts_and_resets_head() public {
+    function test_mappingQueue_queuedLength_after_settles_without_compact() public {
         _mintAndSendToSell(owner);
         _mintAndSendToSell(owner);
         vm.prank(owner);
@@ -674,28 +677,6 @@ contract AuctionSellTest is Test {
         sell.settleCurrentAndCreateNewAuction();
 
         assertEq(sell.queuedLength(), 1);
-
-        vm.prank(alice);
-        vm.expectPartialRevert(Ownable.OwnableUnauthorizedAccount.selector);
-        sell.compactQueue();
-
-        vm.prank(owner);
-        sell.compactQueue();
-        assertEq(sell.queuedLength(), 1);
-    }
-
-    function test_compactQueue_drains_when_head_past_length() public {
-        _mintAndSendToSell(owner);
-        vm.prank(owner);
-        sell.unpause();
-        vm.prank(alice);
-        sell.bid(RESERVE_PRICE);
-        vm.warp(block.timestamp + DURATION + 1);
-        sell.settleCurrentAndCreateNewAuction();
-
-        assertEq(sell.queuedLength(), 0);
-        vm.prank(owner);
-        sell.compactQueue();
     }
 
     /* ========== edge: wrong NFT contract cannot enqueue ========== */
@@ -725,29 +706,15 @@ contract AuctionSellTest is Test {
         assertEq(id, 0);
     }
 
-    /* ========== views & queue index edge cases ========== */
+    /* ========== views & bump prev-hint edge cases ========== */
 
-    function test_mainQueueAt_reverts_OOB_when_queue_empty() public {
-        vm.expectRevert(bytes("AuctionSell: queue index OOB"));
-        sell.mainQueueAt(0);
+    function test_getQueuedTokenIds_empty() public view {
+        uint256[] memory q = sell.getQueuedTokenIds();
+        assertEq(q.length, 0);
     }
 
-    function test_bump_reverts_queueIndex_below_queueHead() public {
+    function test_bump_reverts_wrong_prev_for_auctioned_token() public {
         uint256 t1 = _mintAndSendToSell(owner);
-        _mintAndSendToSell(owner);
-        vm.prank(owner);
-        sell.unpause();
-
-        uint256 fee = sell.queueBumpFee();
-        bidToken.mint(address(sell), fee);
-        vm.prank(address(bidToken));
-        vm.expectRevert(bytes("AuctionSell: bad queue index"));
-        // Index 0 is before `queueHead` once the first queued NFT is in auction (t1 still stored at slot 0)
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t1, uint256(0)), "");
-    }
-
-    function test_bump_reverts_queueIndex_out_of_bounds() public {
-        _mintAndSendToSell(owner);
         uint256 t2 = _mintAndSendToSell(owner);
         vm.prank(owner);
         sell.unpause();
@@ -755,55 +722,11 @@ contract AuctionSellTest is Test {
         uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
-        vm.expectRevert(bytes("AuctionSell: bad queue index"));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, uint256(2)), "");
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t1, t2), "");
     }
 
-    function test_bump_reverts_wrong_token_for_slot() public {
-        uint256 t1 = _mintAndSendToSell(owner);
-        _mintAndSendToSell(owner);
-        vm.prank(owner);
-        sell.unpause();
-
-        uint256 fee = sell.queueBumpFee();
-        bidToken.mint(address(sell), fee);
-        vm.prank(address(bidToken));
-        vm.expectRevert(bytes("AuctionSell: bad queue index"));
-        // slot 1 is t2, not t1
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t1, uint256(1)), "");
-    }
-
-    function test_bump_tail_element_uses_pop_only_path() public {
-        _mintAndSendToSell(owner);
-        uint256 t2 = _mintAndSendToSell(owner);
-        vm.prank(owner);
-        sell.unpause();
-
-        uint256 fee = sell.queueBumpFee();
-        bidToken.mint(address(sell), fee);
-        vm.prank(address(bidToken));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, uint256(1)), "");
-
-        assertEq(sell.priorityQueueLength(), 1);
-        assertEq(sell.queuedLength(), 1);
-    }
-
-    function test_bump_transfers_fee_to_proceeds_recipient() public {
-        _mintAndSendToSell(owner);
-        uint256 t2 = _mintAndSendToSell(owner);
-        vm.prank(owner);
-        sell.unpause();
-
-        uint256 fee = sell.queueBumpFee();
-        uint256 beforeP = bidToken.balanceOf(proceeds);
-        bidToken.mint(address(sell), fee);
-        vm.prank(address(bidToken));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, uint256(1)), "");
-
-        assertEq(bidToken.balanceOf(proceeds), beforeP + fee);
-    }
-
-    function test_bump_twice_same_token_second_call_reverts() public {
+    function test_bump_reverts_bad_prev_self_not_predecessor() public {
         _mintAndSendToSell(owner);
         _mintAndSendToSell(owner);
         uint256 t3 = _mintAndSendToSell(owner);
@@ -811,37 +734,108 @@ contract AuctionSellTest is Test {
         sell.unpause();
 
         uint256 fee = sell.queueBumpFee();
-        bidToken.mint(address(sell), fee * 2);
+        bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, uint256(2)), "");
-        vm.prank(address(bidToken));
-        vm.expectRevert(bytes("AuctionSell: bad queue index"));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, uint256(2)), "");
-        vm.prank(address(bidToken));
-        vm.expectRevert(bytes("AuctionSell: bad queue index"));
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, uint256(1)), "");
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t3), "");
     }
 
-    function test_after_compactQueue_bump_at_index_zero() public {
+    function test_bump_reverts_wrong_token_for_prev() public {
         uint256 t1 = _mintAndSendToSell(owner);
-        uint256 t2 = _mintAndSendToSell(owner);
+        _mintAndSendToSell(owner);
         vm.prank(owner);
         sell.unpause();
-        assertEq(sell.queueHead(), 1);
-        assertEq(sell.mainQueueAt(1), t2);
-
-        vm.prank(owner);
-        sell.compactQueue();
-        assertEq(sell.queueHead(), 0);
-        assertEq(sell.mainQueueAt(0), t2);
 
         uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
-        sell.tokensReceived(address(0), bob, address(0), fee, abi.encode(t2, uint256(0)), "");
-        assertEq(sell.nextQueuedTokenId(), t2);
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t1, t1), "");
+    }
+
+    function test_bump_tail_moves_to_front() public {
+        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+
+        assertEq(sell.queuedLength(), 2);
+        assertEq(sell.nextQueuedTokenId(), t3);
+    }
+
+    function test_bump_transfers_fee_to_proceeds_recipient() public {
+        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        uint256 beforeP = bidToken.balanceOf(proceeds);
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+
+        assertEq(bidToken.balanceOf(proceeds), beforeP + fee);
+    }
+
+    function test_bump_twice_same_token_second_call_reverts() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee * 2);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: already first"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, t1), "");
+    }
+
+    function test_bump_non_head_while_first_auction_live() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256[] memory q0 = sell.getQueuedTokenIds();
+        assertEq(q0.length, 2);
+        assertEq(q0[0], t2);
+        assertEq(q0[1], t3);
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), bob, address(0), fee, abi.encode(t3, t2), "");
+        assertEq(sell.nextQueuedTokenId(), t3);
         (uint256 activeId,,,,,) = sell.auction();
         assertEq(activeId, t1);
+    }
+
+    function test_bump_reverts_already_first() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: already first"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, t1), "");
     }
 
     function test_nextQueuedTokenId_reverts_when_fully_drained() public {
@@ -939,7 +933,7 @@ contract AuctionSellTest is Test {
 
     function test_bump_reverts_for_nonexistent_tokenId() public {
         _mintAndSendToSell(owner);
-        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
         vm.prank(owner);
         sell.unpause();
 
@@ -947,7 +941,7 @@ contract AuctionSellTest is Test {
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         vm.expectRevert();
-        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(uint256(999_999), uint256(1)), "");
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(uint256(999_999), t2), "");
     }
 
     /* ========== startAuction / extendAuction / settle edge cases ========== */
