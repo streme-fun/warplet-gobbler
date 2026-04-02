@@ -76,6 +76,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     event AuctionMinBidIncrementPercentageUpdated(uint8 minBidIncrementPercentage);
     event ProceedsRecipientUpdated(address indexed recipient);
     event QueueBumpFeeUpdated(uint256 queueBumpFee);
+    event TokenEnqueued(uint256 indexed tokenId);
     event QueueBumped(address indexed payer, uint256 indexed tokenId, uint256 fee);
 
     constructor(
@@ -140,6 +141,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         unchecked {
             ++_queuedCount;
         }
+        emit TokenEnqueued(tokenId);
         return IERC721Receiver.onERC721Received.selector;
     }
 
