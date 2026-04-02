@@ -5,13 +5,13 @@ pragma solidity ^0.8.26;
 /// @notice Nouns-style highest-bidder auction for Warplets. Bids in an ERC20 `bidToken`.
 /// @dev Adapted from NounsAuctionHouse / Zora AuctionHouse (see DegenDogs mission3 branch).
 ///      NFTs are received via safeTransfer into a FIFO main queue; a LIFO priority stack is drained first
-///      when starting each auction. Queue bump (`QUEUE_BUMP_FEE` + `userData`) removes a token from the
+///      when starting each auction. Queue bump (`queueBumpFee` + `userData`) removes a token from the
 ///      main queue (swap with tail + pop) and pushes it onto the priority stack. Bump uses caller-supplied
 ///      `queueIndex` into `_nftQueue` (verified in O(1); clients must compute it off-chain from `queueHead` + reads).
 ///      On settle, the Warplet NFT is transferred to the winner, bid proceeds to `proceedsRecipient`,
 ///      and an empty-URI GobbledWarplet receipt is minted to the winner (admin sets URI separately).
 /// @dev ERC777 `send` / `tokensReceived`: use empty or non-bump `userData` to bid. To bump, `send` exactly
-///      `QUEUE_BUMP_FEE` with `userData = abi.encode(uint256 tokenId, uint256 queueIndex)` (64 bytes).
+///      `queueBumpFee` with `userData = abi.encode(uint256 tokenId, uint256 queueIndex)` (64 bytes).
 ///      `queueIndex` is the token's current index in `_nftQueue` (see `queueHead` + `mainQueueAt`). Stale
 ///      indices revert. Other payment amounts use the bid path.
 
@@ -65,13 +65,14 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     uint256[] private _priorityQueue;
 
     /// @notice WARPGOBB required to move a queued Warplet to the head via ERC777 `send` + `userData`.
-    uint256 public constant QUEUE_BUMP_FEE = 1_000_000 * 1e18;
+    uint256 public queueBumpFee;
 
     event AuctionExtended(uint256 indexed tokenId, uint256 endTime);
     event AuctionTimeBufferUpdated(uint256 timeBuffer);
     event AuctionReservePriceUpdated(uint256 reservePrice);
     event AuctionMinBidIncrementPercentageUpdated(uint8 minBidIncrementPercentage);
     event ProceedsRecipientUpdated(address indexed recipient);
+    event QueueBumpFeeUpdated(uint256 queueBumpFee);
     event QueueBumped(address indexed payer, uint256 indexed tokenId, uint256 fee);
 
     constructor(
@@ -96,6 +97,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         reservePrice = _reservePrice;
         minBidIncrementPercentage = _minBidIncrementPercentage;
         duration = _duration;
+        queueBumpFee = 1_000_000 * 1e18;
         _pause();
         // Register this contract as an ERC1820 implementer for the ERC777TokensRecipient interface
         // (i.e., ERC1820: "ERC777TokensRecipient" = keccak256("ERC777TokensRecipient"))
@@ -169,7 +171,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         bytes calldata /*operatorData*/
     ) external override nonReentrant whenNotPaused {
         require(msg.sender == address(bidToken), "AuctionSell: only configured token");
-        if (amount == QUEUE_BUMP_FEE && userData.length == 64) {
+        if (amount == queueBumpFee && userData.length == 64) {
             (uint256 tokenId, uint256 queueIndex) = abi.decode(userData, (uint256, uint256));
             _bumpQueueToHead(from, tokenId, queueIndex, amount);
             return;
@@ -325,6 +327,11 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         require(_proceedsRecipient != address(0), "AuctionSell: zero proceeds");
         proceedsRecipient = _proceedsRecipient;
         emit ProceedsRecipientUpdated(_proceedsRecipient);
+    }
+
+    function setQueueBumpFee(uint256 _queueBumpFee) external onlyOwner {
+        queueBumpFee = _queueBumpFee;
+        emit QueueBumpFeeUpdated(_queueBumpFee);
     }
 
     /// @notice Move live queue entries to the front of `_nftQueue` and shrink storage length (clears skipped head slots).

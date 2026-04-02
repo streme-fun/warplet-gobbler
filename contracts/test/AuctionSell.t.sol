@@ -34,6 +34,7 @@ contract AuctionSellTest is Test {
     event AuctionReservePriceUpdated(uint256 reservePrice);
     event AuctionMinBidIncrementPercentageUpdated(uint8 minBidIncrementPercentage);
     event ProceedsRecipientUpdated(address indexed recipient);
+    event QueueBumpFeeUpdated(uint256 queueBumpFee);
     event QueueBumped(address indexed payer, uint256 indexed tokenId, uint256 fee);
     event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId);
 
@@ -153,7 +154,7 @@ contract AuctionSellTest is Test {
 
         assertEq(sell.nextQueuedTokenId(), t2);
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.expectEmit(true, true, false, true, address(sell));
         emit QueueBumped(alice, t3, fee);
@@ -174,7 +175,7 @@ contract AuctionSellTest is Test {
         assertEq(sell.nextQueuedTokenId(), t2);
         assertEq(sell.priorityQueueLength(), 0);
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, uint256(1)), "");
@@ -191,7 +192,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee * 2);
         vm.prank(address(bidToken));
         sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, uint256(1)), "");
@@ -215,7 +216,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         vm.expectRevert(bytes("AuctionSell: bad queue index"));
@@ -235,7 +236,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.pause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         vm.expectPartialRevert(Pausable.EnforcedPause.selector);
@@ -615,6 +616,21 @@ contract AuctionSellTest is Test {
         assertEq(sell.proceedsRecipient(), nextRecv);
     }
 
+    function test_setQueueBumpFee_only_owner() public {
+        assertEq(sell.queueBumpFee(), 1_000_000 * 1e18);
+
+        vm.prank(alice);
+        vm.expectPartialRevert(Ownable.OwnableUnauthorizedAccount.selector);
+        sell.setQueueBumpFee(1);
+
+        uint256 nextFee = 500_000 * 1e18;
+        vm.expectEmit(false, false, false, true, address(sell));
+        emit QueueBumpFeeUpdated(nextFee);
+        vm.prank(owner);
+        sell.setQueueBumpFee(nextFee);
+        assertEq(sell.queueBumpFee(), nextFee);
+    }
+
     function test_pause_unpause_only_owner() public {
         assertTrue(sell.paused());
 
@@ -722,7 +738,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         vm.expectRevert(bytes("AuctionSell: bad queue index"));
@@ -736,7 +752,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         vm.expectRevert(bytes("AuctionSell: bad queue index"));
@@ -749,7 +765,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         vm.expectRevert(bytes("AuctionSell: bad queue index"));
@@ -763,7 +779,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, uint256(1)), "");
@@ -778,7 +794,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         uint256 beforeP = bidToken.balanceOf(proceeds);
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
@@ -794,7 +810,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee * 2);
         vm.prank(address(bidToken));
         sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, uint256(2)), "");
@@ -819,7 +835,7 @@ contract AuctionSellTest is Test {
         assertEq(sell.queueHead(), 0);
         assertEq(sell.mainQueueAt(0), t2);
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         sell.tokensReceived(address(0), bob, address(0), fee, abi.encode(t2, uint256(0)), "");
@@ -849,7 +865,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(alice);
         vm.expectRevert(bytes("AuctionSell: only configured token"));
@@ -861,7 +877,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         require(fee < RESERVE_PRICE, "test assumes bump fee < reserve");
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
@@ -874,7 +890,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         vm.expectRevert(bytes("AuctionSell: below reserve"));
@@ -927,7 +943,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        uint256 fee = sell.QUEUE_BUMP_FEE();
+        uint256 fee = sell.queueBumpFee();
         bidToken.mint(address(sell), fee);
         vm.prank(address(bidToken));
         vm.expectRevert();
