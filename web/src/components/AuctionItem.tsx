@@ -4,6 +4,7 @@ import { useRef } from "react";
 import AuctionWarpletImage from "./AuctionWarpletImage";
 import StreamingNumber from "./StreamingNumber";
 import type { MockAuction } from "@/lib/mock-data";
+import { PAYMENT_TOKEN_LABEL } from "@/lib/paymentToken";
 
 export default function AuctionItem({
   auction,
@@ -43,7 +44,7 @@ export default function AuctionItem({
               decimals={3}
               min={auction.floor}
             />{" "}
-            <span className="text-base-content/40">$STRAT</span>
+            <span className="text-base-content/40">{PAYMENT_TOKEN_LABEL}</span>
           </>
         )}
       </div>
