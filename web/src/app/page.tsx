@@ -109,15 +109,15 @@ export default function Home() {
   const isDutchAuctionConfigured =
     CONTRACTS.dutchAuction.toLowerCase() !== ZERO_ADDRESS.toLowerCase();
 
-  const payoutUsd = isAmountMissing
+  const payoutUsd: number | null = isAmountMissing
     ? isDutchAuctionConfigured
       ? FX_EST_MARKET_CAP_USD
       : 0
     : payoutAmount === 0
       ? 0
-      : warpgobbPriceUsd !== null
+      : warpgobbPriceUsd != null
         ? payoutAmount * warpgobbPriceUsd
-        : 0;
+        : null;
 
   const handleChestReveal = useCallback(() => {
     setWarpletVisible(false);
@@ -318,10 +318,12 @@ export default function Home() {
               </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/40 mt-1">
-              {`~$${payoutUsd.toLocaleString(undefined, {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2,
-              })}`}
+              {payoutUsd === null
+                ? "USD quote unavailable"
+                : `~$${payoutUsd.toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                    minimumFractionDigits: 2,
+                  })}`}
             </p>
             <p className="text-sm sm:text-base text-base-content/50">
               for your warplet
