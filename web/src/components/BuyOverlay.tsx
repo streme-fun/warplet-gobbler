@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { warpletImageSrc } from "@/lib/warplet-image-src";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -53,7 +54,7 @@ export default function BuyOverlay({
     eggImg.onload = () => { eggLoaded = true; };
 
     const warpletImg = new Image();
-    warpletImg.src = `/warplets/warplet-${fid}.png`;
+    warpletImg.src = warpletImageSrc(fid);
     let warpletLoaded = false;
     warpletImg.onload = () => { warpletLoaded = true; };
 
