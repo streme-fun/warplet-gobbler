@@ -27,6 +27,7 @@ import {
   MOCK_AUCTIONS,
   MY_WARPLETS,
 } from "@/lib/mock-data";
+import { warpletImageSrc } from "@/lib/warplet-image-src";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -77,7 +78,9 @@ export default function Home() {
     w: number;
     h: number;
   } | null>(null);
-  const [boughtFids, setBoughtFids] = useState<Set<number>>(new Set());
+  const [auctionBidPlacedFids, setAuctionBidPlacedFids] = useState<
+    Set<number>
+  >(new Set());
   const { data: currentPrice } = useDutchAuctionPrice();
   const { symbol: payoutSymbol, decimals: payoutDecimals } =
     useDutchAuctionPayoutToken();
@@ -191,7 +194,7 @@ export default function Home() {
 
   const handleBuyDone = useCallback(() => {
     if (buyingFid) {
-      setBoughtFids((prev) => new Set(prev).add(buyingFid));
+      setAuctionBidPlacedFids((prev) => new Set(prev).add(buyingFid));
     }
     setBuyingFid(null);
     setBuyRect(null);
@@ -231,7 +234,7 @@ export default function Home() {
       {gobbling && flyingFid && warpletVisible && (
         <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
           <img
-            src={`/warplets/warplet-${flyingFid}.png`}
+            src={warpletImageSrc(flyingFid)}
             alt=""
             className="w-[280px] h-[280px] sm:w-[350px] sm:h-[350px] rounded-2xl animate-breathe"
             draggable={false}
@@ -399,7 +402,7 @@ export default function Home() {
                     } ${flyingFid === w.fid ? "opacity-0" : ""}`}
                   >
                     <img
-                      src={`/warplets/warplet-${w.fid}.png`}
+                      src={warpletImageSrc(w.fid)}
                       alt={w.name}
                       className="w-full h-full object-cover"
                       draggable={false}

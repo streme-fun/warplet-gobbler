@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { warpletImageSrc } from "@/lib/warplet-image-src";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -76,7 +77,7 @@ export default function ParallaxBackground() {
           }}
         >
           <img
-            src={`/warplets/warplet-${w.fid}.png`}
+            src={warpletImageSrc(w.fid)}
             alt=""
             draggable={false}
             style={{
