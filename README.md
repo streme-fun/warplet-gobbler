@@ -5,22 +5,44 @@ A PunkStrategy-style flywheel for [Warplets](https://opensea.io/collection/the-w
 ## How It Works
 
 ```
-Fee treasury ──stream USDCx──▸ Dutch Auction ("Gobbler")
-                                      │
-                     Arbitrageur deposits Warplet, drains pot
-                                      │
-                                      ▼
-                               Auction Sell
-                      (highest $STRAT bid wins Warplet)
-                                      │
-                          $STRAT proceeds ──▸ Staking
+LP Fees (WETH) ──▸ FeeHandler ──swap──▸ $STRAT (SuperToken)
+                                            │
+                                     Superfluid stream
+                                            │
+                                            ▼
+                                  Dutch Auction ("Gobbler")
+                                            │
+                         Arbitrageur deposits Warplet, drains pot
+                                            │
+                                            ▼
+                                     Auction Sell
+                            (highest $STRAT bid wins Warplet)
+                                            │
+                                $STRAT proceeds ──▸ Staking
 ```
 
-1. **The Gobbler** — A dutch auction that receives a continuous USDCx stream. The pot grows over time. Anyone can deposit a Warplet NFT and drain the full balance. Arbitrageurs buy Warplets on OpenSea when the pot exceeds floor price, deposit them, and profit the difference.
+1. **FeeHandler** — Collects WETH rewards from the Uniswap v4 LP locker, swaps them to $STRAT (a Superfluid SuperToken) via `StremeZapUniversal`, and opens a continuous Superfluid stream to the Gobbler. Admins control the auction target and stream duration; a permissionless `rebalanceFlowRate()` lets anyone adjust the stream rate based on current balance.
 
-2. **Auction Sell** — Gobbled Warplets are auctioned to highest bidder, denominated in $STRAT tokens.
+2. **The Gobbler** (`DutchAuction`) — Receives the $STRAT stream. The pot grows over time. Anyone can deposit a Warplet NFT and drain the full balance. Arbitrageurs buy Warplets on OpenSea when the pot exceeds floor price, deposit them, and profit the difference. Gobbled NFTs are sent to the `nftReserve` address.
 
-3. **Staking** — $STRAT from auctions flows to stakers, closing the flywheel.
+3. **Auction Sell** — Gobbled Warplets are auctioned to the highest bidder, denominated in $STRAT tokens. *(stub — not yet implemented)*
+
+4. **Staking** — $STRAT from auctions flows to stakers, closing the flywheel. *(reuses existing streme.fun staking contract)*
+
+## Contracts
+
+| Contract | Status | Description |
+|---|---|---|
+| `FeeHandler.sol` | **functional** | Claims LP fees (WETH), swaps to $STRAT via StremeZapUniversal, streams to auction via Superfluid CFA. Role-based access (`DEFAULT_ADMIN_ROLE`, `REBALANCER_ROLE`). |
+| `DutchAuction.sol` | **functional** | Receives $STRAT stream; deposit a Warplet to drain the pot. |
+| `AuctionSell.sol` | stub | All functions revert "not implemented". |
+| `StratStaking.sol` | placeholder | Reuses existing streme.fun contract. |
+
+### Test Coverage
+
+- `test/FeeHandler.t.sol` — Unit tests with mocked Superfluid host, CFA, GDA, LP factory, and zap contracts
+- `test/fork/FeeHandlerFork.t.sol` — Fork tests against Base mainnet (real SuperToken, noop LP/zap stubs)
+- `test/DutchAuction.t.sol` — Unit tests for gobble mechanics and constructor
 
 ## Monorepo Structure
 
@@ -28,7 +50,8 @@ Fee treasury ──stream USDCx──▸ Dutch Auction ("Gobbler")
 warplet-gobbler/
 ├── contracts/          # Foundry — Solidity contracts
 │   ├── src/            # Contract source + interfaces
-│   ├── test/           # Forge tests
+│   ├── test/           # Forge unit tests
+│   ├── test/fork/      # Forge fork tests (Base mainnet)
 │   └── script/         # Deploy scripts
 ├── web/                # Next.js — Frontend app
 │   ├── src/app/        # App router pages
@@ -77,8 +100,9 @@ cd contracts && forge test
 
 - [ ] Auction duration for sell side (24h? configurable?)
 - [ ] What happens if auction gets no bids?
-- [ ] Superfluid CFA vs GDA for treasury stream
+- [x] ~~Superfluid CFA vs GDA for treasury stream~~ → CFA (FeeHandler uses `ISuperToken.flow`)
 - [ ] Hook whitelisting timeline (launching without hook initially)
 - [ ] $STRAT initial supply and distribution
 - [ ] Streme Staking config (supply? lock? duration?)
 - [ ] Should $STRAT be used to _extend_ Staking rewards or _boost_ them? ( add to the pile or 2nd stream to the pool, respectively)
+- [ ] FeeHandler: test with live v4 locker + real StremeZapUniversal on fork
