@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {AuctionSell} from "../src/AuctionSell.sol";
+import {GobbledWarplets} from "../src/GobbledWarplets.sol";
 import {MockBidToken} from "./mocks/MockBidToken.sol";
 import {MockAuctionNFT} from "./mocks/MockAuctionNFT.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -11,6 +12,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract AuctionSellTest is Test {
     AuctionSell internal sell;
+    GobbledWarplets internal gobbled;
     MockAuctionNFT internal nft;
     MockBidToken internal bidToken;
 
@@ -37,9 +39,11 @@ contract AuctionSellTest is Test {
         vm.startPrank(owner);
         nft = new MockAuctionNFT();
         bidToken = new MockBidToken();
+        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner);
         sell = new AuctionSell(
             IERC721(address(nft)),
             bidToken,
+            gobbled,
             proceeds,
             TIME_BUFFER,
             RESERVE_PRICE,
@@ -47,6 +51,7 @@ contract AuctionSellTest is Test {
             DURATION,
             owner
         );
+        gobbled.setMinter(address(sell));
         vm.stopPrank();
 
         bidToken.mint(alice, BID_TOKEN_SEED);
@@ -233,9 +238,57 @@ contract AuctionSellTest is Test {
 
         assertEq(nft.ownerOf(t1), alice);
         assertEq(bidToken.balanceOf(proceeds), proceedsBefore + RESERVE_PRICE);
+        assertEq(gobbled.ownerOf(t1), alice);
+        assertEq(gobbled.warpletOf(t1), t1);
+        assertEq(gobbled.gobbleIndexOf(t1), 0);
 
         (uint256 nextId,,,) = sell.currentAuction();
         assertEq(nextId, t2);
+    }
+
+    function test_settle_mints_gobbled_receipt_incrementing_gobble_index() public {
+        uint256 wid = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+        vm.warp(block.timestamp + DURATION + 1);
+        sell.settleCurrentAndCreateNewAuction();
+
+        assertEq(gobbled.ownerOf(wid), alice);
+        assertEq(nft.ownerOf(wid), alice);
+
+        vm.prank(alice);
+        nft.safeTransferFrom(alice, address(sell), wid);
+        sell.startAuction(wid);
+
+        vm.prank(bob);
+        sell.bid(RESERVE_PRICE);
+        vm.warp(block.timestamp + DURATION + 1);
+        sell.settleCurrentAndCreateNewAuction();
+
+        uint256 stride = gobbled.TOKEN_ID_DECIMAL_STRIDE();
+        uint256 secondGobbledId = stride + wid;
+        assertEq(gobbled.ownerOf(secondGobbledId), bob);
+        assertEq(gobbled.warpletOf(secondGobbledId), wid);
+        assertEq(gobbled.gobbleIndexOf(secondGobbledId), 1);
+    }
+
+    function test_settle_reverts_when_warplet_id_too_large_for_gobbled_encoding() public {
+        vm.prank(owner);
+        uint256 badId = nft.mintSpecific(owner, gobbled.MAX_WARPLET_ID_EXCLUSIVE());
+
+        vm.prank(owner);
+        nft.safeTransferFrom(owner, address(sell), badId);
+
+        vm.prank(owner);
+        sell.unpause();
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+        vm.warp(block.timestamp + DURATION + 1);
+
+        vm.expectRevert(bytes("GobbledWarplets: warpletId too large"));
+        sell.settleCurrentAndCreateNewAuction();
     }
 
     function test_settleCurrent_no_next_when_queue_empty() public {

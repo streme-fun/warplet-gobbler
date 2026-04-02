@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {AuctionSell} from "../../src/AuctionSell.sol";
+import {GobbledWarplets} from "../../src/GobbledWarplets.sol";
 import {MockAuctionNFT} from "../mocks/MockAuctionNFT.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -33,6 +34,7 @@ contract AuctionSellForkTest is Test {
 
     address internal bidTokenAddr;
     AuctionSell internal sell;
+    GobbledWarplets internal gobbled;
     MockAuctionNFT internal nft;
 
     bool internal forkCreated;
@@ -69,10 +71,12 @@ contract AuctionSellForkTest is Test {
         vm.prank(owner);
         nft = new MockAuctionNFT();
 
-        vm.prank(owner);
+        vm.startPrank(owner);
+        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner);
         sell = new AuctionSell(
             nft,
             IERC20(bidTokenAddr),
+            gobbled,
             proceeds,
             TIME_BUFFER,
             RESERVE_PRICE,
@@ -80,9 +84,12 @@ contract AuctionSellForkTest is Test {
             DURATION,
             owner
         );
+        gobbled.setMinter(address(sell));
+        vm.stopPrank();
 
         vm.label(address(sell), "AuctionSell");
         vm.label(address(nft), "MockAuctionNFT");
+        vm.label(address(gobbled), "GobbledWarplets");
 
         vm.startPrank(owner);
         uint256 tokenId = nft.mint(owner);

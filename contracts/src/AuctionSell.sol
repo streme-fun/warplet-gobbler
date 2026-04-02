@@ -7,6 +7,7 @@ pragma solidity ^0.8.26;
 ///      NFTs are received via safeTransfer and queued FIFO; each new auction consumes the queue head.
 
 import {IAuctionSell} from "./interfaces/IAuctionSell.sol";
+import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
 import {IERC721Receiver} from "openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol";
@@ -37,6 +38,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
 
     IERC721 public immutable nft;
     IERC20 public immutable bidToken;
+    IGobbledWarplets public immutable gobbledWarplets;
 
     address public proceedsRecipient;
 
@@ -59,6 +61,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     constructor(
         IERC721 _nft,
         IERC20 _bidToken,
+        IGobbledWarplets _gobbledWarplets,
         address _proceedsRecipient,
         uint256 _timeBuffer,
         uint256 _reservePrice,
@@ -67,9 +70,11 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         address initialOwner
     ) Ownable(initialOwner) {
         require(address(_nft) != address(0) && address(_bidToken) != address(0), "AuctionSell: zero token");
+        require(address(_gobbledWarplets) != address(0), "AuctionSell: zero gobbled");
         require(_proceedsRecipient != address(0), "AuctionSell: zero proceeds");
         nft = _nft;
         bidToken = _bidToken;
+        gobbledWarplets = _gobbledWarplets;
         proceedsRecipient = _proceedsRecipient;
         timeBuffer = _timeBuffer;
         reservePrice = _reservePrice;
@@ -317,10 +322,12 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
 
         auction.settled = true;
 
+        uint256 gobbledTokenId = gobbledWarplets.mint(_auction.bidder, _auction.tokenId);
+
         nft.transferFrom(address(this), _auction.bidder, _auction.tokenId);
 
         require(bidToken.transfer(proceedsRecipient, _auction.amount), "AuctionSell: proceeds failed");
 
-        emit AuctionSettled(_auction.tokenId, _auction.bidder, _auction.amount);
+        emit AuctionSettled(_auction.tokenId, _auction.bidder, _auction.amount, gobbledTokenId);
     }
 }
