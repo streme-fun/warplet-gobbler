@@ -25,11 +25,24 @@ export const CONTRACTS = {
   wethUsdcPool: envAddress(process.env.NEXT_PUBLIC_WETH_USDC_POOL_ADDRESS),
 } as const;
 
-const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
+const ZERO_BYTES32 =
+  "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+/** `bytes32` pool id for Uniswap v4 StateView.getSlot0 — accepts with or without 0x. */
+export function normalizeV4PoolIdBytes32(raw?: string): `0x${string}` {
+  if (!raw?.trim()) return ZERO_BYTES32 as `0x${string}`;
+  const s = raw.trim();
+  if (/^0x[0-9a-fA-F]{64}$/i.test(s)) return s.toLowerCase() as `0x${string}`;
+  if (/^[0-9a-fA-F]{64}$/i.test(s))
+    return (`0x${s.toLowerCase()}`) as `0x${string}`;
+  return ZERO_BYTES32 as `0x${string}`;
+}
+
+const v4WarpgobbWethPoolIdRaw =
+  process.env.NEXT_PUBLIC_UNISWAP_V4_WARPGOBB_WETH_POOL_ID ??
+  process.env.NEXT_PUBLIC_WARPGOBB_WETH_POOL_ID ??
+  process.env.NEXT_PUBLIC_WARPGOBB_POOL_KEY;
 
 export const UNISWAP_V4_POOL_IDS = {
-  warpgobbWeth:
-    process.env.NEXT_PUBLIC_UNISWAP_V4_WARPGOBB_WETH_POOL_ID ??
-    process.env.NEXT_PUBLIC_WARPGOBB_POOL_KEY ??
-    ZERO_BYTES32,
+  warpgobbWeth: normalizeV4PoolIdBytes32(v4WarpgobbWethPoolIdRaw),
 } as const;
