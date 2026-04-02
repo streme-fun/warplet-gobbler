@@ -68,10 +68,8 @@ contract AuctionSellForkTest is Test {
         vm.label(alice, "alice");
         vm.label(bob, "bob");
 
-        vm.prank(owner);
-        nft = new MockAuctionNFT();
-
         vm.startPrank(owner);
+        nft = new MockAuctionNFT();
         gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner);
         sell = new AuctionSell(
             nft,

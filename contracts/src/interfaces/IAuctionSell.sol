@@ -33,6 +33,6 @@ interface IAuctionSell {
 
     event AuctionStarted(uint256 indexed tokenId, uint256 endTime);
     event BidPlaced(uint256 indexed tokenId, address indexed bidder, uint256 amount);
-    /// @param gobbledTokenId Newly minted GobbledWarplets receipt id (URI may be set later).
+    /// @param gobbledTokenId Newly minted GobbledWarplets receipt id (URI may be set later via `setTokenURI`).
     event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId);
 }
