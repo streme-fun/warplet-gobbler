@@ -2,9 +2,11 @@
 
 import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
 import { ConnectKitButton } from "connectkit";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { useMiniApp } from "@/hooks/useMiniApp";
+import { useOwnedWarplets } from "@/hooks/useOwnedWarplets";
+import { useAuctionQueueStripFids } from "@/hooks/useAuctionQueueStripFids";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import {
   useDutchAuctionActions,
@@ -78,15 +80,65 @@ export default function Home() {
     w: number;
     h: number;
   } | null>(null);
-  const [auctionBidPlacedFids, setAuctionBidPlacedFids] = useState<
-    Set<number>
-  >(new Set());
+  const [boughtFids, setBoughtFids] = useState<Set<number>>(new Set());
   const { data: currentPrice } = useDutchAuctionPrice();
   const { symbol: payoutSymbol, decimals: payoutDecimals } =
     useDutchAuctionPayoutToken();
   const { priceUsd: warpgobbPriceUsd } = useWarpgobbUsdPrice();
   const { isApproved, refetchApproval } = useWarpletApproval(selectedFid);
   const { approveWarplet, gobbleWarplet, isWriting } = useDutchAuctionActions();
+  const {
+    warplets: ownedWarplets,
+    isLoading: ownedWarpletsLoading,
+    isError: ownedWarpletsError,
+    warpletsConfigured,
+  } = useOwnedWarplets();
+  const auctionQueueStripFids = useAuctionQueueStripFids();
+
+  const pickerWarplets = useMemo(() => {
+    const demo = MY_WARPLETS.map((w) => ({
+      fid: w.fid,
+      name: w.name,
+      imageSrc: warpletImageSrc(w.fid),
+    }));
+
+    if (!warpletsConfigured || !isConnected) {
+      return demo;
+    }
+
+    if (ownedWarpletsLoading) {
+      return [];
+    }
+
+    if (ownedWarpletsError) {
+      return [];
+    }
+
+    if (ownedWarplets.length === 0) {
+      return [];
+    }
+
+    return ownedWarplets.map((w) => ({
+      fid: w.fid,
+      name: w.name,
+      imageSrc: w.imageSrc,
+    }));
+  }, [
+    warpletsConfigured,
+    isConnected,
+    ownedWarpletsLoading,
+    ownedWarpletsError,
+    ownedWarplets,
+  ]);
+
+  useEffect(() => {
+    if (
+      selectedFid != null &&
+      !pickerWarplets.some((w) => w.fid === selectedFid)
+    ) {
+      setSelectedFid(null);
+    }
+  }, [selectedFid, pickerWarplets]);
 
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [isSelling, setIsSelling] = useState(false);
@@ -94,13 +146,10 @@ export default function Home() {
 
   const displayPrice = currentPrice ?? BigInt(0);
   const payoutAmount = Number(formatUnits(displayPrice, payoutDecimals));
-  const formattedPrice = payoutAmount.toLocaleString(
-    undefined,
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 3,
-    },
-  );
+  const formattedPrice = payoutAmount.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 3,
+  });
   // USD quote fallback rules:
   // - if payout amount is 0 => show $0.00
   // - if the payout amount hasn't loaded yet => show a very conservative $50k estimate
@@ -194,7 +243,7 @@ export default function Home() {
 
   const handleBuyDone = useCallback(() => {
     if (buyingFid) {
-      setAuctionBidPlacedFids((prev) => new Set(prev).add(buyingFid));
+      setBoughtFids((prev) => new Set(prev).add(buyingFid));
     }
     setBuyingFid(null);
     setBuyRect(null);
@@ -263,7 +312,7 @@ export default function Home() {
         style={{ opacity: gobbling ? 0 : 1 }}
       >
         {/* Parallax warplet background */}
-        <ParallaxBackground />
+        <ParallaxBackground queueFids={auctionQueueStripFids} />
 
         {/* Background gradient orbs */}
         <div className="fixed inset-0 pointer-events-none">
@@ -337,6 +386,9 @@ export default function Home() {
               <div className="flex items-center justify-between mb-2 ">
                 <p className="text-xs text-base-content/40">
                   Select a Warplet to sell
+                  {warpletsConfigured && isConnected && ownedWarpletsLoading
+                    ? " · Loading your Warplets…"
+                    : ""}
                 </p>
                 <div className="flex gap-1">
                   <button
@@ -385,7 +437,26 @@ export default function Home() {
                 id="warplet-scroll"
                 className="flex gap-2 overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
               >
-                {MY_WARPLETS.map((w) => (
+                {warpletsConfigured &&
+                  isConnected &&
+                  ownedWarpletsError && (
+                    <p className="text-xs text-error/80 px-1">
+                      Couldn&apos;t load Warplets from the chain. Check
+                      NEXT_PUBLIC_WARPLETS_ADDRESS and that the contract supports{" "}
+                      <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
+                      (ERC721Enumerable).
+                    </p>
+                  )}
+                {warpletsConfigured &&
+                  isConnected &&
+                  !ownedWarpletsLoading &&
+                  !ownedWarpletsError &&
+                  ownedWarplets.length === 0 && (
+                    <p className="text-xs text-base-content/50 px-1 py-4">
+                      No Warplets in this wallet on Base.
+                    </p>
+                  )}
+                {pickerWarplets.map((w) => (
                   <button
                     key={w.fid}
                     ref={(el) => {
@@ -402,10 +473,12 @@ export default function Home() {
                     } ${flyingFid === w.fid ? "opacity-0" : ""}`}
                   >
                     <img
-                      src={warpletImageSrc(w.fid)}
+                      src={w.imageSrc}
                       alt={w.name}
                       className="w-full h-full object-cover"
                       draggable={false}
+                      loading="lazy"
+                      decoding="async"
                     />
                     <span className="absolute bottom-0 inset-x-0 text-[10px] py-0.5 bg-black/60 text-base-content/70">
                       #{w.fid}

@@ -12,6 +12,8 @@ export default function AuctionWarpletImage({ fid }: { fid: number }) {
         alt={`Warplet #${fid}`}
         className="w-full rounded-[10px] block"
         draggable={false}
+        loading="lazy"
+        decoding="async"
       />
       {/* Shine sweep on hover */}
       <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />
