@@ -52,6 +52,9 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     uint256[] private _nftQueue;
     uint256 private _queueHead;
 
+    /// @notice `AuctionSettled.gobbledTokenId` uses this value when `GobbledWarplets.mint` reverts so settlement still completes.
+    uint256 public constant GOBBLED_MINT_FAILED = type(uint256).max;
+
     event AuctionExtended(uint256 indexed tokenId, uint256 endTime);
     event AuctionTimeBufferUpdated(uint256 timeBuffer);
     event AuctionReservePriceUpdated(uint256 reservePrice);
@@ -322,7 +325,12 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
 
         auction.settled = true;
 
-        uint256 gobbledTokenId = gobbledWarplets.mint(_auction.bidder, _auction.tokenId);
+        uint256 gobbledTokenId;
+        try gobbledWarplets.mint(_auction.bidder, _auction.tokenId) returns (uint256 tid) {
+            gobbledTokenId = tid;
+        } catch {
+            gobbledTokenId = GOBBLED_MINT_FAILED;
+        }
 
         nft.transferFrom(address(this), _auction.bidder, _auction.tokenId);
 
