@@ -1,5 +1,33 @@
 /**
- * Normalize Superfluid Whois API JSON (shape varies slightly by deployment).
+ * Superfluid identity resolver — documented shape from
+ * https://whois.superfluid.finance/api/resolve/{address}
+ */
+function pickString(v: unknown): string | null {
+  if (typeof v === "string" && v.trim()) return v.trim();
+  return null;
+}
+
+function normalizeHandle(h: string): string {
+  const t = h.trim();
+  return t.startsWith("@") ? t.slice(1) : t;
+}
+
+type ServiceProfile = {
+  handle?: string | null;
+  avatarUrl?: string | null;
+} | null;
+
+function readService(o: unknown): ServiceProfile {
+  if (!o || typeof o !== "object") return null;
+  const r = o as Record<string, unknown>;
+  return {
+    handle: pickString(r.handle),
+    avatarUrl: pickString(r.avatarUrl),
+  };
+}
+
+/**
+ * Parses JSON from GET https://whois.superfluid.finance/api/resolve/0x…
  */
 export function normalizeSuperfluidWhoisPayload(json: unknown): {
   displayName: string | null;
@@ -10,18 +38,22 @@ export function normalizeSuperfluidWhoisPayload(json: unknown): {
   }
   const o = json as Record<string, unknown>;
 
-  const pickString = (v: unknown): string | null =>
-    typeof v === "string" && v.trim() ? v.trim() : null;
+  const ens = readService(o.ENS);
+  const fc = readService(o.Farcaster);
 
-  const displayName =
-    pickString(o.displayName) ??
-    pickString(o.name) ??
-    pickString(o.username);
+  let displayName = pickString(o.recommendedName);
+  let avatarUrl = pickString(o.recommendedAvatar);
 
-  const avatarUrl =
-    pickString(o.avatarUrl) ??
-    pickString(o.avatar) ??
-    pickString(o.image);
+  if (!displayName) {
+    const fh = fc?.handle;
+    const eh = ens?.handle;
+    const raw = fh ?? eh;
+    if (raw) displayName = normalizeHandle(raw);
+  }
+
+  if (!avatarUrl) {
+    avatarUrl = fc?.avatarUrl ?? ens?.avatarUrl ?? null;
+  }
 
   return { displayName, avatarUrl };
 }

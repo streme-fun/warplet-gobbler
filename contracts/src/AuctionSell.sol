@@ -4,14 +4,14 @@ pragma solidity ^0.8.26;
 import {IAuctionSell} from "./interfaces/IAuctionSell.sol";
 
 /// @title AuctionSell
-/// @notice Highest-bidder auction for gobbled Warplets. Bids in $STRAT.
+/// @notice Highest-bidder auction for gobbled Warplets. Bids in the configured ERC-20 bid token.
 /// @dev TODO: Mark to adapt from DegenDogs auction contract. Key decisions:
 ///      - Auction duration (24h? 48h? configurable?)
 ///      - Minimum bid / reserve price?
 ///      - What happens if auction gets no bids? (return to gobbler? relist?)
-///      - $STRAT proceeds go to staking contract — direct transfer or stream?
+///      - Bid proceeds go to staking contract — direct transfer or stream?
 contract AuctionSell is IAuctionSell {
-    // address public immutable stratToken;     // $STRAT token
+    // address public immutable bidToken;     // auction ERC-20 / SuperToken
     // address public immutable staking;        // Staking contract — receives auction proceeds
     // address public immutable warplets;       // Warplets NFT contract
 

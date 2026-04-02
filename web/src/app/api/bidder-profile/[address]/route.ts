@@ -10,7 +10,8 @@ import { normalizeSuperfluidWhoisPayload } from "@/lib/superfluid-whois";
 
 export const runtime = "nodejs";
 
-const WHOIS_BASE = "https://whois.superfluid.org";
+const SUPERFLUID_WHOIS_RESOLVE =
+  "https://whois.superfluid.finance/api/resolve";
 
 const ethClient = createPublicClient({
   chain: mainnet,
@@ -33,7 +34,7 @@ export async function GET(
   let source: "whois" | "ens" | "mixed" | "address" = "address";
 
   try {
-    const whoisRes = await fetch(`${WHOIS_BASE}/v1/whois/${checksum}`, {
+    const whoisRes = await fetch(`${SUPERFLUID_WHOIS_RESOLVE}/${checksum}`, {
       headers: { Accept: "application/json" },
       next: { revalidate: 300 },
     });

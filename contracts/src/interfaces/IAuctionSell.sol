@@ -2,14 +2,14 @@
 pragma solidity ^0.8.26;
 
 /// @title IAuctionSell
-/// @notice Simple highest-bidder auction for Warplet NFTs. Bids denominated in $STRAT.
+/// @notice Simple highest-bidder auction for Warplet NFTs. Bids denominated in the bid token.
 ///         Based on Mark's DegenDogs auction contract.
 interface IAuctionSell {
     /// @notice Place a bid on the current Warplet auction
-    /// @param amount The $STRAT amount to bid
+    /// @param amount The bid token amount
     function bid(uint256 amount) external;
 
-    /// @notice Settle the current auction — transfers NFT to winner, $STRAT to staking
+    /// @notice Settle the current auction — transfers NFT to winner, proceeds to staking
     function settle() external;
 
     /// @notice Start a new auction with a gobbled Warplet

@@ -10,6 +10,7 @@ import { useAuctionQueueStripFids } from "@/hooks/useAuctionQueueStripFids";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import {
   useDutchAuctionActions,
+  useDutchAuctionPayoutStream,
   useDutchAuctionPayoutToken,
   useDutchAuctionPrice,
   useWarpgobbUsdPrice,
@@ -23,6 +24,7 @@ import GobblePeek from "@/components/GobblePeek";
 import BuyOverlay from "@/components/BuyOverlay";
 import GobblerAuctionSection from "@/components/GobblerAuctionSection";
 import FlyingWarplet from "@/components/FlyingWarplet";
+import StreamingNumber from "@/components/StreamingNumber";
 import { MY_WARPLETS } from "@/lib/mock-data";
 import { warpletImageSrc } from "@/lib/warplet-image-src";
 
@@ -76,9 +78,15 @@ export default function Home() {
     h: number;
   } | null>(null);
   const [boughtFids, setBoughtFids] = useState<Set<number>>(new Set());
-  const { data: currentPrice } = useDutchAuctionPrice();
+  const dutchAuctionPriceQuery = useDutchAuctionPrice();
+  const currentPrice = dutchAuctionPriceQuery.data;
   const { symbol: payoutSymbol, decimals: payoutDecimals } =
     useDutchAuctionPayoutToken();
+  const payoutStream = useDutchAuctionPayoutStream(
+    currentPrice,
+    payoutDecimals,
+    dutchAuctionPriceQuery.dataUpdatedAt,
+  );
   const { priceUsd: warpgobbPriceUsd } = useWarpgobbUsdPrice();
   const { isApproved, refetchApproval } = useWarpletApproval(selectedFid);
   const { approveWarplet, gobbleWarplet, isWriting } = useDutchAuctionActions();
@@ -141,10 +149,6 @@ export default function Home() {
 
   const displayPrice = currentPrice ?? BigInt(0);
   const payoutAmount = Number(formatUnits(displayPrice, payoutDecimals));
-  const formattedPrice = payoutAmount.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 3,
-  });
   // USD quote fallback rules:
   // - if payout amount is 0 => show $0.00
   // - if the payout amount hasn't loaded yet => show a very conservative $50k estimate
@@ -359,18 +363,45 @@ export default function Home() {
               The Gobbler will pay
             </p>
             <div className="text-4xl sm:text-6xl font-mono font-semibold text-primary streaming-glow">
-              {formattedPrice}
+              <StreamingNumber
+                start={payoutStream.start}
+                perSecond={payoutStream.perSecond}
+                smartMinSigFigs={6}
+                smartHideDecimalsIfIntegerDigitsGt={5}
+              />
               <span className="text-base font-normal text-base-content/40 ml-2">
                 {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/40 mt-1">
-              {payoutUsd === null
-                ? "USD quote unavailable"
-                : `~$${payoutUsd.toLocaleString(undefined, {
-                    maximumFractionDigits: 2,
-                    minimumFractionDigits: 2,
-                  })}`}
+              {isAmountMissing ? (
+                isDutchAuctionConfigured ? (
+                  <>
+                    ~$
+                    {FX_EST_MARKET_CAP_USD.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                      minimumFractionDigits: 0,
+                    })}
+                  </>
+                ) : (
+                  "~$0.00"
+                )
+              ) : payoutAmount > 0 && warpgobbPriceUsd == null ? (
+                "USD quote unavailable"
+              ) : (
+                <>
+                  ~$
+                  <StreamingNumber
+                    start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
+                    perSecond={
+                      payoutStream.perSecond * (warpgobbPriceUsd ?? 0)
+                    }
+                    decimals={2}
+                    truncateFractionDigits
+                    className="inline font-mono"
+                  />
+                </>
+              )}
             </p>
             <p className="text-sm sm:text-base text-base-content/50">
               for your warplet
@@ -548,7 +579,6 @@ export default function Home() {
           auctionBidPlacedFids={boughtFids}
           onBid={handleBuy}
           bidDisabled={!isConnected}
-          selectedWarpletTokenId={selectedFid}
         />
 
         <footer className="mt-12 sm:mt-16 pb-8 text-center text-sm text-base-content/30">
