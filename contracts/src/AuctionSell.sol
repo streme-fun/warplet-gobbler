@@ -13,6 +13,9 @@ pragma solidity ^0.8.26;
 ///      `queueBumpFee` with `userData = abi.encode(uint256 tokenId, uint256 prev)` (64 bytes). `prev` must
 ///      satisfy `_nextToken[prev] == tokenId` (walk `getQueuedTokenIds()` off-chain to compute). If `tokenId`
 ///      is already at the queue head, bump reverts. Stale `prev` reverts. Other payment amounts use the bid path.
+/// @dev **Token id 0:** the queue uses `0` as the “no next” / empty-head sentinel. The Warplets collection
+///      does not assign token id `0`; this contract is only intended for that collection as `nft`. Pointing
+///      `nft` at an ERC-721 that can mint id `0` would collide with that sentinel and break queue invariants.
 
 import {IAuctionSell} from "./interfaces/IAuctionSell.sol";
 import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
@@ -57,7 +60,8 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
 
     Auction public auction;
 
-    /// @dev Head of the waiting queue (next token to auction after the current one settles). 0 = empty.
+    /// @dev Head of the waiting queue (next token to auction after the current one settles). `0` = empty
+    ///      (valid only because Warplets never use token id 0 — see contract @dev above).
     uint256 private _listHead;
     uint256 private _listTail;
     mapping(uint256 tokenId => uint256 nextTokenId) private _nextToken;
