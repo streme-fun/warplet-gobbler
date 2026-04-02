@@ -35,27 +35,29 @@ export function useDutchAuctionPayoutToken() {
   });
 
   const tokenAddress = paymentToken.data;
+  const resolvedTokenAddress = tokenAddress ?? CONTRACTS.warpgobbToken;
+  const isResolvedTokenSet = resolvedTokenAddress.toLowerCase() !== ZERO;
 
   const symbol = useReadContract({
     abi: erc20Abi,
-    address: tokenAddress ?? CONTRACTS.warpgobbToken,
+    address: resolvedTokenAddress,
     functionName: "symbol",
     query: {
-      enabled: !!tokenAddress && tokenAddress.toLowerCase() !== ZERO,
+      enabled: isResolvedTokenSet,
     },
   });
 
   const decimals = useReadContract({
     abi: erc20Abi,
-    address: tokenAddress ?? CONTRACTS.warpgobbToken,
+    address: resolvedTokenAddress,
     functionName: "decimals",
     query: {
-      enabled: !!tokenAddress && tokenAddress.toLowerCase() !== ZERO,
+      enabled: isResolvedTokenSet,
     },
   });
 
   return {
-    address: tokenAddress,
+    address: resolvedTokenAddress,
     symbol: symbol.data ?? "WARPGOBB",
     decimals: Number(decimals.data ?? 18),
     isLoading: paymentToken.isLoading || symbol.isLoading || decimals.isLoading,
