@@ -6,11 +6,11 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title DutchAuction — "The Gobbler"
-/// @notice Receives a Superfluid stream of USDCx. Anyone can deposit a Warplet and drain the pot.
+/// @notice Receives a Superfluid stream of $WARPGOBB. Anyone can deposit a Warplet and drain the pot.
 
 contract DutchAuction is IDutchAuction {
     IERC721 public immutable warplets;      // Warplets NFT contract
-    IERC20 public immutable paymentToken;   // USDCx
+    IERC20 public immutable paymentToken;   // token used for payment: $WARPGOBB
     address public immutable nftReserve;    // Where gobbled Warplets go next
 
     // @public

@@ -1,0 +1,288 @@
+"use client";
+
+import { useMemo } from "react";
+import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import { CONTRACTS, UNISWAP_V4_POOL_IDS } from "@/lib/contracts";
+import { dutchAuctionAbi } from "@/abi/dutchAuction";
+import { erc721Abi } from "@/abi/erc721";
+import { erc20Abi } from "@/abi/erc20";
+import { uniswapV3PoolAbi } from "@/abi/uniswapV3Pool";
+import { stateViewAbi } from "@/abi/stateView";
+const ZERO = "0x0000000000000000000000000000000000000000";
+const ZERO_BYTES32 =
+  "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+export function useDutchAuctionPrice() {
+  return useReadContract({
+    abi: dutchAuctionAbi,
+    address: CONTRACTS.dutchAuction,
+    functionName: "currentPrice",
+    query: {
+      refetchInterval: 3000,
+    },
+  });
+}
+
+export function useDutchAuctionPayoutToken() {
+  const isAuctionSet = CONTRACTS.dutchAuction.toLowerCase() !== ZERO;
+  const paymentToken = useReadContract({
+    abi: dutchAuctionAbi,
+    address: CONTRACTS.dutchAuction,
+    functionName: "paymentToken",
+    query: {
+      enabled: isAuctionSet,
+    },
+  });
+
+  const tokenAddress = paymentToken.data;
+  const resolvedTokenAddress = tokenAddress ?? CONTRACTS.warpgobbToken;
+  const isResolvedTokenSet = resolvedTokenAddress.toLowerCase() !== ZERO;
+
+  const symbol = useReadContract({
+    abi: erc20Abi,
+    address: resolvedTokenAddress,
+    functionName: "symbol",
+    query: {
+      enabled: isResolvedTokenSet,
+    },
+  });
+
+  const decimals = useReadContract({
+    abi: erc20Abi,
+    address: resolvedTokenAddress,
+    functionName: "decimals",
+    query: {
+      enabled: isResolvedTokenSet,
+    },
+  });
+
+  return {
+    address: resolvedTokenAddress,
+    symbol: symbol.data ?? "WARPGOBB",
+    decimals: Number(decimals.data ?? 18),
+    isLoading: paymentToken.isLoading || symbol.isLoading || decimals.isLoading,
+  };
+}
+
+export function useWarpgobbUsdPrice() {
+  const wethUsdcPool = CONTRACTS.wethUsdcPool;
+  const hasWethUsdcPool = wethUsdcPool.toLowerCase() !== ZERO;
+  const warpgobbWethPoolId = UNISWAP_V4_POOL_IDS.warpgobbWeth;
+  const hasWarpgobbWethV4Pool =
+    warpgobbWethPoolId !== ZERO_BYTES32;
+
+  const warpgobbAddr = CONTRACTS.warpgobbToken;
+  const wethAddr = CONTRACTS.wethToken;
+  const token0Address =
+    warpgobbAddr.toLowerCase() < wethAddr.toLowerCase() ? warpgobbAddr : wethAddr;
+  const token1Address = token0Address === warpgobbAddr ? wethAddr : warpgobbAddr;
+
+  const gwSlot0 = useReadContract({
+    abi: stateViewAbi,
+    address: CONTRACTS.uniswapV4StateView,
+    functionName: "getSlot0",
+    args: [warpgobbWethPoolId as `0x${string}`],
+    query: { enabled: hasWarpgobbWethV4Pool, refetchInterval: 15000 },
+  });
+
+  const wuToken0 = useReadContract({
+    abi: uniswapV3PoolAbi,
+    address: wethUsdcPool,
+    functionName: "token0",
+    query: { enabled: hasWethUsdcPool },
+  });
+  const wuToken1 = useReadContract({
+    abi: uniswapV3PoolAbi,
+    address: wethUsdcPool,
+    functionName: "token1",
+    query: { enabled: hasWethUsdcPool },
+  });
+  const wuSlot0 = useReadContract({
+    abi: uniswapV3PoolAbi,
+    address: wethUsdcPool,
+    functionName: "slot0",
+    query: { enabled: hasWethUsdcPool, refetchInterval: 15000 },
+  });
+
+  const token0Decimals = useReadContract({
+    abi: erc20Abi,
+    address: token0Address,
+    functionName: "decimals",
+    query: { enabled: hasWarpgobbWethV4Pool },
+  });
+  const token1Decimals = useReadContract({
+    abi: erc20Abi,
+    address: token1Address,
+    functionName: "decimals",
+    query: { enabled: hasWarpgobbWethV4Pool },
+  });
+  const wuToken0Decimals = useReadContract({
+    abi: erc20Abi,
+    address: wuToken0.data ?? CONTRACTS.wethToken,
+    functionName: "decimals",
+    query: { enabled: !!wuToken0.data },
+  });
+  const wuToken1Decimals = useReadContract({
+    abi: erc20Abi,
+    address: wuToken1.data ?? CONTRACTS.usdcToken,
+    functionName: "decimals",
+    query: { enabled: !!wuToken1.data },
+  });
+
+  const calcToken1PerToken0 = (
+    sqrtPriceX96: bigint,
+    token0Decimals: bigint | number,
+    token1Decimals: bigint | number,
+  ) => {
+    const decimalDiff = Number(token0Decimals) - Number(token1Decimals);
+    const q192 = BigInt(2) ** BigInt(192);
+    const scale = BigInt(1_000_000_000_000);
+    let numerator = sqrtPriceX96 * sqrtPriceX96 * scale;
+    if (decimalDiff > 0) numerator *= BigInt(10) ** BigInt(decimalDiff);
+    let denominator = q192;
+    if (decimalDiff < 0) denominator *= BigInt(10) ** BigInt(-decimalDiff);
+    const scaledPrice = numerator / denominator;
+    return Number(scaledPrice) / 1_000_000_000_000;
+  };
+
+  const priceUsd = useMemo(() => {
+    const warpgobb = CONTRACTS.warpgobbToken.toLowerCase();
+    const weth = CONTRACTS.wethToken.toLowerCase();
+    const usdc = CONTRACTS.usdcToken.toLowerCase();
+
+    if (!gwSlot0.data) return null;
+    if (!token0Decimals.data || !token1Decimals.data) return null;
+    if (!wuToken0.data || !wuToken1.data) return null;
+    if (!wuSlot0.data) return null;
+    if (!wuToken0Decimals.data || !wuToken1Decimals.data) return null;
+
+    const v4Token0 = token0Address.toLowerCase();
+    const v4Token1 = token1Address.toLowerCase();
+    const v4Token1PerToken0 = calcToken1PerToken0(
+      gwSlot0.data[0],
+      token0Decimals.data,
+      token1Decimals.data,
+    );
+
+    // v4 spot gives price(token1/token0). We want WETH per WARPGOBB.
+    let warpgobbInWeth: number | null = null;
+    if (v4Token0 === warpgobb && v4Token1 === weth) {
+      warpgobbInWeth = v4Token1PerToken0;
+    } else if (v4Token0 === weth && v4Token1 === warpgobb) {
+      warpgobbInWeth =
+        v4Token1PerToken0 === 0 ? null : 1 / v4Token1PerToken0;
+    }
+
+    const v3Token0 = wuToken0.data.toLowerCase();
+    const v3Token1 = wuToken1.data.toLowerCase();
+    const v3Token1PerToken0 = calcToken1PerToken0(
+      wuSlot0.data[0],
+      wuToken0Decimals.data,
+      wuToken1Decimals.data,
+    );
+
+    // v3 spot gives price(token1/token0). We want USDC per WETH.
+    let wethInUsdc: number | null = null;
+    if (v3Token0 === weth && v3Token1 === usdc) {
+      wethInUsdc = v3Token1PerToken0;
+    } else if (v3Token0 === usdc && v3Token1 === weth) {
+      wethInUsdc = v3Token1PerToken0 === 0 ? null : 1 / v3Token1PerToken0;
+    }
+
+    if (warpgobbInWeth === null || wethInUsdc === null) return null;
+    return warpgobbInWeth * wethInUsdc;
+  }, [
+    token0Address,
+    token1Address,
+    gwSlot0.data,
+    token0Decimals.data,
+    token1Decimals.data,
+    wuToken0.data,
+    wuToken1.data,
+    wuSlot0.data,
+    wuToken0Decimals.data,
+    wuToken1Decimals.data,
+  ]);
+
+  return {
+    priceUsd,
+    isLoading:
+      gwSlot0.isLoading ||
+      token0Decimals.isLoading ||
+      token1Decimals.isLoading ||
+      wuToken0.isLoading ||
+      wuToken1.isLoading ||
+      wuSlot0.isLoading ||
+      wuToken0Decimals.isLoading ||
+      wuToken1Decimals.isLoading,
+  };
+}
+
+export function useWarpletApproval(tokenId: number | null) {
+  const { address } = useAccount();
+
+  const approvedForToken = useReadContract({
+    abi: erc721Abi,
+    address: CONTRACTS.warplets,
+    functionName: "getApproved",
+    args: [BigInt(tokenId ?? 0)],
+    query: {
+      enabled: !!tokenId,
+    },
+  });
+
+  const approvedForAll = useReadContract({
+    abi: erc721Abi,
+    address: CONTRACTS.warplets,
+    functionName: "isApprovedForAll",
+    args: [address ?? CONTRACTS.dutchAuction, CONTRACTS.dutchAuction],
+    query: {
+      enabled: !!address,
+    },
+  });
+
+  const isApproved = useMemo(() => {
+    if (!tokenId) return false;
+    if (approvedForAll.data) return true;
+    return (
+      typeof approvedForToken.data === "string" &&
+      approvedForToken.data.toLowerCase() === CONTRACTS.dutchAuction.toLowerCase()
+    );
+  }, [tokenId, approvedForAll.data, approvedForToken.data]);
+
+  return {
+    isApproved,
+    isApprovalLoading: approvedForAll.isLoading || approvedForToken.isLoading,
+    refetchApproval: async () => {
+      await Promise.all([approvedForAll.refetch(), approvedForToken.refetch()]);
+    },
+  };
+}
+
+export function useDutchAuctionActions() {
+  const { writeContractAsync, isPending } = useWriteContract();
+
+  const approveWarplet = async (tokenId: number) => {
+    return writeContractAsync({
+      abi: erc721Abi,
+      address: CONTRACTS.warplets,
+      functionName: "approve",
+      args: [CONTRACTS.dutchAuction, BigInt(tokenId)],
+    });
+  };
+
+  const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
+    return writeContractAsync({
+      abi: dutchAuctionAbi,
+      address: CONTRACTS.dutchAuction,
+      functionName: "gobble",
+      args: [BigInt(tokenId), minPrice],
+    });
+  };
+
+  return {
+    approveWarplet,
+    gobbleWarplet,
+    isWriting: isPending,
+  };
+}

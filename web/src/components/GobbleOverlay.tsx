@@ -6,14 +6,18 @@ interface GobbleOverlayProps {
   onDone: () => void;
   /** Called when the chest phase begins (phase 6) */
   onChestReveal?: () => void;
-  /** USDCx payout to reveal after gobble */
+  /** Payout amount to reveal after gobble */
   payout?: number;
+  payoutSymbol?: string;
+  payoutUsd?: number | null;
 }
 
 export default function GobbleOverlay({
   onDone,
   onChestReveal,
   payout = 891.426,
+  payoutSymbol = "WARPGOBB",
+  payoutUsd = null,
 }: GobbleOverlayProps) {
   const bgRef = useRef<HTMLCanvasElement>(null);
   const gooRef = useRef<HTMLCanvasElement>(null);
@@ -406,23 +410,53 @@ export default function GobbleOverlay({
       ctx.save();
       ctx.globalAlpha = textAlpha;
 
-      const formatted = payout.toFixed(3);
+      function conciseNumber(n: number) {
+        const abs = Math.abs(n);
+        const sign = n < 0 ? "-" : "";
+        const format = (v: number) =>
+          v.toLocaleString(undefined, {
+            maximumFractionDigits: 2,
+          });
+
+        if (abs >= 1e9) return `${sign}${format(abs / 1e9)}b`;
+        if (abs >= 1e6) return `${sign}${format(abs / 1e6)}m`;
+        if (abs >= 1e3) return `${sign}${format(abs / 1e3)}k`;
+        return `${sign}${format(abs)}`;
+      }
+
+      function formatUsd(n: number) {
+        return n.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+      }
+
+      const tokenLabel = payoutSymbol.startsWith("$")
+        ? payoutSymbol
+        : `$${payoutSymbol}`;
+      const formattedTokenAmount = conciseNumber(payout);
+      const usdText =
+        payoutUsd === null ? "--" : `${formatUsd(Math.max(0, payoutUsd))}`;
       const bobY = Math.sin(time * 0.03) * 3;
       const textY = centerY - 160 + bobY;
 
-      ctx.font = "bold 52px 'EB Garamond', Georgia, serif";
+      ctx.font = "bold 48px 'EB Garamond', Georgia, serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
       ctx.shadowColor = "rgba(255, 215, 50, 0.8)";
       ctx.shadowBlur = 30;
       ctx.fillStyle = "#FFD700";
-      ctx.fillText(formatted, centerX, textY);
+      ctx.fillText(
+        `${formattedTokenAmount} ${tokenLabel}`,
+        centerX,
+        textY,
+      );
       ctx.shadowBlur = 0;
 
       ctx.font = "400 22px 'EB Garamond', Georgia, serif";
-      ctx.fillStyle = `rgba(255, 215, 50, ${0.7 * textAlpha})`;
-      ctx.fillText("USDCx received", centerX, textY + 40);
+      ctx.fillStyle = `rgba(200,200,200, ${0.9 * textAlpha})`;
+      ctx.fillText(`~$${usdText}`, centerX, textY + 55);
 
       ctx.restore();
     }
@@ -615,7 +649,7 @@ export default function GobbleOverlay({
       cancelled = true;
       window.removeEventListener("resize", resize);
     };
-  }, [onDone, onChestReveal, payout]);
+  }, [onDone, onChestReveal, payout, payoutSymbol, payoutUsd]);
 
   return (
     <div className="fixed inset-0 z-50" style={{ width: "100vw", height: "100vh" }}>
