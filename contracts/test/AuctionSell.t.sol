@@ -7,6 +7,7 @@ import {GobbledWarplets} from "../src/GobbledWarplets.sol";
 import {MockBidToken} from "./mocks/MockBidToken.sol";
 import {MockAuctionNFT} from "./mocks/MockAuctionNFT.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -241,6 +242,10 @@ contract AuctionSellTest is Test {
         assertEq(gobbled.ownerOf(t1), alice);
         assertEq(gobbled.warpletOf(t1), t1);
         assertEq(gobbled.gobbleIndexOf(t1), 0);
+        assertEq(gobbled.totalSupply(), 1);
+        assertEq(gobbled.tokenOfOwnerByIndex(alice, 0), t1);
+        assertEq(gobbled.tokenByIndex(0), t1);
+        assertTrue(gobbled.supportsInterface(type(IERC721Enumerable).interfaceId));
 
         (uint256 nextId,,,) = sell.currentAuction();
         assertEq(nextId, t2);
@@ -272,6 +277,11 @@ contract AuctionSellTest is Test {
         assertEq(gobbled.ownerOf(secondGobbledId), bob);
         assertEq(gobbled.warpletOf(secondGobbledId), wid);
         assertEq(gobbled.gobbleIndexOf(secondGobbledId), 1);
+        assertEq(gobbled.totalSupply(), 2);
+        assertEq(gobbled.tokenOfOwnerByIndex(alice, 0), wid);
+        assertEq(gobbled.tokenOfOwnerByIndex(bob, 0), secondGobbledId);
+        assertEq(gobbled.tokenByIndex(0), wid);
+        assertEq(gobbled.tokenByIndex(1), secondGobbledId);
     }
 
     function test_settle_reverts_when_warplet_id_too_large_for_gobbled_encoding() public {
