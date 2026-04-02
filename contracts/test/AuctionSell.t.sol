@@ -10,6 +10,7 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
 contract AuctionSellTest is Test {
     AuctionSell internal sell;
     GobbledWarplets internal gobbled;
@@ -347,7 +348,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        (, ,, uint256 endBefore) = sell.currentAuction();
+        (,,, uint256 endBefore) = sell.currentAuction();
         uint256 warpTo = endBefore - 3 minutes;
         vm.warp(warpTo);
 
@@ -357,7 +358,7 @@ contract AuctionSellTest is Test {
         vm.prank(alice);
         sell.bid(RESERVE_PRICE);
 
-        (, ,, uint256 endAfter) = sell.currentAuction();
+        (,,, uint256 endAfter) = sell.currentAuction();
         assertEq(endAfter, warpTo + TIME_BUFFER);
     }
 
@@ -532,7 +533,7 @@ contract AuctionSellTest is Test {
 
         sell.extendAuction();
 
-        (, ,, uint256 end) = sell.currentAuction();
+        (,,, uint256 end) = sell.currentAuction();
         assertEq(end, before + DURATION);
     }
 
@@ -1010,7 +1011,9 @@ contract AuctionSellTest is Test {
         sell.settle();
     }
 
-    function test_settle_reverts_when_warplet_id_too_large_for_gobbled_mint_paused_path() public {
+    function test_settle_do_not_reverts_when_warplet_id_too_large_for_gobbled_mint_paused_path() public {
+        uint256 aliceGobbledBalanceBefore = gobbled.balanceOf(alice);
+
         vm.prank(owner);
         uint256 badId = nft.mintSpecific(owner, gobbled.MAX_WARPLET_ID_EXCLUSIVE());
 
@@ -1025,7 +1028,12 @@ contract AuctionSellTest is Test {
 
         vm.prank(owner);
         sell.pause();
-        vm.expectRevert(bytes("GobbledWarplets: warpletId too large"));
         sell.settle();
+
+        uint256 aliceGobbledBalanceAfter = gobbled.balanceOf(alice);
+
+        // Asserts that settle did not revert and that the warplet mint was attempted, but did not succeed in minting a gobbled receipt
+        vm.assertEq(nft.ownerOf(badId), alice);
+        vm.assertEq(aliceGobbledBalanceAfter, aliceGobbledBalanceBefore);
     }
 }
