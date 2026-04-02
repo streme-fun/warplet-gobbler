@@ -425,7 +425,7 @@ contract AuctionSellTest is Test {
         assertEq(gobbled.tokenByIndex(1), secondGobbledId);
     }
 
-    function test_settle_reverts_when_warplet_id_too_large_for_gobbled_encoding() public {
+    function test_settle_succeeds_when_gobbled_mint_reverts_warplet_id_too_large() public {
         vm.prank(owner);
         uint256 badId = nft.mintSpecific(owner, gobbled.MAX_WARPLET_ID_EXCLUSIVE());
 
@@ -438,8 +438,12 @@ contract AuctionSellTest is Test {
         sell.bid(RESERVE_PRICE);
         vm.warp(block.timestamp + DURATION + 1);
 
-        vm.expectRevert(bytes("GobbledWarplets: warpletId too large"));
         sell.settleCurrentAndCreateNewAuction();
+
+        assertEq(nft.ownerOf(badId), alice);
+        assertEq(gobbled.totalSupply(), 0);
+        (,,,,, bool settled) = sell.auction();
+        assertTrue(settled);
     }
 
     function test_settleCurrent_no_next_when_queue_empty() public {

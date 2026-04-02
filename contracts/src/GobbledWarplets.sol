@@ -11,6 +11,9 @@ import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 /// @notice ERC721 receipt collection for gobbled Warplets. Only the authorized minter may mint.
 /// @dev Token id encoding: `tokenId = gobbleIndex * 10**6 + warpletId` (warplet ids must be below 100_000).
 ///      Uses {ERC721Enumerable} for `totalSupply`, `tokenOfOwnerByIndex`, and `tokenByIndex`.
+///      Mint uses {_mint} (not {_safeMint}) so auction settlement cannot be bricked by a receiver that
+///      reverts in `onERC721Received`. No post-mint receiver callback — avoids re-entrancy in the middle
+///      of `AuctionSell` settlement (after `settled` is written) and matches common auction-house practice.
 contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, IGobbledWarplets {
     uint256 public constant MAX_WARPLET_ID_EXCLUSIVE = 100_000;
     uint256 public constant TOKEN_ID_DECIMAL_STRIDE = 1_000_000;
@@ -47,7 +50,7 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, IGobble
         require(_ownerOf(tokenId) == address(0), "GobbledWarplets: already minted");
 
         _gobbles[warpletId] = gobbleIndex + 1;
-        _safeMint(to, tokenId);
+        _mint(to, tokenId);
         emit Minted(to, warpletId, tokenId, gobbleIndex);
     }
 
