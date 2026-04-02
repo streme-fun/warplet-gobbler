@@ -291,6 +291,28 @@ body {
   text-shadow: 0 0 12px rgba(0, 245, 255, 0.3), 0 0 30px rgba(0, 245, 255, 0.1);
 }
 
+@keyframes auction-aura-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(123, 97, 255, 0.35),
+      0 0 28px rgba(123, 97, 255, 0.2),
+      0 0 52px rgba(0, 245, 255, 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(123, 97, 255, 0.55),
+      0 0 40px rgba(123, 97, 255, 0.35),
+      0 0 72px rgba(0, 245, 255, 0.14);
+  }
+}
+
+.auction-warplet-aura {
+  padding: 2px;
+  border-radius: 0.85rem;
+  animation: auction-aura-pulse 3.5s ease-in-out infinite;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
