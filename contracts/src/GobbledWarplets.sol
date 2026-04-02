@@ -2,6 +2,7 @@
 pragma solidity ^0.8.26;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
@@ -9,7 +10,8 @@ import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 /// @title GobbledWarplets
 /// @notice ERC721 receipt collection for gobbled Warplets. Only the authorized minter may mint.
 /// @dev Token id encoding: `tokenId = gobbleIndex * 10**6 + warpletId` (warplet ids must be below 100_000).
-contract GobbledWarplets is ERC721URIStorage, Ownable, IGobbledWarplets {
+///      Uses {ERC721Enumerable} for `totalSupply`, `tokenOfOwnerByIndex`, and `tokenByIndex`.
+contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, IGobbledWarplets {
     uint256 public constant MAX_WARPLET_ID_EXCLUSIVE = 100_000;
     uint256 public constant TOKEN_ID_DECIMAL_STRIDE = 1_000_000;
 
@@ -98,11 +100,19 @@ contract GobbledWarplets is ERC721URIStorage, Ownable, IGobbledWarplets {
         }
     }
 
-    function supportsInterface(bytes4 interfaceId) public view override(ERC721URIStorage) returns (bool) {
+    function _update(address to, uint256 tokenId, address auth) internal override(ERC721Enumerable, ERC721) returns (address) {
+        return super._update(to, tokenId, auth);
+    }
+
+    function _increaseBalance(address account, uint128 value) internal override(ERC721Enumerable, ERC721) {
+        super._increaseBalance(account, value);
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721Enumerable, ERC721URIStorage) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
-    function tokenURI(uint256 tokenId) public view override(ERC721URIStorage) returns (string memory) {
+    function tokenURI(uint256 tokenId) public view override(ERC721URIStorage, ERC721) returns (string memory) {
         return super.tokenURI(tokenId);
     }
 }
