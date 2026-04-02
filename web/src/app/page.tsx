@@ -20,15 +20,10 @@ import ParallaxBackground from "@/components/ParallaxBackground";
 import Particles from "@/components/Particles";
 import GobbleOverlay from "@/components/GobbleOverlay";
 import GobblePeek from "@/components/GobblePeek";
-import StreamingNumber from "@/components/StreamingNumber";
-import AuctionItem from "@/components/AuctionItem";
 import BuyOverlay from "@/components/BuyOverlay";
+import GobblerAuctionSection from "@/components/GobblerAuctionSection";
 import FlyingWarplet from "@/components/FlyingWarplet";
-import { PAYMENT_TOKEN_LABEL } from "@/lib/paymentToken";
-import {
-  MOCK_AUCTIONS,
-  MY_WARPLETS,
-} from "@/lib/mock-data";
+import { MY_WARPLETS } from "@/lib/mock-data";
 import { warpletImageSrc } from "@/lib/warplet-image-src";
 
 /* eslint-disable @next/next/no-img-element */
@@ -549,114 +544,12 @@ export default function Home() {
         id="auction"
         className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 py-12 sm:py-20"
       >
-        <div className="w-full max-w-4xl rounded-2xl bg-base-200/40 border border-secondary/10 backdrop-blur-sm p-6 sm:p-10">
-          <h2 className="text-xl sm:text-3xl font-bold tracking-widest uppercase mb-1">
-            Buy Warplets from the Gobbler
-          </h2>
-          <p className="text-sm text-base-content/40 mb-6 sm:mb-8">
-            Buy the Gobbler&apos;s Warplet remains — the price drops every
-            second.
-            <br />
-            Receive a Warplet NFT, a Gobbled Warplet NFT, and Superfluid $SUP.
-          </p>
-
-          {/* You receive breakdown */}
-          <div className="flex items-center justify-center gap-3 sm:gap-5 mb-8 sm:mb-10">
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-base-content/10">
-                <img
-                  src="/warplet.png"
-                  alt="Original Warplet"
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                />
-              </div>
-              <span className="text-[10px] sm:text-xs text-base-content/50">
-                Warplet
-              </span>
-            </div>
-            <span className="text-lg sm:text-xl text-base-content/20 font-light mt-[-1rem]">
-              +
-            </span>
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-base-content/10">
-                <img
-                  src="/gobbled-warplet.jpg"
-                  alt="Gobbled Warplet"
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                />
-              </div>
-              <span className="text-[10px] sm:text-xs text-base-content/50">
-                Gobbled Warplet
-              </span>
-            </div>
-            <span className="text-lg sm:text-xl text-base-content/20 font-light mt-[-1rem]">
-              +
-            </span>
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-base-content/10">
-                <img
-                  src="/sup.png"
-                  alt="$SUP"
-                  className="w-full h-full object-contain"
-                  draggable={false}
-                />
-              </div>
-              <span className="text-[10px] sm:text-xs text-base-content/50">
-                Superfluid $SUP
-              </span>
-            </div>
-          </div>
-
-          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mb-4">
-            Warplets for Sale
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 sm:gap-8">
-            {MOCK_AUCTIONS.map((auction) => (
-              <AuctionItem
-                key={auction.fid}
-                auction={auction}
-                bought={boughtFids.has(auction.fid)}
-                onBuy={handleBuy}
-              />
-            ))}
-          </div>
-
-          {/* Bulk random buy */}
-          <div className="mt-8 pt-6 border-t border-base-content/5 text-center">
-            <p className="text-xs text-base-content/40 mb-3">Feeling lucky?</p>
-            <div className="flex flex-row items-center justify-center gap-3">
-              {[3, 5].map((n) => {
-                const sorted = [...MOCK_AUCTIONS].sort(
-                  (a, b) => b.priceStart - a.priceStart,
-                );
-                const top = sorted.slice(0, Math.min(n, sorted.length));
-                const maxStart = top.reduce((s, a) => s + a.priceStart, 0);
-                const maxRate = top.reduce((s, a) => s + a.priceRate, 0);
-                const minFloor = top.reduce((s, a) => s + a.floor, 0);
-                return (
-                  <button
-                    key={n}
-                    className="px-4 py-2.5 rounded-lg border border-secondary/30 text-secondary text-sm font-medium hover:bg-secondary/10 hover:border-secondary transition-colors"
-                  >
-                    <span>Buy {n} Random</span>
-                    <span className="block text-[10px] text-base-content/40 font-mono mt-0.5">
-                      max{" "}
-                      <StreamingNumber
-                        start={maxStart}
-                        perSecond={maxRate}
-                        decimals={0}
-                        min={minFloor}
-                      />{" "}
-                      {PAYMENT_TOKEN_LABEL}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <GobblerAuctionSection
+          auctionBidPlacedFids={boughtFids}
+          onBid={handleBuy}
+          bidDisabled={!isConnected}
+          selectedWarpletTokenId={selectedFid}
+        />
 
         <footer className="mt-12 sm:mt-16 pb-8 text-center text-sm text-base-content/30">
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 mb-6">

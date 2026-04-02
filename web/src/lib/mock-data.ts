@@ -56,6 +56,16 @@ export const MOCK_AUCTIONS = [
 
 export type MockAuction = (typeof MOCK_AUCTIONS)[number];
 
+/** Mock top bid when on-chain lot is not wired (display only). */
+export const MOCK_FALLBACK_TOP_BID_STRAT = "12,400";
+
+/** Mock high bidder for hero when not on-chain (zero = no bidder row). */
+export const MOCK_FALLBACK_TOP_BIDDER =
+  "0x0000000000000000000000000000000000000000" as const;
+
+/** Mock skip-queue fee when on-chain fee is unavailable. */
+export const MOCK_SKIP_QUEUE_FEE_STRAT = 2500;
+
 // Mock warplets the user "owns" — same fids as background
 export const MY_WARPLETS = [
   { fid: 1, name: "Warplet #1" },
