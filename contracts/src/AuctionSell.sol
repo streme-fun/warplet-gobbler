@@ -4,7 +4,18 @@ pragma solidity ^0.8.26;
 /// @title AuctionSell
 /// @notice Nouns-style highest-bidder auction for Warplets. Bids in an ERC20 `bidToken`.
 /// @dev Adapted from NounsAuctionHouse / Zora AuctionHouse (see DegenDogs mission3 branch).
-///      NFTs are received via safeTransfer and queued FIFO; each new auction consumes the queue head.
+///      NFTs are received via safeTransfer into a singly-linked FIFO queue (`_listHead` … `_nextToken`).
+///      Queue bump (`queueBumpFee` + `userData`) splices a token out using caller-supplied `prev` (the token id
+///      immediately before it in queue order) and prepends it to the head. On settle, the Warplet NFT is
+///      transferred to the winner, bid proceeds to `proceedsRecipient`, and an empty-URI GobbledWarplet
+///      receipt is minted to the winner (admin sets URI separately).
+/// @dev ERC777 `send` / `tokensReceived`: use empty or non-bump `userData` to bid. To bump, `send` exactly
+///      `queueBumpFee` with `userData = abi.encode(uint256 tokenId, uint256 prev)` (64 bytes). `prev` must
+///      satisfy `_nextToken[prev] == tokenId` (walk `getQueuedTokenIds()` off-chain to compute). If `tokenId`
+///      is already at the queue head, bump reverts. Stale `prev` reverts. Other payment amounts use the bid path.
+/// @dev **Token id 0:** the queue uses `0` as the “no next” / empty-head sentinel. The Warplets collection
+///      does not assign token id `0`; this contract is only intended for that collection as `nft`. Pointing
+///      `nft` at an ERC-721 that can mint id `0` would collide with that sentinel and break queue invariants.
 
 import {IAuctionSell} from "./interfaces/IAuctionSell.sol";
 import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
@@ -49,8 +60,18 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
 
     Auction public auction;
 
-    uint256[] private _nftQueue;
-    uint256 private _queueHead;
+    /// @dev Head of the waiting queue (next token to auction after the current one settles). `0` = empty
+    ///      (valid only because Warplets never use token id 0 — see contract @dev above).
+    uint256 private _listHead;
+    uint256 private _listTail;
+    mapping(uint256 tokenId => uint256 nextTokenId) private _nextToken;
+    uint256 private _queuedCount;
+
+    /// @notice WARPGOBB required to move a queued Warplet to the head via ERC777 `send` + `userData`.
+    uint256 public queueBumpFee;
+
+    /// @notice `AuctionSettled.gobbledTokenId` uses this value when `GobbledWarplets.mint` reverts so settlement still completes.
+    uint256 public constant GOBBLED_MINT_FAILED = type(uint256).max;
 
     /// @notice `AuctionSettled.gobbledTokenId` uses this value when `GobbledWarplets.mint` reverts so settlement still completes.
     uint256 public constant GOBBLED_MINT_FAILED = type(uint256).max;
@@ -60,6 +81,9 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     event AuctionReservePriceUpdated(uint256 reservePrice);
     event AuctionMinBidIncrementPercentageUpdated(uint8 minBidIncrementPercentage);
     event ProceedsRecipientUpdated(address indexed recipient);
+    event QueueBumpFeeUpdated(uint256 queueBumpFee);
+    event TokenEnqueued(uint256 indexed tokenId);
+    event QueueBumped(address indexed payer, uint256 indexed tokenId, uint256 fee);
 
     constructor(
         IERC721 _nft,
@@ -83,6 +107,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         reservePrice = _reservePrice;
         minBidIncrementPercentage = _minBidIncrementPercentage;
         duration = _duration;
+        queueBumpFee = 1_000_000 * 1e18;
         _pause();
         // Register this contract as an ERC1820 implementer for the ERC777TokensRecipient interface
         // (i.e., ERC1820: "ERC777TokensRecipient" = keccak256("ERC777TokensRecipient"))
@@ -110,17 +135,41 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         returns (bytes4)
     {
         require(msg.sender == address(nft), "AuctionSell: only configured NFT");
-        _nftQueue.push(tokenId);
+        if (_listHead == 0) {
+            _listHead = tokenId;
+            _listTail = tokenId;
+            _nextToken[tokenId] = 0;
+        } else {
+            _nextToken[_listTail] = tokenId;
+            _listTail = tokenId;
+            _nextToken[tokenId] = 0;
+        }
+        unchecked {
+            ++_queuedCount;
+        }
+        emit TokenEnqueued(tokenId);
         return IERC721Receiver.onERC721Received.selector;
     }
 
     function queuedLength() external view returns (uint256) {
-        return _nftQueue.length - _queueHead;
+        return _queuedCount;
+    }
+
+    /// @notice Full waiting-queue order from head to tail for off-chain / frontend use. O(n) gas.
+    function getQueuedTokenIds() external view returns (uint256[] memory orderedIds) {
+        uint256 n = _queuedCount;
+        orderedIds = new uint256[](n);
+        uint256 cur = _listHead;
+        for (uint256 i = 0; i < n; ++i) {
+            orderedIds[i] = cur;
+            cur = _nextToken[cur];
+        }
+        require(cur == 0, "AuctionSell: queue corrupt");
     }
 
     function nextQueuedTokenId() external view returns (uint256) {
-        require(_nftQueue.length > _queueHead, "AuctionSell: empty queue");
-        return _nftQueue[_queueHead];
+        require(_listHead != 0, "AuctionSell: empty queue");
+        return _listHead;
     }
 
     /// @inheritdoc IAuctionSell
@@ -134,13 +183,18 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         address from,
         address /*to*/,
         uint256 amount,
-        bytes calldata /*userData*/,
+        bytes calldata userData,
         bytes calldata /*operatorData*/
     ) external override nonReentrant whenNotPaused {
         require(msg.sender == address(bidToken), "AuctionSell: only configured token");
+        if (amount == queueBumpFee && userData.length == 64) {
+            (uint256 tokenId, uint256 prev) = abi.decode(userData, (uint256, uint256));
+            _bumpToFront(from, tokenId, prev, amount);
+            return;
+        }
         _bid(amount, from);
     }
-    
+
     function _bid(uint256 amount, address from) internal {
         Auction memory _auction = auction;
 
@@ -159,10 +213,9 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         address payable lastBidder = _auction.bidder;
         uint256 lastAmount = _auction.amount;
 
-        
         auction.amount = amount;
         auction.bidder = payable(from);
-        
+
         if (lastBidder != address(0)) {
             require(bidToken.transfer(lastBidder, lastAmount), "AuctionSell: refund failed");
         }
@@ -179,6 +232,35 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         }
     }
 
+    /// @dev Splice `tokenId` out (predecessor `prev`) and prepend to `_listHead`.
+    function _bumpToFront(address payer, uint256 tokenId, uint256 prev, uint256 fee) internal {
+        require(nft.ownerOf(tokenId) == address(this), "AuctionSell: not holding NFT");
+        require(_listHead != 0, "AuctionSell: empty queue");
+        require(tokenId != _listHead, "AuctionSell: already first");
+        require(_nextToken[prev] == tokenId, "AuctionSell: bad prev");
+
+        uint256 oldNext = _nextToken[tokenId];
+        _nextToken[prev] = oldNext;
+        if (_listTail == tokenId) {
+            _listTail = prev;
+        }
+
+        _nextToken[tokenId] = _listHead;
+        _listHead = tokenId;
+
+        require(bidToken.transfer(proceedsRecipient, fee), "AuctionSell: bump proceeds failed");
+        emit QueueBumped(payer, tokenId, fee);
+    }
+
+    function _hasPendingTokens() internal view returns (bool) {
+        return _listHead != 0;
+    }
+
+    function _peekNextTokenId() internal view returns (uint256) {
+        require(_listHead != 0, "AuctionSell: empty queue");
+        return _listHead;
+    }
+
     /// @inheritdoc IAuctionSell
     function settle() external override nonReentrant whenPaused {
         _settleAuction();
@@ -187,7 +269,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     /// @inheritdoc IAuctionSell
     function settleCurrentAndCreateNewAuction() external override nonReentrant whenNotPaused {
         _settleAuction();
-        if (_nftQueue.length > _queueHead) {
+        if (_hasPendingTokens()) {
             _startAuctionFromQueueHead();
         }
     }
@@ -195,8 +277,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     /// @inheritdoc IAuctionSell
     function startAuction(uint256 tokenId) external override nonReentrant whenNotPaused {
         require(auction.startTime == 0 || auction.settled, "AuctionSell: auction live");
-        require(_nftQueue.length > _queueHead, "AuctionSell: empty queue");
-        require(tokenId == _nftQueue[_queueHead], "AuctionSell: not next in queue");
+        require(tokenId == _peekNextTokenId(), "AuctionSell: not next in queue");
         _startAuctionFromQueueHead();
     }
 
@@ -233,7 +314,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         _unpause();
 
         if (auction.startTime == 0 || auction.settled) {
-            if (_nftQueue.length > _queueHead) {
+            if (_hasPendingTokens()) {
                 _startAuctionFromQueueHead();
             }
         }
@@ -260,43 +341,23 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         emit ProceedsRecipientUpdated(_proceedsRecipient);
     }
 
-    /// @notice Move live queue entries to the front of `_nftQueue` and shrink storage length (clears skipped head slots).
-    /// @dev Rare maintenance hook if `_queueHead` grows large vs `length`. FIFO order is preserved. No-op if `_queueHead == 0`.
-    function compactQueue() external onlyOwner {
-        uint256 head = _queueHead;
-        uint256 len = _nftQueue.length;
-
-        if (len == 0) {
-            _queueHead = 0;
-            return;
-        }
-        if (head == 0) {
-            return;
-        }
-        if (head >= len) {
-            while (_nftQueue.length > 0) {
-                _nftQueue.pop();
-            }
-            _queueHead = 0;
-            return;
-        }
-
-        uint256 tail = len - head;
-        for (uint256 i = 0; i < tail; i++) {
-            _nftQueue[i] = _nftQueue[head + i];
-        }
-        while (_nftQueue.length > tail) {
-            _nftQueue.pop();
-        }
-        _queueHead = 0;
+    function setQueueBumpFee(uint256 _queueBumpFee) external onlyOwner {
+        queueBumpFee = _queueBumpFee;
+        emit QueueBumpFeeUpdated(_queueBumpFee);
     }
 
     function _startAuctionFromQueueHead() internal {
-        require(_nftQueue.length > _queueHead, "AuctionSell: empty queue");
-
-        uint256 tokenId = _nftQueue[_queueHead];
-        ++_queueHead;
-        delete _nftQueue[_queueHead - 1];
+        require(_listHead != 0, "AuctionSell: empty queue");
+        uint256 tokenId = _listHead;
+        uint256 nextHead = _nextToken[tokenId];
+        delete _nextToken[tokenId];
+        _listHead = nextHead;
+        if (_listHead == 0) {
+            _listTail = 0;
+        }
+        unchecked {
+            --_queuedCount;
+        }
 
         require(nft.ownerOf(tokenId) == address(this), "AuctionSell: not holding NFT");
 

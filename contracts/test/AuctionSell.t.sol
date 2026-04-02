@@ -35,6 +35,9 @@ contract AuctionSellTest is Test {
     event AuctionReservePriceUpdated(uint256 reservePrice);
     event AuctionMinBidIncrementPercentageUpdated(uint8 minBidIncrementPercentage);
     event ProceedsRecipientUpdated(address indexed recipient);
+    event QueueBumpFeeUpdated(uint256 queueBumpFee);
+    event QueueBumped(address indexed payer, uint256 indexed tokenId, uint256 fee);
+    event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId);
 
     function setUp() public {
         vm.startPrank(owner);
@@ -125,6 +128,145 @@ contract AuctionSellTest is Test {
         assertEq(tid, t2);
     }
 
+    function test_settle_mints_gobbled_to_winner() public {
+        uint256 wid = _mintAndSendToSell(owner);
+        _unpauseStartsAuction(wid);
+
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+
+        vm.warp(block.timestamp + DURATION + 1);
+        sell.settleCurrentAndCreateNewAuction();
+
+        assertEq(nft.ownerOf(wid), alice);
+        assertEq(gobbled.balanceOf(alice), 1);
+        assertEq(gobbled.ownerOf(wid), alice);
+    }
+
+    /* ========== ERC777 queue bump ========== */
+
+    function test_tokensReceived_bump_moves_later_queued_to_head() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+
+        vm.prank(owner);
+        sell.unpause();
+
+        assertEq(sell.nextQueuedTokenId(), t2);
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.expectEmit(true, true, false, true, address(sell));
+        emit QueueBumped(alice, t3, fee);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+
+        assertEq(sell.nextQueuedTokenId(), t3);
+        (uint256 activeId,,,,,) = sell.auction();
+        assertEq(t1, activeId);
+    }
+
+    function test_bump_second_position_moves_to_front_with_prev_hint() public {
+        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+
+        vm.prank(owner);
+        sell.unpause();
+        assertEq(sell.nextQueuedTokenId(), t2);
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+
+        assertEq(sell.nextQueuedTokenId(), t3);
+        uint256[] memory q = sell.getQueuedTokenIds();
+        assertEq(q.length, 2);
+        assertEq(q[0], t3);
+        assertEq(q[1], t2);
+    }
+
+    function test_last_bumper_is_next_in_line_after_settle() public {
+        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee * 2);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, t3), "");
+
+        assertEq(sell.nextQueuedTokenId(), t2);
+
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+        vm.warp(block.timestamp + DURATION + 1);
+        sell.settleCurrentAndCreateNewAuction();
+
+        (uint256 activeId,,,) = sell.currentAuction();
+        assertEq(activeId, t2);
+    }
+
+    function test_tokensReceived_bump_revert_if_not_in_queue() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        // t1 is in the live auction; queue is only t2 — next[t2] != t1
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t1, t2), "");
+    }
+
+    function test_tokensReceived_bump_revert_when_paused() public {
+        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+
+        vm.prank(owner);
+        sell.unpause();
+        assertEq(sell.nextQueuedTokenId(), t2);
+
+        vm.prank(owner);
+        sell.pause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectPartialRevert(Pausable.EnforcedPause.selector);
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+    }
+
+    function test_tokensReceived_with_32byte_userData_and_non_fee_amount_is_bid() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+
+        uint256 bobBid = RESERVE_PRICE + (RESERVE_PRICE * MIN_INCREMENT_PCT) / 100;
+        bidToken.mint(address(sell), bobBid);
+        bytes memory userData = abi.encode(uint256(12345));
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), bob, address(0), bobBid, userData, "");
+
+        (, address highBidder,,) = sell.currentAuction();
+        assertEq(highBidder, bob);
+        (uint256 activeId,,,,,) = sell.auction();
+        assertEq(t1, activeId);
+    }
+
     /* ========== bidding & refunds ========== */
 
     function test_bid_below_reserve_reverts() public {
@@ -206,7 +348,7 @@ contract AuctionSellTest is Test {
         vm.prank(owner);
         sell.unpause();
 
-        (, ,, uint256 endBefore) = sell.currentAuction();
+        (,,, uint256 endBefore) = sell.currentAuction();
         uint256 warpTo = endBefore - 3 minutes;
         vm.warp(warpTo);
 
@@ -216,7 +358,7 @@ contract AuctionSellTest is Test {
         vm.prank(alice);
         sell.bid(RESERVE_PRICE);
 
-        (, ,, uint256 endAfter) = sell.currentAuction();
+        (,,, uint256 endAfter) = sell.currentAuction();
         assertEq(endAfter, warpTo + TIME_BUFFER);
     }
 
@@ -391,7 +533,7 @@ contract AuctionSellTest is Test {
 
         sell.extendAuction();
 
-        (, ,, uint256 end) = sell.currentAuction();
+        (,,, uint256 end) = sell.currentAuction();
         assertEq(end, before + DURATION);
     }
 
@@ -482,6 +624,21 @@ contract AuctionSellTest is Test {
         assertEq(sell.proceedsRecipient(), nextRecv);
     }
 
+    function test_setQueueBumpFee_only_owner() public {
+        assertEq(sell.queueBumpFee(), 1_000_000 * 1e18);
+
+        vm.prank(alice);
+        vm.expectPartialRevert(Ownable.OwnableUnauthorizedAccount.selector);
+        sell.setQueueBumpFee(1);
+
+        uint256 nextFee = 500_000 * 1e18;
+        vm.expectEmit(false, false, false, true, address(sell));
+        emit QueueBumpFeeUpdated(nextFee);
+        vm.prank(owner);
+        sell.setQueueBumpFee(nextFee);
+        assertEq(sell.queueBumpFee(), nextFee);
+    }
+
     function test_pause_unpause_only_owner() public {
         assertTrue(sell.paused());
 
@@ -502,9 +659,9 @@ contract AuctionSellTest is Test {
         assertTrue(sell.paused());
     }
 
-    /* ========== compactQueue ========== */
+    /* ========== mapping queue: no compaction needed ========== */
 
-    function test_compactQueue_shifts_and_resets_head() public {
+    function test_mappingQueue_queuedLength_after_settles_without_compact() public {
         _mintAndSendToSell(owner);
         _mintAndSendToSell(owner);
         vm.prank(owner);
@@ -525,28 +682,6 @@ contract AuctionSellTest is Test {
         sell.settleCurrentAndCreateNewAuction();
 
         assertEq(sell.queuedLength(), 1);
-
-        vm.prank(alice);
-        vm.expectPartialRevert(Ownable.OwnableUnauthorizedAccount.selector);
-        sell.compactQueue();
-
-        vm.prank(owner);
-        sell.compactQueue();
-        assertEq(sell.queuedLength(), 1);
-    }
-
-    function test_compactQueue_drains_when_head_past_length() public {
-        _mintAndSendToSell(owner);
-        vm.prank(owner);
-        sell.unpause();
-        vm.prank(alice);
-        sell.bid(RESERVE_PRICE);
-        vm.warp(block.timestamp + DURATION + 1);
-        sell.settleCurrentAndCreateNewAuction();
-
-        assertEq(sell.queuedLength(), 0);
-        vm.prank(owner);
-        sell.compactQueue();
     }
 
     /* ========== edge: wrong NFT contract cannot enqueue ========== */
@@ -574,5 +709,331 @@ contract AuctionSellTest is Test {
 
         (uint256 id,,,) = sell.currentAuction();
         assertEq(id, 0);
+    }
+
+    /* ========== views & bump prev-hint edge cases ========== */
+
+    function test_getQueuedTokenIds_empty() public view {
+        uint256[] memory q = sell.getQueuedTokenIds();
+        assertEq(q.length, 0);
+    }
+
+    function test_bump_reverts_wrong_prev_for_auctioned_token() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t1, t2), "");
+    }
+
+    function test_bump_reverts_bad_prev_self_not_predecessor() public {
+        _mintAndSendToSell(owner);
+        _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t3), "");
+    }
+
+    function test_bump_reverts_wrong_token_for_prev() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t1, t1), "");
+    }
+
+    function test_bump_tail_moves_to_front() public {
+        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+
+        assertEq(sell.queuedLength(), 2);
+        assertEq(sell.nextQueuedTokenId(), t3);
+    }
+
+    function test_bump_transfers_fee_to_proceeds_recipient() public {
+        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        uint256 beforeP = bidToken.balanceOf(proceeds);
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+
+        assertEq(bidToken.balanceOf(proceeds), beforeP + fee);
+    }
+
+    function test_bump_twice_same_token_second_call_reverts() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee * 2);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: already first"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t3, t2), "");
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: bad prev"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, t1), "");
+    }
+
+    function test_bump_non_head_while_first_auction_live() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        uint256 t3 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256[] memory q0 = sell.getQueuedTokenIds();
+        assertEq(q0.length, 2);
+        assertEq(q0[0], t2);
+        assertEq(q0[1], t3);
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        sell.tokensReceived(address(0), bob, address(0), fee, abi.encode(t3, t2), "");
+        assertEq(sell.nextQueuedTokenId(), t3);
+        (uint256 activeId,,,,,) = sell.auction();
+        assertEq(activeId, t1);
+    }
+
+    function test_bump_reverts_already_first() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: already first"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, t1), "");
+    }
+
+    function test_nextQueuedTokenId_reverts_when_fully_drained() public {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+        vm.warp(block.timestamp + DURATION + 1);
+        sell.settleCurrentAndCreateNewAuction();
+
+        vm.expectRevert(bytes("AuctionSell: empty queue"));
+        sell.nextQueuedTokenId();
+    }
+
+    /* ========== tokensReceived routing ========== */
+
+    function test_tokensReceived_non_bidToken_msgSender_reverts() public {
+        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(alice);
+        vm.expectRevert(bytes("AuctionSell: only configured token"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(t2, uint256(1)), "");
+    }
+
+    function test_tokensReceived_bump_fee_with_non_64_byte_userData_treated_as_bid_below_reserve() public {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        require(fee < RESERVE_PRICE, "test assumes bump fee < reserve");
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: below reserve"));
+        sell.tokensReceived(address(0), alice, address(0), fee, hex"abcd", "");
+    }
+
+    function test_tokensReceived_bump_fee_32_byte_userData_treated_as_bid_below_reserve() public {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: below reserve"));
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(uint256(123)), "");
+    }
+
+    function test_tokensReceived_bid_reverts_when_no_auction_live() public {
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 amt = RESERVE_PRICE;
+        bidToken.mint(address(sell), amt);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: no auction"));
+        sell.tokensReceived(address(0), alice, address(0), amt, "", "");
+    }
+
+    function test_tokensReceived_bid_reverts_after_auction_expired() public {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+        vm.warp(block.timestamp + DURATION + 1);
+        bidToken.mint(address(sell), RESERVE_PRICE);
+        vm.prank(address(bidToken));
+        vm.expectRevert(bytes("AuctionSell: expired"));
+        sell.tokensReceived(address(0), alice, address(0), RESERVE_PRICE, "", "");
+    }
+
+    function test_bid_reverts_when_previous_auction_struct_still_marked_settled() public {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+        vm.warp(block.timestamp + DURATION + 1);
+        vm.prank(owner);
+        sell.pause();
+        sell.settle();
+        vm.prank(owner);
+        sell.unpause();
+
+        vm.prank(bob);
+        vm.expectRevert(bytes("AuctionSell: settled"));
+        sell.bid(RESERVE_PRICE);
+    }
+
+    function test_bump_reverts_for_nonexistent_tokenId() public {
+        _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        uint256 fee = sell.queueBumpFee();
+        bidToken.mint(address(sell), fee);
+        vm.prank(address(bidToken));
+        vm.expectRevert();
+        sell.tokensReceived(address(0), alice, address(0), fee, abi.encode(uint256(999_999), t2), "");
+    }
+
+    /* ========== startAuction / extendAuction / settle edge cases ========== */
+
+    function test_startAuction_reverts_when_auction_already_live() public {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+        (uint256 cur,,,) = sell.currentAuction();
+        assertGt(cur, 0);
+        vm.expectRevert(bytes("AuctionSell: auction live"));
+        sell.startAuction(cur);
+    }
+
+    function test_extendAuction_reverts_while_auction_still_live() public {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+        vm.expectRevert(bytes("AuctionSell: still live"));
+        sell.extendAuction();
+    }
+
+    function test_extendAuction_reverts_when_no_auction_started() public {
+        vm.prank(owner);
+        sell.unpause();
+        vm.expectRevert(bytes("AuctionSell: no auction"));
+        sell.extendAuction();
+    }
+
+    function test_settle_when_paused_does_not_auto_start_next_auction() public {
+        uint256 t1 = _mintAndSendToSell(owner);
+        uint256 t2 = _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+        vm.warp(block.timestamp + DURATION + 1);
+
+        vm.prank(owner);
+        sell.pause();
+        sell.settle();
+
+        (uint256 cur,,,) = sell.currentAuction();
+        assertEq(cur, 0);
+        assertEq(sell.nextQueuedTokenId(), t2);
+        assertEq(nft.ownerOf(t1), alice);
+    }
+
+    function test_settle_emits_AuctionSettled_with_gobbled_token_id() public {
+        uint256 wid = _mintAndSendToSell(owner);
+        _unpauseStartsAuction(wid);
+
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+        vm.warp(block.timestamp + DURATION + 1);
+
+        vm.prank(owner);
+        sell.pause();
+
+        vm.expectEmit(true, true, false, true, address(sell));
+        emit AuctionSettled(wid, alice, RESERVE_PRICE, wid);
+        sell.settle();
+    }
+
+    function test_settle_do_not_reverts_when_warplet_id_too_large_for_gobbled_mint_paused_path() public {
+        uint256 aliceGobbledBalanceBefore = gobbled.balanceOf(alice);
+
+        vm.prank(owner);
+        uint256 badId = nft.mintSpecific(owner, gobbled.MAX_WARPLET_ID_EXCLUSIVE());
+
+        vm.prank(owner);
+        nft.safeTransferFrom(owner, address(sell), badId);
+
+        vm.prank(owner);
+        sell.unpause();
+        vm.prank(alice);
+        sell.bid(RESERVE_PRICE);
+        vm.warp(block.timestamp + DURATION + 1);
+
+        vm.prank(owner);
+        sell.pause();
+        sell.settle();
+
+        uint256 aliceGobbledBalanceAfter = gobbled.balanceOf(alice);
+
+        // Asserts that settle did not revert and that the warplet mint was attempted, but did not succeed in minting a gobbled receipt
+        vm.assertEq(nft.ownerOf(badId), alice);
+        vm.assertEq(aliceGobbledBalanceAfter, aliceGobbledBalanceBefore);
     }
 }
