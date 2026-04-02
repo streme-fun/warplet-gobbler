@@ -252,43 +252,11 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         emit ProceedsRecipientUpdated(_proceedsRecipient);
     }
 
-    /// @notice Move live queue entries to the front of `_nftQueue` and shrink storage length (clears skipped head slots).
-    /// @dev Rare maintenance hook if `_queueHead` grows large vs `length`. FIFO order is preserved. No-op if `_queueHead == 0`.
-    function compactQueue() external onlyOwner {
-        uint256 head = _queueHead;
-        uint256 len = _nftQueue.length;
-
-        if (len == 0) {
-            _queueHead = 0;
-            return;
-        }
-        if (head == 0) {
-            return;
-        }
-        if (head >= len) {
-            while (_nftQueue.length > 0) {
-                _nftQueue.pop();
-            }
-            _queueHead = 0;
-            return;
-        }
-
-        uint256 tail = len - head;
-        for (uint256 i = 0; i < tail; i++) {
-            _nftQueue[i] = _nftQueue[head + i];
-        }
-        while (_nftQueue.length > tail) {
-            _nftQueue.pop();
-        }
-        _queueHead = 0;
-    }
-
     function _startAuctionFromQueueHead() internal {
         require(_nftQueue.length > _queueHead, "AuctionSell: empty queue");
 
         uint256 tokenId = _nftQueue[_queueHead];
         ++_queueHead;
-        delete _nftQueue[_queueHead - 1];
 
         require(nft.ownerOf(tokenId) == address(this), "AuctionSell: not holding NFT");
 
