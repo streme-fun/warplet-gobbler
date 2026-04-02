@@ -12,4 +12,14 @@ contract MockAuctionNFT is ERC721 {
         tokenId = _nextId++;
         _mint(to, tokenId);
     }
+
+    /// @dev Mint a specific `tokenId` (for boundary tests). Advances internal counter if needed.
+    function mintSpecific(address to, uint256 tokenId) external returns (uint256) {
+        require(_ownerOf(tokenId) == address(0), "MockAuctionNFT: minted");
+        _mint(to, tokenId);
+        if (tokenId >= _nextId) {
+            _nextId = tokenId + 1;
+        }
+        return tokenId;
+    }
 }
