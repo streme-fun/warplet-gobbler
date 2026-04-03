@@ -99,9 +99,8 @@ contract FeeHandlerForkTest is Test {
         vm.label(address(warplets), "warplets");
         address nftReserve = makeAddr("feeHandlerForkNftReserve");
 
-        handler = new FeeHandler(
-            cash, streme, lpFactory, PLACEHOLDER_AUCTION, stremeZap, TARGET_DURATION, admin, rebalancer, MIN_TOKEN_OUT
-        );
+        handler =
+            new FeeHandler(cash, streme, lpFactory, PLACEHOLDER_AUCTION, stremeZap, TARGET_DURATION, admin, rebalancer);
 
         vm.label(address(handler), "FeeHandler");
 

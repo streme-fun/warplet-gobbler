@@ -191,8 +191,7 @@ contract FeeHandlerTest is Test {
             address(zap),
             TARGET_DURATION,
             admin,
-            rebalancer,
-            MIN_TOKEN_OUT
+            rebalancer
         );
     }
 
@@ -206,15 +205,7 @@ contract FeeHandlerTest is Test {
     function test_constructor_reverts_on_zero_target_duration() public {
         vm.expectRevert(FeeHandler.InvalidDuration.selector);
         new FeeHandler(
-            address(weth),
-            address(streme),
-            address(lpFactory),
-            address(oldAuction),
-            address(zap),
-            0,
-            admin,
-            rebalancer,
-            MIN_TOKEN_OUT
+            address(weth), address(streme), address(lpFactory), address(oldAuction), address(zap), 0, admin, rebalancer
         );
     }
 
