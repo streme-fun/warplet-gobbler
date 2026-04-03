@@ -153,6 +153,13 @@ export default function Home() {
       const gobbleHash = await gobbleWarplet(selectedFid, minPrice);
       await publicClient.waitForTransactionReceipt({ hash: gobbleHash });
 
+      // Fire-and-forget gobbled image generation
+      fetch("/api/gobbled-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokenId: selectedFid }),
+      }).catch(console.error);
+
       startSellAnimation();
     } catch (err) {
       const msg =

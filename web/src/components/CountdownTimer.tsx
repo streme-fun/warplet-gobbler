@@ -2,22 +2,29 @@
 
 import { useEffect, useRef } from "react";
 
-/** Countdown timer — ticks every second via DOM writes. */
+/** Countdown timer — ticks every second via DOM writes.
+ *  Supply either `startSecs` (relative countdown) or `endUnix` (absolute epoch seconds). */
 export default function CountdownTimer({
   startSecs,
+  endUnix,
   className,
 }: {
-  startSecs: number;
+  startSecs?: number;
+  endUnix?: number;
   className?: string;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+
+  const initialSecs = endUnix != null
+    ? Math.max(0, endUnix - Date.now() / 1000)
+    : (startSecs ?? 0);
 
   useEffect(() => {
     const t0 = performance.now();
     let raf: number;
     function tick() {
       const elapsed = (performance.now() - t0) / 1000;
-      const remaining = Math.max(0, startSecs - elapsed);
+      const remaining = Math.max(0, initialSecs - elapsed);
       const h = Math.floor(remaining / 3600);
       const m = Math.floor((remaining % 3600) / 60);
       const s = Math.floor(remaining % 60);
@@ -28,11 +35,11 @@ export default function CountdownTimer({
     }
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [startSecs]);
+  }, [initialSecs]);
 
-  const h = Math.floor(startSecs / 3600);
-  const m = Math.floor((startSecs % 3600) / 60);
-  const s = Math.floor(startSecs % 60);
+  const h = Math.floor(initialSecs / 3600);
+  const m = Math.floor((initialSecs % 3600) / 60);
+  const s = Math.floor(initialSecs % 60);
   return (
     <span ref={ref} className={className}>
       {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:

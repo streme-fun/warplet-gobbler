@@ -1,8 +1,17 @@
 "use client";
 
+import type { Address } from "viem";
 import { formatUnits } from "viem";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import { AUCTION_BID_TOKEN_SYMBOL } from "@/lib/paymentToken";
+
+export interface AuctionLot {
+  tokenId: bigint;
+  amount: bigint;
+  bidder: Address;
+  settled: boolean;
+  endTime: bigint;
+}
 
 /**
  * Reads live AuctionSell lot when the contract is configured and wired.
@@ -14,7 +23,7 @@ export function useAuctionSellAuction() {
 
   return {
     configured,
-    auction: null as null,
+    auction: null as AuctionLot | null,
     formatBidAmount: (amount: bigint) =>
       Number(formatUnits(amount, 18)).toLocaleString(undefined, {
         maximumFractionDigits: 6,

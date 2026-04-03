@@ -58,7 +58,7 @@ export default function GobblerAuctionSection({
     auctionSellConfigured &&
     !auctionReadError &&
     chainLot != null &&
-    chainLot.tokenId > 0n;
+    chainLot.tokenId > BigInt(0);
 
   const { data: chainQueuedIds = [] } = useAuctionSellQueue({
     enabled: useChain,
@@ -71,7 +71,7 @@ export default function GobblerAuctionSection({
 
   const hasChainBid =
     useChain &&
-    chainLot.amount > 0n &&
+    chainLot.amount > BigInt(0) &&
     !isAddressEqual(chainLot.bidder, zeroAddress);
 
   const topBidAmountStr = useChain
