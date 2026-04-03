@@ -30,16 +30,18 @@ contract NoopStremeZap {
 ///      (the same asset `FeeHandler` streams via `ISuperToken.flow`). Plain ERC-20s will not work.
 ///      Integration tests skip when env is incomplete (`vm.skip`).
 ///
-    ///      `lpFactory` defaults to real Streme LPFactoryV4 on Base and `stremeZap` to a bare EOA when unset.
-    ///      With zero cash balance, swap path is skipped — enough to exercise access control
+///      `lpFactory` defaults to real Streme LPFactoryV4 on Base and `stremeZap` to a bare EOA when unset.
+///      With zero cash balance, swap path is skipped — enough to exercise access control
 ///      and flow updates against a real SuperToken.
 contract FeeHandlerForkTest is Test {
     /// @notice Native Base USDC (6 decimals).
     address internal constant USDC_BASE = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address internal constant WETH_BASE = 0x4200000000000000000000000000000000000006;
     /// @notice Interim Base SuperToken default provided by project owner.
     address internal constant DEFAULT_STREME_SUPERTOKEN = 0x3042b035325393F3d72390C7E5d51F26fe1F0e61;
     address internal constant DEFAULT_LP_FACTORY_V4 = 0x341FaEe049DC78F437B00FbCcC33020fa252A957;
 
+    address internal constant UNISWAP_SINGLETON = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     uint256 internal constant TARGET_DURATION = 7 days;
     uint256 internal constant MIN_TOKEN_OUT = 0;
 
@@ -98,15 +100,7 @@ contract FeeHandlerForkTest is Test {
         address nftReserve = makeAddr("feeHandlerForkNftReserve");
 
         handler = new FeeHandler(
-            cash,
-            streme,
-            lpFactory,
-            PLACEHOLDER_AUCTION,
-            stremeZap,
-            TARGET_DURATION,
-            admin,
-            rebalancer,
-            MIN_TOKEN_OUT
+            cash, streme, lpFactory, PLACEHOLDER_AUCTION, stremeZap, TARGET_DURATION, admin, rebalancer, MIN_TOKEN_OUT
         );
 
         vm.label(address(handler), "FeeHandler");
@@ -146,17 +140,19 @@ contract FeeHandlerForkTest is Test {
     function test_stranger_cannot_rebalance() public requiresIntegration {
         vm.prank(stranger);
         vm.expectRevert(FeeHandler.UnauthorizedRebalance.selector);
-        handler.rebalance();
+        handler.rebalance(0);
     }
 
     function test_rebalancer_can_rebalance() public requiresIntegration {
         vm.prank(rebalancer);
-        handler.rebalance();
+        // TODO : figure out a proper minamountOut value
+        handler.rebalance(0);
     }
 
     function test_admin_can_rebalance() public requiresIntegration {
         vm.prank(admin);
-        handler.rebalance();
+        // TODO : figure out a proper minamountOut value
+        handler.rebalance(0);
     }
 
     /// @notice `rebalanceFlowRate` is permissionless when stream is active (current contract behavior).
@@ -168,7 +164,9 @@ contract FeeHandlerForkTest is Test {
 
     function test_stranger_cannot_setTargetDuration() public requiresIntegration {
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, handler.DEFAULT_ADMIN_ROLE())
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, handler.DEFAULT_ADMIN_ROLE()
+            )
         );
         vm.prank(stranger);
         handler.setTargetDuration(TARGET_DURATION + 1);
