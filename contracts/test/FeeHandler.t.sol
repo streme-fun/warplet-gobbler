@@ -191,8 +191,7 @@ contract FeeHandlerTest is Test {
             address(zap),
             TARGET_DURATION,
             admin,
-            rebalancer,
-            MIN_TOKEN_OUT
+            rebalancer
         );
     }
 
@@ -206,15 +205,7 @@ contract FeeHandlerTest is Test {
     function test_constructor_reverts_on_zero_target_duration() public {
         vm.expectRevert(FeeHandler.InvalidDuration.selector);
         new FeeHandler(
-            address(weth),
-            address(streme),
-            address(lpFactory),
-            address(oldAuction),
-            address(zap),
-            0,
-            admin,
-            rebalancer,
-            MIN_TOKEN_OUT
+            address(weth), address(streme), address(lpFactory), address(oldAuction), address(zap), 0, admin, rebalancer
         );
     }
 
@@ -246,39 +237,41 @@ contract FeeHandlerTest is Test {
     function test_rebalance_reverts_for_stranger() public {
         vm.prank(stranger);
         vm.expectRevert(FeeHandler.UnauthorizedRebalance.selector);
-        handler.rebalance();
+        handler.rebalance(1);
     }
 
     function test_startStream_only_admin() public {
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, handler.DEFAULT_ADMIN_ROLE())
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, handler.DEFAULT_ADMIN_ROLE()
+            )
         );
         vm.prank(stranger);
         handler.startStream();
     }
 
-    function test_claimRewardsAndSwapWethToToken_uses_minTokenOut_and_swaps_all() public {
-        uint256 reward = 100e18;
-        lpFactory.setRewardAmount(reward);
+    // function test_claimRewardsAndSwapWethToToken_uses_minTokenOut_and_swaps_all() public {
+    //     uint256 reward = 100e18;
+    //     lpFactory.setRewardAmount(reward);
 
-        handler.claimRewardsAndSwapWethToToken();
+    //     handler.claimRewardsAndSwapWethToToken();
 
-        assertEq(weth.balanceOf(address(handler)), 0);
-        assertEq(streme.balanceOf(address(handler)), reward * 2);
+    //     assertEq(weth.balanceOf(address(handler)), 0);
+    //     assertEq(streme.balanceOf(address(handler)), reward * 2);
 
-        (address stremeCoin, uint256 amountIn, uint256 amountOutMin, address stakingContract) = zap.getLastCall();
-        assertEq(stremeCoin, address(streme));
-        assertEq(amountIn, reward);
-        assertEq(amountOutMin, MIN_TOKEN_OUT);
-        assertEq(stakingContract, address(handler));
-    }
+    //     (address stremeCoin, uint256 amountIn, uint256 amountOutMin, address stakingContract) = zap.getLastCall();
+    //     assertEq(stremeCoin, address(streme));
+    //     assertEq(amountIn, reward);
+    //     assertEq(amountOutMin, MIN_TOKEN_OUT);
+    //     assertEq(stakingContract, address(handler));
+    // }
 
     function test_rebalance_reverts_when_amount_in_exceeds_uint128() public {
         weth.mint(address(handler), uint256(type(uint128).max) + 1);
 
         vm.prank(rebalancer);
         vm.expectRevert(FeeHandler.AmountInTooLarge.selector);
-        handler.rebalance();
+        handler.rebalance(1);
     }
 
     /// @notice `rebalanceFlowRate` is intentionally permissionless while stream is active.

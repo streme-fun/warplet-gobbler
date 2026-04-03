@@ -9,7 +9,11 @@ interface IAuctionSell {
     /// @param amount The $STRAT amount to bid
     function bid(uint256 amount) external;
 
-    /// @notice Settle the current auction — transfers NFT to winner, $STRAT to staking
+    /// @notice Settle the current auction and start the next from the queue (normal user path)
+    function settleCurrentAndCreateNewAuction() external;
+
+    /// @notice Settle the current auction only while the contract is paused (emergency / migration path).
+    ///         Does not start the next auction — use `settleCurrentAndCreateNewAuction` when unpaused.
     function settle() external;
 
     /// @notice Start a new auction with a gobbled Warplet
@@ -29,5 +33,7 @@ interface IAuctionSell {
 
     event AuctionStarted(uint256 indexed tokenId, uint256 endTime);
     event BidPlaced(uint256 indexed tokenId, address indexed bidder, uint256 amount);
-    event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount);
+    /// @param gobbledTokenId Newly minted GobbledWarplets receipt id (URI may be set later). If mint failed,
+    ///                     equals `type(uint256).max` (not `0` — `0` is a valid encoded receipt id for warplet 0).
+    event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId);
 }
