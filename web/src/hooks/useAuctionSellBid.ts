@@ -1,14 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import {
-  formatUnits,
-  maxUint256,
-  parseUnits,
-  type Address,
-  isAddressEqual,
-  zeroAddress,
-} from "viem";
+import { formatUnits, parseUnits, type Address, isAddressEqual, zeroAddress } from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -16,7 +9,7 @@ import {
   useWriteContract,
 } from "wagmi";
 import { auctionSellAbi } from "@/abi/auctionSell";
-import { erc20Abi } from "@/abi/erc20";
+import { erc777Abi } from "@/abi/erc777";
 import { CONTRACTS } from "@/lib/contracts";
 import type { AuctionSellLot } from "@/hooks/useAuctionSell";
 
@@ -66,19 +59,6 @@ export function useAuctionSellBid(opts: {
     query: { enabled: configured, refetchInterval: 30_000 },
   });
 
-  const allowanceQ = useReadContract({
-    abi: erc20Abi,
-    address: bidTokenAddress ?? zeroAddress,
-    functionName: "allowance",
-    args:
-      address != null
-        ? ([address, CONTRACTS.auctionSell] as const)
-        : ([zeroAddress, zeroAddress] as const),
-    query: {
-      enabled: Boolean(configured && address && bidTokenAddress),
-    },
-  });
-
   const minBidWei = useMemo(() => {
     if (!lot || !configured) return null;
     const reserve = reserveQ.data;
@@ -100,41 +80,18 @@ export function useAuctionSellBid(opts: {
       ) {
         throw new Error("Invalid bid amount");
       }
-      const allowance = allowanceQ.data ?? 0n;
-      if (allowance < amountWei) {
-        const approveHash = await writeContractAsync({
-          abi: erc20Abi,
-          address: bidTokenAddress,
-          functionName: "approve",
-          args: [CONTRACTS.auctionSell, maxUint256],
-        });
-        if (publicClient) {
-          await publicClient.waitForTransactionReceipt({ hash: approveHash });
-        }
-        await allowanceQ.refetch();
-      }
       const hash = await writeContractAsync({
-        abi: auctionSellAbi,
-        address: CONTRACTS.auctionSell,
-        functionName: "bid",
-        args: [amountWei],
+        abi: erc777Abi,
+        address: bidTokenAddress,
+        functionName: "send",
+        args: [CONTRACTS.auctionSell, amountWei, "0x"],
       });
       if (publicClient) {
         await publicClient.waitForTransactionReceipt({ hash });
       }
       await refetchAuction();
-      await allowanceQ.refetch();
     },
-    [
-      address,
-      allowanceQ.data,
-      allowanceQ.refetch,
-      bidTokenAddress,
-      minBidWei,
-      publicClient,
-      refetchAuction,
-      writeContractAsync,
-    ],
+    [address, bidTokenAddress, minBidWei, publicClient, refetchAuction, writeContractAsync],
   );
 
   const parseHumanToWei = useCallback(
@@ -146,7 +103,6 @@ export function useAuctionSellBid(opts: {
     minBidWei,
     minBidHuman,
     reservePriceWei: reserveQ.data,
-    allowanceWei: allowanceQ.data,
     placeBid,
     parseHumanToWei,
     isBidding: isWritePending,

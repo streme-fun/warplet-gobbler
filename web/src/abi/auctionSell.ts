@@ -31,6 +31,13 @@ export const auctionSellAbi = [
   },
   {
     type: "function",
+    name: "nextQueuedTokenId",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256", name: "" }],
+  },
+  {
+    type: "function",
     name: "queueBumpFee",
     stateMutability: "view",
     inputs: [],
@@ -70,5 +77,33 @@ export const auctionSellAbi = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "uint8" }],
+  },
+  {
+    type: "function",
+    name: "settle",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "settleCurrentAndCreateNewAuction",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "extendAuction",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "startAuction",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [],
   },
 ] as const;

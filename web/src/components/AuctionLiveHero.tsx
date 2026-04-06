@@ -58,7 +58,7 @@ function AuctionBundleMini() {
 }
 
 function formatBidHuman(amountStr: string) {
-  const n = Number.parseFloat(amountStr);
+  const n = Number.parseFloat(amountStr.replace(/,/g, ""));
   if (!Number.isFinite(n)) return amountStr;
   return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
@@ -95,6 +95,17 @@ export type AuctionLiveHeroChainBid = {
   bidTokenPriceUsd?: number | null;
 };
 
+export type AuctionLiveHeroChainSettlement = {
+  label: string;
+  onSubmit: () => Promise<void>;
+  loading: boolean;
+  disabled: boolean;
+  error: string | null;
+  onClearError?: () => void;
+  /** Short line under the primary button (e.g. what the action does). */
+  hint?: string | null;
+};
+
 export default function AuctionLiveHero({
   displayTokenId,
   topBidAmountStr,
@@ -105,13 +116,18 @@ export default function AuctionLiveHero({
   countdownEndUnix,
   countdownDurationSecs,
   auctionSettled,
-  viewerIsLeadingBidder,
   bidDisabled,
   onBid,
   chainBid,
+  chainSettlement,
+  postAuctionNoActionHint,
+  expiredLotCaption,
   idleNoChainAuction,
   auctionExpiredOnChain,
   contractPaused,
+  bidInviteCopy,
+  extendSuccessTick,
+  countdownResetKey,
 }: {
   displayTokenId: number;
   topBidAmountStr: string;
@@ -122,23 +138,60 @@ export default function AuctionLiveHero({
   countdownEndUnix?: number;
   countdownDurationSecs?: number;
   auctionSettled: boolean;
-  viewerIsLeadingBidder?: boolean;
   bidDisabled?: boolean;
   onBid?: (fid: number, rect: { x: number; y: number; w: number; h: number }) => void;
   /** Live on-chain lot — bid form (amount + Bid) inside this card. */
   chainBid?: AuctionLiveHeroChainBid;
+  /** Ended lot — finalize settlement / extend empty round. */
+  chainSettlement?: AuctionLiveHeroChainSettlement | null;
+  /** Shown under top bid when lot time is up (on-chain). */
+  expiredLotCaption?: string | null;
   idleNoChainAuction?: boolean;
   auctionExpiredOnChain?: boolean;
   contractPaused?: boolean;
+  /** Live lot, no bids yet — nudge to bid (on-chain). */
+  bidInviteCopy?: string | null;
+  /** Expired lot, no bids, house paused — there is no wallet tx until unpause. */
+  postAuctionNoActionHint?: string | null;
+  /** Incremented in parent after a successful `extendAuction` tx (drives banner + glow). */
+  extendSuccessTick?: number;
+  /** On-chain `endTime` as string — remounts countdown when the listing is extended. */
+  countdownResetKey?: string;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
+  const renewFlashRef = useRef<HTMLDivElement>(null);
+  const artFrameRef = useRef<HTMLDivElement>(null);
+  const [artFrameHeightPx, setArtFrameHeightPx] = useState<number | null>(null);
+  const [isLgViewport, setIsLgViewport] = useState(false);
   const [bidAmountRaw, setBidAmountRaw] = useState("");
   const [bidValidationError, setBidValidationError] = useState<string | null>(
     null,
   );
+  const [showExtendSuccessBanner, setShowExtendSuccessBanner] = useState(false);
 
   const chainBlocksBid =
     Boolean(contractPaused || auctionExpiredOnChain || idleNoChainAuction);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsLgViewport(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    const el = artFrameRef.current;
+    if (!el) return;
+    const apply = () => {
+      const h = el.getBoundingClientRect().height;
+      if (h > 0) setArtFrameHeightPx(Math.round(h));
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [displayTokenId, idleNoChainAuction]);
 
   const bidUsdEstimate = useMemo(() => {
     const spot = chainBid?.bidTokenPriceUsd;
@@ -155,6 +208,29 @@ export default function AuctionLiveHero({
     setBidAmountRaw(trimDecimalDisplay(chainBid.minBidHuman));
     setBidValidationError(null);
   }, [chainBid?.minBidHuman, chainBid?.minBidWei]);
+
+  const tick = extendSuccessTick ?? 0;
+  useEffect(() => {
+    if (tick === 0) return;
+    setShowExtendSuccessBanner(true);
+    const t = setTimeout(() => setShowExtendSuccessBanner(false), 6500);
+    return () => clearTimeout(t);
+  }, [tick]);
+
+  useEffect(() => {
+    if (tick === 0) return;
+    const el = renewFlashRef.current;
+    if (!el) return;
+    el.classList.remove("animate-auction-listing-renewed");
+    void el.offsetWidth;
+    el.classList.add("animate-auction-listing-renewed");
+    const done = () => el.classList.remove("animate-auction-listing-renewed");
+    el.addEventListener("animationend", done, { once: true });
+    return () => {
+      el.removeEventListener("animationend", done);
+      el.classList.remove("animate-auction-listing-renewed");
+    };
+  }, [tick]);
 
   const handleDemoBid = () => {
     if (bidDisabled || auctionSettled || chainBlocksBid) return;
@@ -198,11 +274,14 @@ export default function AuctionLiveHero({
     topBidder != null && !isAddressEqual(topBidder, zeroAddress);
 
   return (
-    <div className="rounded-2xl border border-secondary/35 bg-gradient-to-b from-secondary/15 to-base-200/30 p-5 sm:p-8 shadow-[0_0_40px_-12px_rgba(123,97,255,0.45)]">
-      <div className="flex flex-col lg:flex-row lg:items-stretch gap-6 lg:gap-10">
+    <div className="rounded-2xl border border-base-content/10 bg-base-200/25 p-5 sm:p-8">
+      <div className="flex flex-col lg:flex-row lg:items-start gap-6 lg:gap-10">
         <div className="flex-shrink-0 mx-auto lg:mx-0 w-full max-w-[220px] sm:max-w-[260px] flex flex-col items-center">
           {idleNoChainAuction ? (
-            <div className="w-full aspect-square rounded-xl border border-dashed border-secondary/25 bg-base-100/15 flex flex-col items-center justify-center gap-2 px-4 text-center">
+            <div
+              ref={artFrameRef}
+              className="w-full aspect-square rounded-xl border border-dashed border-secondary/25 bg-base-100/15 flex flex-col items-center justify-center gap-2 px-4 text-center"
+            >
               <p className="text-sm text-base-content/55 font-medium">No live lot</p>
               <p className="text-[11px] text-base-content/40 leading-snug">
                 Nothing is selling yet — queue empty, house paused, or the next auction has not been started.
@@ -210,29 +289,94 @@ export default function AuctionLiveHero({
             </div>
           ) : (
             <>
-              <div className="auction-warplet-aura w-full rounded-xl">
-                <AuctionWarpletImage fid={displayTokenId} variant="hero" />
+              <div ref={artFrameRef} className="w-full aspect-square">
+                <div className="auction-warplet-aura h-full w-full min-h-0 rounded-xl">
+                  <div className="h-full w-full min-h-0 rounded-xl overflow-hidden">
+                    <AuctionWarpletImage
+                      fid={displayTokenId}
+                      variant="hero"
+                    />
+                  </div>
+                </div>
               </div>
+              <p className="mt-2 text-xs sm:text-sm font-medium text-base-content/70">
+                Warplet #{displayTokenId}
+              </p>
               <AuctionBundleMini />
             </>
           )}
         </div>
 
-        <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left gap-3 sm:gap-4 min-w-0">
-          <div>
-            <p className="text-[10px] sm:text-xs font-semibold tracking-[0.2em] uppercase text-secondary mb-1">
-              Today&apos;s auction
-            </p>
-            <p className="text-sm text-base-content/55">
-              Every day, one Warplet is rescued. Bid to make them yours.
-            </p>
-          </div>
+        <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left gap-3 sm:gap-4 min-w-0 min-h-0">
+          <div
+            className="w-full flex flex-col gap-3 sm:gap-4 lg:min-h-0 lg:min-w-0"
+            style={
+              isLgViewport && artFrameHeightPx != null
+                ? {
+                    height: artFrameHeightPx,
+                    minHeight: artFrameHeightPx,
+                    maxHeight: artFrameHeightPx,
+                  }
+                : undefined
+            }
+          >
+            <div className="w-full flex items-end justify-between gap-3 sm:gap-4 shrink-0">
+              <div className="min-w-0 flex-1 text-left">
+                <h2 className="text-[10px] sm:text-xs font-semibold tracking-[0.2em] uppercase text-secondary m-0">
+                  Today&apos;s auction
+                </h2>
+                <p className="text-sm text-base-content/55 mt-1 mb-0 max-w-md mx-auto lg:mx-0 lg:mr-auto">
+                  Every day, one Warplet is rescued.
+                  <br />
+                  Bid to make them yours.
+                </p>
+              </div>
+              {!sold && !idleNoChainAuction ? (
+                <div
+                  className="shrink-0 text-right leading-none pb-px"
+                  aria-live="polite"
+                  aria-label="Time remaining in lot"
+                >
+                  {countdownEndUnix !== undefined ? (
+                    <CountdownTimer
+                      key={countdownResetKey ?? String(countdownEndUnix)}
+                      endUnix={countdownEndUnix}
+                      className="inline-block text-2xl sm:text-3xl md:text-3xl font-mono font-semibold text-secondary tabular-nums tracking-tight"
+                    />
+                  ) : countdownDurationSecs !== undefined ? (
+                    <CountdownTimer
+                      startSecs={countdownDurationSecs}
+                      className="inline-block text-2xl sm:text-3xl md:text-3xl font-mono font-semibold text-secondary tabular-nums tracking-tight"
+                    />
+                  ) : (
+                    <span className="inline-block text-2xl sm:text-3xl font-mono font-semibold text-base-content/25 tabular-nums">
+                      —:—:—
+                    </span>
+                  )}
+                </div>
+              ) : null}
+            </div>
 
-          <span className="inline-flex text-xs sm:text-sm px-2.5 py-1 rounded-full border border-base-content/15 text-base-content/65">
-            {idleNoChainAuction ? "—" : `Warplet #${displayTokenId}`}
-          </span>
+            {showExtendSuccessBanner && !idleNoChainAuction && !sold ? (
+              <div
+                className="w-full rounded-xl border border-primary/35 bg-primary/10 px-4 py-3 text-left shadow-[0_0_24px_-8px_rgba(0,245,255,0.35)] animate-fade-up shrink-0"
+                role="status"
+              >
+                <p className="text-sm font-medium text-primary/95">
+                  Listing extended
+                </p>
+                <p className="text-xs text-base-content/60 mt-1 leading-relaxed">
+                  The chain has opened a fresh window — bidding picks up from the
+                  updated countdown.
+                </p>
+              </div>
+            ) : null}
 
-          <div className="w-full rounded-xl bg-base-100/30 border border-base-content/10 px-4 py-3 sm:py-4 space-y-3">
+            <div
+              ref={renewFlashRef}
+              className="w-full flex-1 min-h-0 flex flex-col rounded-xl transition-[box-shadow] duration-500"
+            >
+              <div className="w-full flex-1 min-h-0 overflow-y-auto rounded-xl bg-base-100/30 border border-base-content/10 px-4 py-3 sm:py-4 flex flex-col justify-center space-y-3 transition-colors duration-500">
             <div>
               <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
                 Top bid
@@ -242,12 +386,19 @@ export default function AuctionLiveHero({
               ) : sold ? (
                 <p className="text-xl sm:text-2xl font-mono text-success">Settled</p>
               ) : showNoBids ? (
-                <p className="text-lg sm:text-xl font-mono text-base-content/50">
-                  No bids yet
-                </p>
+                <div className="space-y-1.5">
+                  <p className="text-lg sm:text-xl font-mono text-base-content/50">
+                    No bids yet
+                  </p>
+                  {bidInviteCopy && !auctionExpiredOnChain ? (
+                    <p className="text-xs text-secondary/80 font-medium">
+                      {bidInviteCopy}
+                    </p>
+                  ) : null}
+                </div>
               ) : (
                 <p className="text-xl sm:text-2xl font-mono text-base-content tabular-nums">
-                  {formatBidHuman(topBidAmountStr)}{" "}
+                  {topBidAmountStr}{" "}
                   <span className="text-base-content/40 text-lg sm:text-xl">
                     {bidSymbol}
                   </span>
@@ -259,17 +410,12 @@ export default function AuctionLiveHero({
                 Auction house is paused — bidding is disabled on-chain.
               </p>
             )}
-            {auctionExpiredOnChain && !sold && !idleNoChainAuction && (
-              <p className="text-xs text-base-content/50">
-                Bidding closed — this lot is waiting for settlement.
-              </p>
-            )}
-            {!sold && viewerIsLeadingBidder && (
-              <p className="text-xs sm:text-sm text-success/85 font-medium">
-                You&apos;re the top bidder — the lot is still open until the timer
-                ends.
-              </p>
-            )}
+            {auctionExpiredOnChain &&
+              !sold &&
+              !idleNoChainAuction &&
+              expiredLotCaption && (
+                <p className="text-xs text-base-content/50">{expiredLotCaption}</p>
+              )}
             {!sold && !showNoBids && hasHighBidder && topBidder && (
               <div>
                 <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1.5">
@@ -281,30 +427,42 @@ export default function AuctionLiveHero({
                 />
               </div>
             )}
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm text-base-content/50">
-            <span className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/40">
-              Lot ends in
-            </span>
-            {idleNoChainAuction ? (
-              <span className="font-mono text-base-content/35 tabular-nums">—:—:—</span>
-            ) : countdownEndUnix !== undefined ? (
-              <CountdownTimer
-                endUnix={countdownEndUnix}
-                className="font-mono text-secondary tabular-nums"
-              />
-            ) : (
-              <CountdownTimer
-                startSecs={countdownDurationSecs ?? 0}
-                className="font-mono text-secondary tabular-nums"
-              />
-            )}
+              </div>
+            </div>
           </div>
 
           {sold ? (
             <p className="text-sm text-base-content/40">This auction has settled.</p>
-          ) : idleNoChainAuction ? null : chainBid ? (
+          ) : idleNoChainAuction ? null : chainSettlement ? (
+            <div className="w-full max-w-2xl space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => void chainSettlement.onSubmit()}
+                disabled={chainSettlement.disabled || chainSettlement.loading}
+                className="btn btn-secondary w-full sm:w-auto min-w-[200px] text-base font-semibold tracking-wide disabled:opacity-50"
+              >
+                {chainSettlement.loading ? (
+                  <span className="loading loading-spinner loading-sm" />
+                ) : (
+                  chainSettlement.label
+                )}
+              </button>
+              {chainSettlement.hint ? (
+                <p className="text-xs text-base-content/45 max-w-md">
+                  {chainSettlement.hint}
+                </p>
+              ) : null}
+              {chainSettlement.error ? (
+                <p className="text-xs text-error/90 break-words">
+                  {chainSettlement.error}
+                </p>
+              ) : null}
+            </div>
+          ) : postAuctionNoActionHint ? (
+            <p className="w-full max-w-2xl pt-1 text-xs text-base-content/50 leading-relaxed">
+              {postAuctionNoActionHint}
+            </p>
+          ) : chainBid ? (
             <div className="w-full max-w-2xl space-y-2 pt-1">
               <label className="form-control w-full">
                 <span className="label py-0 min-h-0 pb-1.5 justify-start">
