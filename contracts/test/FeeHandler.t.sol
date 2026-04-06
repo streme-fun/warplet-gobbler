@@ -139,9 +139,7 @@ contract MockStremeZap {
         weth.transferFrom(msg.sender, address(this), amountIn);
         amountOut = amountIn * outMultiplier;
         require(amountOut >= amountOutMin, "min-out");
-        // Match StremeZapUniversal: zero staking = output to `msg.sender`; else old mock sent to staking address.
-        address to = stakingContract == address(0) ? msg.sender : stakingContract;
-        streme.mint(to, amountOut);
+        streme.mint(stakingContract, amountOut);
     }
 
     function getLastCall() external view returns (address, uint256, uint256, address) {
