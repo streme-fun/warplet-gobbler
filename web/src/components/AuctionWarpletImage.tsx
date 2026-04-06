@@ -26,14 +26,24 @@ export default function AuctionWarpletImage({
     );
   }
 
-  const frame =
-    variant === "hero"
-      ? "border-transparent shadow-none max-w-none hover:border-transparent hover:shadow-none hover:rotate-0"
-      : "";
+  if (variant === "hero") {
+    return (
+      <div className="group relative h-full min-h-0 w-full overflow-hidden rounded-xl border-2 border-transparent">
+        <img
+          src={src}
+          alt={`Warplet #${fid}`}
+          className="block h-full w-full object-cover"
+          draggable={false}
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+    );
+  }
 
   return (
     <div
-      className={`group relative w-full max-w-[200px] aspect-square mx-auto rounded-xl border-2 border-transparent hover:border-secondary/40 hover:shadow-lg hover:shadow-secondary/10 hover:rotate-2 transition-all duration-300 overflow-hidden will-change-transform ${frame}`}
+      className="group relative w-full max-w-[200px] aspect-square mx-auto rounded-xl border-2 border-transparent hover:border-secondary/40 hover:shadow-lg hover:shadow-secondary/10 hover:rotate-2 transition-all duration-300 overflow-hidden will-change-transform"
     >
       <img
         src={src}

@@ -1,11 +1,15 @@
 "use client";
 
+import { useMemo } from "react";
 import { isAddressEqual, zeroAddress } from "viem";
 import { useReadContract } from "wagmi";
 import { CONTRACTS } from "@/lib/contracts";
 import { auctionSellAbi } from "@/abi/auctionSell";
 
-export function useAuctionSellQueue(opts: { enabled: boolean }) {
+export function useAuctionSellQueue(opts: {
+  enabled: boolean;
+  excludeTokenId?: bigint;
+}) {
   const configured = !isAddressEqual(CONTRACTS.auctionSell, zeroAddress);
 
   const q = useReadContract({
@@ -18,9 +22,18 @@ export function useAuctionSellQueue(opts: { enabled: boolean }) {
     },
   });
 
+  const data = useMemo(() => {
+    const raw = q.data ?? [];
+    if (!raw.length) return [] as bigint[];
+    const ex = opts.excludeTokenId;
+    if (ex === undefined) return [...raw];
+    return raw.filter((id) => id !== ex);
+  }, [q.data, opts.excludeTokenId]);
+
   return {
-    data: (q.data ?? []) as bigint[],
+    data,
     isError: q.isError,
     refetch: q.refetch,
+    isLoading: q.isLoading,
   };
 }
