@@ -141,7 +141,7 @@ export default function Home() {
     ) {
       setSelectedFid(null);
     }
-  }, [selectedFid, pickerWarplets]);
+  }, [selectedFid, pickerWarplets, setSelectedFid]);
 
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [isSelling, setIsSelling] = useState(false);

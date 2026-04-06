@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatUnits, type Address } from "viem";
+import { formatUnits, type Address, isAddressEqual, zeroAddress } from "viem";
 import { useReadContract } from "wagmi";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import { auctionSellAbi } from "@/abi/auctionSell";
@@ -22,8 +22,7 @@ export type AuctionSellLot = {
  * Full queue bump + ERC777 `send` path matches `feat/auction-linked-list-queue`; older ABIs fail reads → mocks in UI.
  */
 export function useAuctionSellAuction() {
-  const configured =
-    CONTRACTS.auctionSell.toLowerCase() !== ZERO_ADDRESS.toLowerCase();
+  const configured = !isAddressEqual(CONTRACTS.auctionSell, zeroAddress);
 
   const auctionQ = useReadContract({
     abi: auctionSellAbi,
@@ -57,7 +56,7 @@ export function useAuctionSellAuction() {
 
   const bidTokenAddr =
     typeof bidTokenQ.data === "string" &&
-    bidTokenQ.data.toLowerCase() !== ZERO_ADDRESS
+    !isAddressEqual(bidTokenQ.data as Address, zeroAddress)
       ? (bidTokenQ.data as Address)
       : undefined;
 

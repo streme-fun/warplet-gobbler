@@ -137,11 +137,19 @@ export default function GobblerAuctionSection({
         place: i + 2,
       }));
 
+  /** Same render as `queuedRows` updates — avoids one frame with a stale selection after the queue drops a fid. */
+  const selectedInQueueFid = useMemo(() => {
+    if (selectedQueueFid == null) return null;
+    return queuedRows.some((r) => r.fid === selectedQueueFid)
+      ? selectedQueueFid
+      : null;
+  }, [selectedQueueFid, queuedRows]);
+
   /** Index in the *visible* queue strip (mock or on-chain) — must not use `chainQueuedIds` alone or mocks always get -1. */
   const selectedQueueIdx = useMemo(() => {
-    if (selectedQueueFid == null) return -1;
-    return queuedRows.findIndex((r) => r.fid === selectedQueueFid);
-  }, [selectedQueueFid, queuedRows]);
+    if (selectedInQueueFid == null) return -1;
+    return queuedRows.findIndex((r) => r.fid === selectedInQueueFid);
+  }, [selectedInQueueFid, queuedRows]);
 
   const prevBigint =
     queueReadsEnabled && selectedQueueIdx > 0
@@ -160,7 +168,7 @@ export default function GobblerAuctionSection({
     if (!queuedRows.some((r) => r.fid === selectedQueueFid)) {
       setSelectedQueueFid(null);
     }
-  }, [queuedRows, selectedQueueFid]);
+  }, [queuedRows, selectedQueueFid, setSelectedQueueFid]);
 
   const skipFeeHuman = humanSkipFee(
     auctionSellConfigured && !auctionReadError
@@ -175,7 +183,7 @@ export default function GobblerAuctionSection({
       !queueBumpReady ||
       !bidTokenAddress ||
       queueBumpFeeWei == null ||
-      selectedQueueFid == null ||
+      selectedInQueueFid == null ||
       prevBigint == null
     )
       return;
@@ -184,7 +192,7 @@ export default function GobblerAuctionSection({
         bidTokenAddress,
         auctionSellAddress: CONTRACTS.auctionSell,
         amount: queueBumpFeeWei,
-        tokenId: BigInt(selectedQueueFid),
+        tokenId: BigInt(selectedInQueueFid),
         prev: prevBigint,
       });
       if (publicClient) {
@@ -201,12 +209,12 @@ export default function GobblerAuctionSection({
     queueBumpFeeWei,
     queueBumpReady,
     refetchQueue,
-    selectedQueueFid,
+    selectedInQueueFid,
     sendBumpTx,
   ]);
 
   const showBumpPanel =
-    selectedQueueFid != null && selectedQueueIdx >= 0;
+    selectedInQueueFid != null && selectedQueueIdx >= 0;
 
   return (
     <div className="w-full max-w-4xl rounded-2xl bg-base-200/40 border border-secondary/10 backdrop-blur-sm p-6 sm:p-10">
@@ -247,7 +255,7 @@ export default function GobblerAuctionSection({
             key={row.fid}
             fid={row.fid}
             placeInLine={row.place}
-            isSelected={selectedQueueFid === row.fid}
+            isSelected={selectedInQueueFid === row.fid}
             onSelect={() =>
               setSelectedQueueFid(
                 selectedQueueFid === row.fid ? null : row.fid,
@@ -264,7 +272,7 @@ export default function GobblerAuctionSection({
 
       {showBumpPanel && (
         <AuctionQueueBumpPanel
-          selectedTokenId={selectedQueueFid}
+          selectedTokenId={selectedInQueueFid}
           bumpAmountDisplay={skipFeeHuman}
           bidSymbol={bidSymbol}
           alreadyFirst={alreadyFirst}

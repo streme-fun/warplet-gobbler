@@ -52,12 +52,11 @@ export function useDutchAuctionPayoutStream(
 
     if (prev && dataUpdatedAt > prev.updatedAt) {
       const dtSec = (dataUpdatedAt - prev.updatedAt) / 1000;
-      if (dtSec >= 0.12) {
-        const delta = priceWei - prev.v;
-        const deltaHuman =
-          delta > BigInt(0)
-            ? Number(formatUnits(delta, tokenDecimals))
-            : 0;
+      const delta = priceWei - prev.v;
+      if (delta <= BigInt(0)) {
+        rateRef.current = 0;
+      } else if (dtSec >= 0.12) {
+        const deltaHuman = Number(formatUnits(delta, tokenDecimals));
         rateRef.current = Math.max(0, deltaHuman / dtSec);
       }
     }
