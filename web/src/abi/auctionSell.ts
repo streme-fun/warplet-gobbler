@@ -45,6 +45,20 @@ export const auctionSellAbi = [
   },
   {
     type: "function",
+    name: "bid",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "amount", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "paused",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
     name: "reservePrice",
     stateMutability: "view",
     inputs: [],
@@ -56,12 +70,5 @@ export const auctionSellAbi = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "uint8" }],
-  },
-  {
-    type: "function",
-    name: "paused",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "bool" }],
   },
 ] as const;

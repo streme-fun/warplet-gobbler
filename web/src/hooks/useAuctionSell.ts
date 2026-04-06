@@ -47,6 +47,8 @@ export function useAuctionSellAuction() {
     },
   });
 
+  const refetchAuction = auctionQ.refetch;
+
   const bumpFeeQ = useReadContract({
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
@@ -71,21 +73,24 @@ export function useAuctionSellAuction() {
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "reservePrice",
-    query: { enabled: configured },
+    query: { enabled: configured, refetchInterval: 30_000 },
   });
 
   const incrementPctQ = useReadContract({
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "minBidIncrementPercentage",
-    query: { enabled: configured },
+    query: { enabled: configured, refetchInterval: 30_000 },
   });
 
   const pausedQ = useReadContract({
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "paused",
-    query: { enabled: configured, refetchInterval: 15_000 },
+    query: {
+      enabled: configured,
+      refetchInterval: 12_000,
+    },
   });
 
   const bidTokenAddr =
@@ -111,7 +116,6 @@ export function useAuctionSellAuction() {
   const chainLot: AuctionSellLot | null = useMemo(() => {
     const d = auctionQ.data;
     if (d == null) return null;
-    // viem decodes a named tuple as an object, not a positional array.
     if (Array.isArray(d)) {
       const [tokenId, amount, startTime, endTime, bidder, settled] = d;
       return { tokenId, amount, startTime, endTime, bidder, settled };
@@ -160,9 +164,13 @@ export function useAuctionSellAuction() {
     );
   }, [chainLot, reserveQ.data, incrementPctQ.data]);
 
+  const isPaused = pausedQ.data === true;
+
   return {
     configured,
     auction: chainLot,
+    bidDecimals: decimals,
+    decimals,
     formatBidAmount,
     bidSymbol,
     isError: auctionReadError,
@@ -170,10 +178,10 @@ export function useAuctionSellAuction() {
     queueBumpFeeWei: bumpFeeQ.data,
     queueBumpReady,
     bidTokenAddress: bidTokenAddr,
-    decimals,
-    isPaused: pausedQ.data === true,
+    auctionPaused: isPaused,
+    isPaused,
     minNextBidAmount,
     reservePrice: reserveQ.data,
-    refetchAuction: auctionQ.refetch,
+    refetchAuction,
   };
 }

@@ -17,7 +17,7 @@ import {
   useWarpletApproval,
 } from "@/hooks/useDutchAuction";
 import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
-import { useAuctionSellBid } from "@/hooks/useAuctionSellBid";
+import { useAuctionSell777Bid } from "@/hooks/useAuctionSell777Bid";
 import AbyssBackground from "@/components/AbyssBackground";
 import ParallaxBackground from "@/components/ParallaxBackground";
 import Particles from "@/components/Particles";
@@ -83,7 +83,7 @@ export default function Home() {
   const [bidding, setBidding] = useState(false);
   const [auctionBidError, setAuctionBidError] = useState<string | null>(null);
   const auctionSell = useAuctionSellAuction();
-  const { approveAndBid, isPending: bidTxPending } = useAuctionSellBid();
+  const { approveAndBid, isPending: bidTxPending } = useAuctionSell777Bid();
   const dutchAuctionPriceQuery = useDutchAuctionPrice();
   const currentPrice = dutchAuctionPriceQuery.data;
   const { symbol: payoutSymbol, decimals: payoutDecimals } =
