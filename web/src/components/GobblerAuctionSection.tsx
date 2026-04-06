@@ -8,8 +8,10 @@ import AuctionLiveHero from "./AuctionLiveHero";
 import AuctionQueueCard from "./AuctionQueueCard";
 import AuctionQueueBumpPanel from "./AuctionQueueBumpPanel";
 import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
+import { useAuctionSellBid } from "@/hooks/useAuctionSellBid";
 import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
 import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
+import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
 import { CONTRACTS } from "@/lib/contracts";
 import {
   MOCK_AUCTIONS,
@@ -47,10 +49,21 @@ export default function GobblerAuctionSection({
   const [live, ...queued] = MOCK_AUCTIONS;
   const [selectedQueueFid, setSelectedQueueFid] = useState<number | null>(null);
   const [bumpError, setBumpError] = useState<string | null>(null);
+  const [chainBidError, setChainBidError] = useState<string | null>(null);
+  const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    const id = setInterval(
+      () => setNowUnix(Math.floor(Date.now() / 1000)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, []);
 
   const {
     configured: auctionSellConfigured,
     auction: chainLot,
+    bidDecimals,
     formatBidAmount,
     bidSymbol,
     isError: auctionReadError,
@@ -58,7 +71,28 @@ export default function GobblerAuctionSection({
     queueBumpFeeWei,
     queueBumpReady,
     bidTokenAddress,
+    auctionPaused,
+    refetchAuction,
   } = useAuctionSellAuction();
+
+  const { priceUsd: warpgobbSpotUsd } = useWarpgobbUsdPrice();
+
+  const bidTokenPriceUsd = useMemo(() => {
+    if (
+      bidTokenAddress == null ||
+      isAddressEqual(bidTokenAddress, zeroAddress)
+    ) {
+      return null;
+    }
+    if (
+      bidTokenAddress.toLowerCase() !== CONTRACTS.warpgobbToken.toLowerCase()
+    ) {
+      return null;
+    }
+    return warpgobbSpotUsd;
+  }, [bidTokenAddress, warpgobbSpotUsd]);
+
+  const onChainMode = auctionSellConfigured;
 
   const hasParsedLot =
     auctionSellConfigured &&
@@ -70,6 +104,32 @@ export default function GobblerAuctionSection({
     chainLot.tokenId > 0n &&
     !chainLot.settled;
 
+  const idleNoChainAuction =
+    hasParsedLot &&
+    chainLot.startTime === 0n &&
+    !chainLot.settled;
+
+  const auctionExpired =
+    liveAuction && nowUnix >= Number(chainLot.endTime);
+
+  const chainBidActive =
+    liveAuction && !auctionPaused && !auctionExpired && onChainMode;
+
+  const {
+    minBidWei,
+    minBidHuman,
+    placeBid,
+    parseHumanToWei,
+    isBidding,
+    rulesLoading,
+  } = useAuctionSellBid({
+    enabled: chainBidActive,
+    lot: chainLot,
+    bidTokenAddress,
+    bidDecimals,
+    refetchAuction,
+  });
+
   const queueReadsEnabled = auctionSellConfigured && !auctionReadError;
   const { data: chainQueuedIds = [], refetch: refetchQueue } =
     useAuctionSellQueue({
@@ -79,20 +139,24 @@ export default function GobblerAuctionSection({
   const { sendBumpTx, isPending: isBumping } = useAuctionQueueBump();
 
   const displayTokenId =
-    hasParsedLot && chainLot.tokenId > 0n
-      ? Number(chainLot.tokenId)
-      : live.fid;
+    idleNoChainAuction
+      ? 0
+      : hasParsedLot && chainLot.tokenId > 0n
+        ? Number(chainLot.tokenId)
+        : live.fid;
 
   const hasChainBid =
     liveAuction &&
     chainLot.amount > 0n &&
     !isAddressEqual(chainLot.bidder, zeroAddress);
 
-  const topBidAmountStr = liveAuction
-    ? hasChainBid
-      ? formatBidAmount(chainLot.amount)
-      : "0"
-    : MOCK_FALLBACK_TOP_BID_AMOUNT;
+  const topBidAmountStr = idleNoChainAuction
+    ? "—"
+    : liveAuction
+      ? hasChainBid
+        ? formatBidAmount(chainLot.amount)
+        : "0"
+      : MOCK_FALLBACK_TOP_BID_AMOUNT;
 
   const chainTopBidder: Address | null = liveAuction
     ? hasChainBid
@@ -100,13 +164,15 @@ export default function GobblerAuctionSection({
       : null
     : (MOCK_FALLBACK_TOP_BIDDER as Address);
 
-  const showNoBids = liveAuction && !hasChainBid;
+  const showNoBids =
+    !idleNoChainAuction && liveAuction && !hasChainBid;
 
   const auctionSettled = hasParsedLot && chainLot.settled;
 
-  const countdownEndUnix = liveAuction
-    ? Number(chainLot.endTime)
-    : undefined;
+  const countdownEndUnix =
+    liveAuction && !idleNoChainAuction
+      ? Number(chainLot.endTime)
+      : undefined;
   const countdownDurationSecs = liveAuction ? undefined : live.endsSecs;
 
   const userCompletedLocalBid = auctionBidPlacedFids.has(displayTokenId);
@@ -117,15 +183,18 @@ export default function GobblerAuctionSection({
     hasChainBid &&
     isAddressEqual(chainLot.bidder, viewerAddress);
 
-  const viewerIsLeadingBidder =
-    leadingOnChain ||
-    (userCompletedLocalBid && (!liveAuction || hasChainBid));
+  const viewerIsLeadingBidder = idleNoChainAuction
+    ? false
+    : leadingOnChain ||
+      (userCompletedLocalBid && (!liveAuction || hasChainBid));
 
   /** After the demo bid animation (mock), show the viewer when connected; on-chain use lot bidder. */
   const displayTopBidder: Address | null =
-    !liveAuction && userCompletedLocalBid && viewerAddress != null
-      ? viewerAddress
-      : chainTopBidder;
+    idleNoChainAuction
+      ? null
+      : !liveAuction && userCompletedLocalBid && viewerAddress != null
+        ? viewerAddress
+        : chainTopBidder;
 
   const queuedRows = queueReadsEnabled
     ? chainQueuedIds.map((id, i) => ({
@@ -216,6 +285,15 @@ export default function GobblerAuctionSection({
   const showBumpPanel =
     selectedInQueueFid != null && selectedQueueIdx >= 0;
 
+  const handleChainBidSubmit = useCallback(async (amountWei: bigint) => {
+    setChainBidError(null);
+    try {
+      await placeBid(amountWei);
+    } catch (e) {
+      setChainBidError(e instanceof Error ? e.message : "Transaction failed");
+    }
+  }, [placeBid]);
+
   return (
     <div className="w-full max-w-4xl rounded-2xl bg-base-200/40 border border-secondary/10 backdrop-blur-sm p-6 sm:p-10">
       <h2 className="text-xl sm:text-3xl font-bold tracking-widest uppercase mb-1">
@@ -238,7 +316,25 @@ export default function GobblerAuctionSection({
         auctionSettled={auctionSettled}
         viewerIsLeadingBidder={viewerIsLeadingBidder}
         bidDisabled={bidDisabled}
-        onBid={onBid}
+        onBid={chainBidActive ? undefined : onBid}
+        chainBid={
+          chainBidActive
+            ? {
+                minBidHuman,
+                minBidWei,
+                parseHumanToWei,
+                onSubmit: handleChainBidSubmit,
+                loading: isBidding || rulesLoading,
+                disabled: bidDisabled || rulesLoading || minBidWei == null,
+                error: chainBidError,
+                onClearTxError: () => setChainBidError(null),
+                bidTokenPriceUsd,
+              }
+            : undefined
+        }
+        idleNoChainAuction={idleNoChainAuction}
+        auctionExpiredOnChain={auctionExpired}
+        contractPaused={auctionPaused}
       />
 
       <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mt-10 mb-1">

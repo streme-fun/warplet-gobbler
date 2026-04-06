@@ -34,6 +34,8 @@ export function useAuctionSellAuction() {
     },
   });
 
+  const refetchAuction = auctionQ.refetch;
+
   const bumpFeeQ = useReadContract({
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
@@ -51,6 +53,16 @@ export function useAuctionSellAuction() {
     query: {
       enabled: configured,
       refetchInterval: 60_000,
+    },
+  });
+
+  const pausedQ = useReadContract({
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "paused",
+    query: {
+      enabled: configured,
+      refetchInterval: 12_000,
     },
   });
 
@@ -117,6 +129,7 @@ export function useAuctionSellAuction() {
   return {
     configured,
     auction: chainLot,
+    bidDecimals: decimals,
     formatBidAmount,
     bidSymbol,
     isError: auctionReadError,
@@ -124,5 +137,7 @@ export function useAuctionSellAuction() {
     queueBumpFeeWei: bumpFeeQ.data,
     queueBumpReady,
     bidTokenAddress: bidTokenAddr,
+    auctionPaused: Boolean(pausedQ.data),
+    refetchAuction,
   };
 }
