@@ -8,6 +8,7 @@ web/out/
 # Foundry
 contracts/out/
 contracts/cache/
+contracts/broadcast/
 
 # Environment
 .env

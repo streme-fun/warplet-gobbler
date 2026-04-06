@@ -7,6 +7,7 @@ import {DutchAuction} from "../../src/DutchAuction.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @dev Minimal collection so `DutchAuction` can be constructed on the fork (gobble is unused here).
 contract ForkWarplet721 is ERC721 {
@@ -29,16 +30,18 @@ contract NoopStremeZap {
 ///      (the same asset `FeeHandler` streams via `ISuperToken.flow`). Plain ERC-20s will not work.
 ///      Integration tests skip when env is incomplete (`vm.skip`).
 ///
-///      `lpFactory` / `stremeZap` default to bare EOAs when unset: `claimRewards` is a no-op success,
-///      and with zero cash balance the swap path is skipped — enough to exercise access control
+///      `lpFactory` defaults to real Streme LPFactoryV4 on Base and `stremeZap` to a bare EOA when unset.
+///      With zero cash balance, swap path is skipped — enough to exercise access control
 ///      and flow updates against a real SuperToken.
 contract FeeHandlerForkTest is Test {
     /// @notice Native Base USDC (6 decimals).
     address internal constant USDC_BASE = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address internal constant WETH_BASE = 0x4200000000000000000000000000000000000006;
     /// @notice Interim Base SuperToken default provided by project owner.
     address internal constant DEFAULT_STREME_SUPERTOKEN = 0x3042b035325393F3d72390C7E5d51F26fe1F0e61;
     address internal constant DEFAULT_LP_FACTORY_V4 = 0x341FaEe049DC78F437B00FbCcC33020fa252A957;
 
+    address internal constant UNISWAP_SINGLETON = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     uint256 internal constant TARGET_DURATION = 7 days;
     uint256 internal constant MIN_TOKEN_OUT = 0;
 
@@ -72,7 +75,7 @@ contract FeeHandlerForkTest is Test {
 
         streme = vm.envOr("FEE_HANDLER_FORK_STREME", DEFAULT_STREME_SUPERTOKEN);
 
-        cash = vm.envOr("FEE_HANDLER_FORK_CASH", USDC_BASE);
+        cash = vm.envOr("FEE_HANDLER_FORK_CASH", WETH_BASE);
 
         admin = makeAddr("feeHandlerForkAdmin");
         rebalancer = makeAddr("feeHandlerForkRebalancer");
@@ -96,17 +99,8 @@ contract FeeHandlerForkTest is Test {
         vm.label(address(warplets), "warplets");
         address nftReserve = makeAddr("feeHandlerForkNftReserve");
 
-        handler = new FeeHandler(
-            cash,
-            streme,
-            lpFactory,
-            PLACEHOLDER_AUCTION,
-            stremeZap,
-            TARGET_DURATION,
-            admin,
-            rebalancer,
-            MIN_TOKEN_OUT
-        );
+        handler =
+            new FeeHandler(cash, streme, lpFactory, PLACEHOLDER_AUCTION, stremeZap, TARGET_DURATION, admin, rebalancer);
 
         vm.label(address(handler), "FeeHandler");
 
@@ -145,17 +139,19 @@ contract FeeHandlerForkTest is Test {
     function test_stranger_cannot_rebalance() public requiresIntegration {
         vm.prank(stranger);
         vm.expectRevert(FeeHandler.UnauthorizedRebalance.selector);
-        handler.rebalance();
+        handler.rebalance(0);
     }
 
     function test_rebalancer_can_rebalance() public requiresIntegration {
         vm.prank(rebalancer);
-        handler.rebalance();
+        // TODO : figure out a proper minamountOut value
+        handler.rebalance(0);
     }
 
     function test_admin_can_rebalance() public requiresIntegration {
         vm.prank(admin);
-        handler.rebalance();
+        // TODO : figure out a proper minamountOut value
+        handler.rebalance(0);
     }
 
     /// @notice `rebalanceFlowRate` is permissionless when stream is active (current contract behavior).
@@ -167,7 +163,9 @@ contract FeeHandlerForkTest is Test {
 
     function test_stranger_cannot_setTargetDuration() public requiresIntegration {
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, handler.DEFAULT_ADMIN_ROLE())
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, handler.DEFAULT_ADMIN_ROLE()
+            )
         );
         vm.prank(stranger);
         handler.setTargetDuration(TARGET_DURATION + 1);
@@ -185,5 +183,14 @@ contract FeeHandlerForkTest is Test {
         uint256 amount = IERC20(streme).balanceOf(address(handler));
         int96 expected = int96(int256(amount / TARGET_DURATION));
         assertEq(handler.previewFlowRate(), expected);
+    }
+
+    function _stealTokensFromSingleton(address token, address to, uint256 amount) internal {
+        uint256 bal = IERC20(token).balanceOf(UNISWAP_SINGLETON);
+        require(bal >= amount, "fork: singleton insufficient token");
+
+        vm.prank(UNISWAP_SINGLETON);
+        bool ok = IERC20(token).transfer(to, amount);
+        require(ok, "fork: singleton transfer failed");
     }
 }
