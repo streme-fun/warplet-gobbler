@@ -5,6 +5,17 @@ import { warpletImageSrc } from "@/lib/warplet-image-src";
 
 /* eslint-disable @next/next/no-img-element */
 
+type BuyOverlayPhase =
+  | "flyin"
+  | "materialize"
+  | "idle"
+  | "hit1"
+  | "recover1"
+  | "hit2"
+  | "recover2"
+  | "finisher"
+  | "resolved";
+
 /**
  * Full-screen canvas overlay for buying a gobbled warplet.
  * Plays the Silksong Void combat sequence:
@@ -20,6 +31,8 @@ export default function BuyOverlay({
   onDone: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   useEffect(() => {
     const cv = canvasRef.current;
@@ -34,6 +47,7 @@ export default function BuyOverlay({
     cv.height = H;
 
     let cancelled = false;
+    let idleCombatTimer: ReturnType<typeof setTimeout> | null = null;
     let time = 0;
     let lastFrameTime = performance.now();
 
@@ -74,7 +88,7 @@ export default function BuyOverlay({
 
     // ========== PHASE STATE ==========
     // 'flyin' → 'materialize' → 'idle' → 'hit1' → 'recover1' → 'hit2' → 'recover2' → 'finisher' → 'resolved' → 'fadeout'
-    let phase: string = "flyin";
+    let phase: BuyOverlayPhase = "flyin";
     let phaseTime = 0;
     let weakenLevel = 0;
     let shakeX = 0;
@@ -248,7 +262,9 @@ export default function BuyOverlay({
         phase = "idle";
         phaseTime = 0;
         // Auto start combat after brief idle
-        setTimeout(() => {
+        if (idleCombatTimer != null) clearTimeout(idleCombatTimer);
+        idleCombatTimer = setTimeout(() => {
+          idleCombatTimer = null;
           if (!cancelled) triggerHit(1);
         }, 300);
       }
@@ -274,7 +290,7 @@ export default function BuyOverlay({
       }
       if (phase === "resolved" && phaseTime > FADE_DELAY + FADE_DURATION) {
         cancelled = true;
-        onDone();
+        onDoneRef.current();
       }
     }
 
@@ -679,9 +695,10 @@ export default function BuyOverlay({
     frame();
     return () => {
       cancelled = true;
+      if (idleCombatTimer != null) clearTimeout(idleCombatTimer);
       window.removeEventListener("resize", onResize);
     };
-  }, [fid, startRect, onDone]);
+  }, [fid, startRect.x, startRect.y, startRect.w, startRect.h]);
 
   return (
     <canvas
