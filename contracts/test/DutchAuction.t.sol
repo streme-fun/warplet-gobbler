@@ -88,9 +88,6 @@ contract DutchAuctionTest is Test {
     }
 
     function test_safeTransferFrom_to_auction_with_encoded_min_price_gobbles_same_as_gobble() public {
-        vm.prank(seller);
-        warplets.setApprovalForAll(address(auction), true);
-
         vm.expectEmit(true, true, false, true, address(auction));
         emit IDutchAuction.Gobbled(seller, TOKEN_ID, POT);
 
@@ -117,9 +114,6 @@ contract DutchAuctionTest is Test {
     }
 
     function test_gobble_reverts_when_hook_data_not_encoded_min_price() public {
-        vm.prank(seller);
-        warplets.setApprovalForAll(address(auction), true);
-
         vm.prank(seller);
         vm.expectRevert();
         warplets.safeTransferFrom(seller, address(auction), TOKEN_ID, "");

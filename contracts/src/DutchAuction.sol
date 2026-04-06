@@ -5,12 +5,15 @@ import {IDutchAuction} from "./interfaces/IDutchAuction.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title DutchAuction — "The Gobbler"
 /// @notice Receives a Superfluid stream of $WARPGOBB. Anyone can deposit a Warplet and drain the pot.
 /// @dev Accepts Warplets via {IERC721Receiver-onERC721Received}. `data` must be `abi.encode(minPrice)`.
 
 contract DutchAuction is IDutchAuction, IERC721Receiver {
+    using SafeERC20 for IERC20;
+
     IERC721 public immutable warplets;      // Warplets NFT contract
     IERC20 public immutable paymentToken;   // token used for payment: $WARPGOBB
     address public immutable nftReserve;    // Where gobbled Warplets go next
@@ -42,9 +45,9 @@ contract DutchAuction is IDutchAuction, IERC721Receiver {
         require(msg.sender == address(warplets), "DutchAuction: only Warplets");
         uint256 minPrice = abi.decode(data, (uint256));
         uint256 payout = currentPrice();
-        warplets.safeTransferFrom(address(this), nftReserve, tokenId);
         require(payout >= minPrice, "Price is too low, try again later");
-        paymentToken.transfer(from, payout);
+        warplets.safeTransferFrom(address(this), nftReserve, tokenId);
+        paymentToken.safeTransfer(from, payout);
         emit Gobbled(from, tokenId, payout);
         return IERC721Receiver.onERC721Received.selector;
     }
