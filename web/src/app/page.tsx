@@ -21,7 +21,6 @@ import ParallaxBackground from "@/components/ParallaxBackground";
 import Particles from "@/components/Particles";
 import GobbleOverlay from "@/components/GobbleOverlay";
 import GobblePeek from "@/components/GobblePeek";
-import BuyOverlay from "@/components/BuyOverlay";
 import GobblerAuctionSection from "@/components/GobblerAuctionSection";
 import FlyingWarplet from "@/components/FlyingWarplet";
 import StreamingNumber from "@/components/StreamingNumber";
@@ -64,14 +63,6 @@ export default function Home() {
   const [selectedFid, setSelectedFid] = useState<number | null>(null);
   const [flyingFid, setFlyingFid] = useState<number | null>(null);
   const [flyRect, setFlyRect] = useState<{
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-  } | null>(null);
-  // Buy overlay state
-  const [buyingFid, setBuyingFid] = useState<number | null>(null);
-  const [buyRect, setBuyRect] = useState<{
     x: number;
     y: number;
     w: number;
@@ -198,7 +189,13 @@ export default function Home() {
   }, [selectedFid, gobbling, flyingFid]);
 
   const handleSell = useCallback(async () => {
-    if (!selectedFid || !isConnected || !publicClient || isSelling || isWriting) {
+    if (
+      !selectedFid ||
+      !isConnected ||
+      !publicClient ||
+      isSelling ||
+      isWriting
+    ) {
       return;
     }
 
@@ -231,14 +228,25 @@ export default function Home() {
       const gobbleHash = await gobbleWarplet(selectedFid, minPrice);
       await publicClient.waitForTransactionReceipt({ hash: gobbleHash });
 
+      // Fire-and-forget gobbled image generation
+      fetch("/api/gobbled-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokenId: selectedFid }),
+      }).catch(console.error);
+
       setChestPayout({ tokens: chestTokens, usd: chestUsd });
       if (!startSellAnimation()) {
         setChestPayout(null);
-        setSellError("Could not start reveal animation — scroll to your Warplet and try again.");
+        setSellError(
+          "Could not start reveal animation — scroll to your Warplet and try again.",
+        );
       }
     } catch (err) {
       const msg =
-        err instanceof Error ? err.message : "Failed to submit sell transaction";
+        err instanceof Error
+          ? err.message
+          : "Failed to submit sell transaction";
       setSellError(msg);
     } finally {
       setIsSelling(false);
@@ -259,22 +267,9 @@ export default function Home() {
     startSellAnimation,
   ]);
 
-  const handleBuy = useCallback(
-    (fid: number, rect: { x: number; y: number; w: number; h: number }) => {
-      if (buyingFid) return;
-      setBuyingFid(fid);
-      setBuyRect(rect);
-    },
-    [buyingFid],
-  );
-
-  const handleBuyDone = useCallback(() => {
-    if (buyingFid) {
-      setBoughtFids((prev) => new Set(prev).add(buyingFid));
-    }
-    setBuyingFid(null);
-    setBuyRect(null);
-  }, [buyingFid]);
+  const handleBid = useCallback((fid: number) => {
+    setBoughtFids((prev) => new Set(prev).add(fid));
+  }, []);
 
   if (isMiniApp && !isLoaded) {
     return (
@@ -286,15 +281,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen relative overflow-hidden noise-overlay flex flex-col">
-      {/* Buy overlay — Silksong Void combat sequence */}
-      {buyingFid && buyRect && (
-        <BuyOverlay
-          fid={buyingFid}
-          startRect={buyRect}
-          onDone={handleBuyDone}
-        />
-      )}
-
       {/* Gobble overlay — canvas jaws on top of everything */}
       {gobbling && (
         <GobbleOverlay
@@ -398,7 +384,9 @@ export default function Home() {
                 smartHideDecimalsIfIntegerDigitsGt={5}
               />
               <span className="text-base font-normal text-base-content/40 ml-2">
-                {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
+                {payoutSymbol?.startsWith("$")
+                  ? payoutSymbol
+                  : `$${payoutSymbol}`}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/40 mt-1">
@@ -421,9 +409,7 @@ export default function Home() {
                   ~$
                   <StreamingNumber
                     start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
-                    perSecond={
-                      payoutStream.perSecond * (warpgobbPriceUsd ?? 0)
-                    }
+                    perSecond={payoutStream.perSecond * (warpgobbPriceUsd ?? 0)}
                     decimals={2}
                     truncateFractionDigits
                     className="inline font-mono"
@@ -491,16 +477,14 @@ export default function Home() {
                 id="warplet-scroll"
                 className="flex gap-2 overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
               >
-                {warpletsConfigured &&
-                  isConnected &&
-                  ownedWarpletsError && (
-                    <p className="text-xs text-error/80 px-1">
-                      Couldn&apos;t load Warplets from the chain. Check
-                      NEXT_PUBLIC_WARPLETS_ADDRESS and that the contract supports{" "}
-                      <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
-                      (ERC721Enumerable).
-                    </p>
-                  )}
+                {warpletsConfigured && isConnected && ownedWarpletsError && (
+                  <p className="text-xs text-error/80 px-1">
+                    Couldn&apos;t load Warplets from the chain. Check
+                    NEXT_PUBLIC_WARPLETS_ADDRESS and that the contract supports{" "}
+                    <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
+                    (ERC721Enumerable).
+                  </p>
+                )}
                 {warpletsConfigured &&
                   isConnected &&
                   !ownedWarpletsLoading &&
@@ -549,7 +533,11 @@ export default function Home() {
                   : "border border-primary/30 text-primary/50 hover:border-primary/50 hover:text-primary/70"
               }`}
               disabled={
-                !!flyingFid || !selectedFid || !isConnected || isSelling || isWriting
+                !!flyingFid ||
+                !selectedFid ||
+                !isConnected ||
+                isSelling ||
+                isWriting
               }
               onClick={selectedFid ? handleSell : undefined}
             >
@@ -562,7 +550,9 @@ export default function Home() {
                     : "Select a Warplet"}
             </button>
             {sellError && (
-              <p className="mt-2 text-xs text-error/90 break-all">{sellError}</p>
+              <p className="mt-2 text-xs text-error/90 break-all">
+                {sellError}
+              </p>
             )}
           </div>
         </section>
@@ -605,7 +595,7 @@ export default function Home() {
       >
         <GobblerAuctionSection
           auctionBidPlacedFids={boughtFids}
-          onBid={handleBuy}
+          onBid={handleBid}
           bidDisabled={!isConnected}
         />
 

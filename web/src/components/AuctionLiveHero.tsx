@@ -88,14 +88,13 @@ export default function AuctionLiveHero({
   auctionSettled: boolean;
   viewerIsLeadingBidder?: boolean;
   bidDisabled?: boolean;
-  onBid?: (fid: number, rect: { x: number; y: number; w: number; h: number }) => void;
+  onBid?: (fid: number) => void;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
 
   const handleBid = () => {
-    if (bidDisabled || auctionSettled || !onBid || !btnRef.current) return;
-    const rect = btnRef.current.getBoundingClientRect();
-    onBid(displayTokenId, { x: rect.left, y: rect.top, w: rect.width, h: rect.height });
+    if (bidDisabled || auctionSettled || !onBid) return;
+    onBid(displayTokenId);
   };
 
   const sold = auctionSettled;
@@ -132,7 +131,9 @@ export default function AuctionLiveHero({
                 Top bid
               </p>
               {sold ? (
-                <p className="text-xl sm:text-2xl font-mono text-success">Settled</p>
+                <p className="text-xl sm:text-2xl font-mono text-success">
+                  Settled
+                </p>
               ) : showNoBids ? (
                 <p className="text-lg sm:text-xl font-mono text-base-content/50">
                   No bids yet
@@ -148,8 +149,8 @@ export default function AuctionLiveHero({
             </div>
             {!sold && viewerIsLeadingBidder && (
               <p className="text-xs sm:text-sm text-success/85 font-medium">
-                You&apos;re the top bidder — the lot is still open until the timer
-                ends.
+                You&apos;re the top bidder — the lot is still open until the
+                timer ends.
               </p>
             )}
             {!sold && !showNoBids && hasHighBidder && topBidder && (
@@ -183,7 +184,9 @@ export default function AuctionLiveHero({
           </div>
 
           {sold ? (
-            <p className="text-sm text-base-content/40">This auction has settled.</p>
+            <p className="text-sm text-base-content/40">
+              This auction has settled.
+            </p>
           ) : (
             <button
               ref={btnRef}
