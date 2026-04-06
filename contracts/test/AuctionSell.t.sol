@@ -43,7 +43,7 @@ contract AuctionSellTest is Test {
         vm.startPrank(owner);
         nft = new MockAuctionNFT();
         bidToken = new MockBidToken();
-        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner);
+        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner, owner);
         sell = new AuctionSell(
             IERC721(address(nft)),
             bidToken,
