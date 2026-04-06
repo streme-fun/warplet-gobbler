@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { formatUnits } from "viem";
+import { type Address, encodeAbiParameters, formatUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { CONTRACTS, UNISWAP_V4_POOL_IDS } from "@/lib/contracts";
 import { dutchAuctionAbi } from "@/abi/dutchAuction";
@@ -269,70 +269,40 @@ export function useWarpgobbUsdPrice() {
   };
 }
 
-export function useWarpletApproval(tokenId: number | null) {
-  const { address } = useAccount();
-
-  const approvedForToken = useReadContract({
-    abi: erc721Abi,
-    address: CONTRACTS.warplets,
-    functionName: "getApproved",
-    args: [BigInt(tokenId ?? 0)],
-    query: {
-      enabled: !!tokenId,
-    },
-  });
-
-  const approvedForAll = useReadContract({
-    abi: erc721Abi,
-    address: CONTRACTS.warplets,
-    functionName: "isApprovedForAll",
-    args: [address ?? CONTRACTS.dutchAuction, CONTRACTS.dutchAuction],
-    query: {
-      enabled: !!address,
-    },
-  });
-
-  const isApproved = useMemo(() => {
-    if (!tokenId) return false;
-    if (approvedForAll.data) return true;
-    return (
-      typeof approvedForToken.data === "string" &&
-      approvedForToken.data.toLowerCase() === CONTRACTS.dutchAuction.toLowerCase()
-    );
-  }, [tokenId, approvedForAll.data, approvedForToken.data]);
-
-  return {
-    isApproved,
-    isApprovalLoading: approvedForAll.isLoading || approvedForToken.isLoading,
-    refetchApproval: async () => {
-      await Promise.all([approvedForAll.refetch(), approvedForToken.refetch()]);
-    },
-  };
+/** `abi.encode(minPrice)` for `DutchAuction.onERC721Received` — required on every gobble tx. */
+export function encodeDutchAuctionGobbleData(minPrice: bigint): `0x${string}` {
+  return encodeAbiParameters([{ type: "uint256" }], [minPrice]);
 }
 
 export function useDutchAuctionActions() {
+  const { address } = useAccount();
   const { writeContractAsync, isPending } = useWriteContract();
 
-  const approveWarplet = async (tokenId: number) => {
+  /**
+   * One-tx gobble: `safeTransferFrom(owner, dutchAuction, tokenId, abi.encode(minPrice))`.
+   * `minPrice` must match the snapshot used for slippage / frontrun protection (on-chain revert if pot < minPrice).
+   */
+  const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
+    if (!address) {
+      throw new Error("Connect wallet to sell");
+    }
+    if (CONTRACTS.warplets.toLowerCase() === ZERO) {
+      throw new Error("NEXT_PUBLIC_WARPLETS_ADDRESS is not configured");
+    }
+    if (CONTRACTS.dutchAuction.toLowerCase() === ZERO) {
+      throw new Error("NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS is not configured");
+    }
+    const data = encodeDutchAuctionGobbleData(minPrice);
+
     return writeContractAsync({
       abi: erc721Abi,
       address: CONTRACTS.warplets,
-      functionName: "approve",
-      args: [CONTRACTS.dutchAuction, BigInt(tokenId)],
-    });
-  };
-
-  const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
-    return writeContractAsync({
-      abi: dutchAuctionAbi,
-      address: CONTRACTS.dutchAuction,
-      functionName: "gobble",
-      args: [BigInt(tokenId), minPrice],
+      functionName: "safeTransferFrom",
+      args: [address as Address, CONTRACTS.dutchAuction, BigInt(tokenId), data],
     });
   };
 
   return {
-    approveWarplet,
     gobbleWarplet,
     isWriting: isPending,
   };

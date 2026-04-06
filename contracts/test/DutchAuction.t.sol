@@ -23,6 +23,14 @@ contract MockWarplets is ERC721 {
     }
 }
 
+contract OtherMock721 is ERC721 {
+    constructor() ERC721("Other", "OTH") {}
+
+    function mint(address to, uint256 tokenId) external {
+        _mint(to, tokenId);
+    }
+}
+
 contract DutchAuctionTest is Test {
     MockWarplets internal warplets;
     MockUSDCx internal paymentToken;
@@ -77,5 +85,45 @@ contract DutchAuctionTest is Test {
         assertEq(warplets.ownerOf(TOKEN_ID), nftReserve);
         assertEq(paymentToken.balanceOf(address(auction)), 0);
         assertEq(paymentToken.balanceOf(seller), POT);
+    }
+
+    function test_safeTransferFrom_to_auction_with_encoded_min_price_gobbles_same_as_gobble() public {
+        vm.prank(seller);
+        warplets.setApprovalForAll(address(auction), true);
+
+        vm.expectEmit(true, true, false, true, address(auction));
+        emit IDutchAuction.Gobbled(seller, TOKEN_ID, POT);
+
+        vm.prank(seller);
+        warplets.safeTransferFrom(seller, address(auction), TOKEN_ID, abi.encode(POT));
+
+        assertEq(warplets.ownerOf(TOKEN_ID), nftReserve);
+        assertEq(paymentToken.balanceOf(seller), POT);
+    }
+
+    function test_gobble_reverts_when_wrong_collection_safe_transferred() public {
+        OtherMock721 other = new OtherMock721();
+        uint256 otherId = 7;
+        other.mint(seller, otherId);
+        vm.prank(seller);
+        other.setApprovalForAll(address(auction), true);
+
+        vm.prank(seller);
+        vm.expectRevert(bytes("DutchAuction: only Warplets"));
+        other.safeTransferFrom(seller, address(auction), otherId, abi.encode(POT));
+
+        assertEq(other.ownerOf(otherId), seller);
+        assertEq(paymentToken.balanceOf(seller), 0);
+    }
+
+    function test_gobble_reverts_when_hook_data_not_encoded_min_price() public {
+        vm.prank(seller);
+        warplets.setApprovalForAll(address(auction), true);
+
+        vm.prank(seller);
+        vm.expectRevert();
+        warplets.safeTransferFrom(seller, address(auction), TOKEN_ID, "");
+
+        assertEq(warplets.ownerOf(TOKEN_ID), seller);
     }
 }
