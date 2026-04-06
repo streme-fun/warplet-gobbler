@@ -1,12 +1,12 @@
 "use client";
 
+import { isAddressEqual, zeroAddress } from "viem";
 import { useReadContract } from "wagmi";
-import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
+import { CONTRACTS } from "@/lib/contracts";
 import { auctionSellAbi } from "@/abi/auctionSell";
 
 export function useAuctionSellQueue(opts: { enabled: boolean }) {
-  const configured =
-    CONTRACTS.auctionSell.toLowerCase() !== ZERO_ADDRESS.toLowerCase();
+  const configured = !isAddressEqual(CONTRACTS.auctionSell, zeroAddress);
 
   const q = useReadContract({
     abi: auctionSellAbi,

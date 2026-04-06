@@ -1,8 +1,9 @@
 "use client";
 
+import { isAddressEqual, zeroAddress } from "viem";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import { useCallback, useMemo } from "react";
-import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
+import { CONTRACTS } from "@/lib/contracts";
 import { warpletsErc721EnumerableAbi } from "@/lib/warplets-abi";
 import { warpletImageSrc } from "@/lib/warplet-image-src";
 
@@ -16,8 +17,7 @@ export type OwnedWarplet = {
 export function useOwnedWarplets() {
   const { address, isConnected } = useAccount();
   const warpletsAddress = CONTRACTS.warplets;
-  const warpletsConfigured =
-    warpletsAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase();
+  const warpletsConfigured = !isAddressEqual(warpletsAddress, zeroAddress);
 
   const { data: balance, ...balanceQuery } = useReadContract({
     address: warpletsAddress,
