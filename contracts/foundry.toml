@@ -6,6 +6,7 @@ solc = "0.8.26"
 
 # Match npm-style imports used in `src/` and `test/`
 remappings = [
+    "forge-std/=lib/forge-std/src/",
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@openzeppelin-v5/contracts/=lib/openzeppelin-contracts/contracts/",
     "@superfluid-finance/ethereum-contracts/=lib/ethereum-contracts/packages/ethereum-contracts/",
