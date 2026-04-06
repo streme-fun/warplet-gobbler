@@ -146,6 +146,11 @@ export default function Home() {
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [isSelling, setIsSelling] = useState(false);
   const [sellError, setSellError] = useState<string | null>(null);
+  /** Snapshot for GobbleOverlay: live `currentPrice` hits 0 right after gobble mines. */
+  const [chestPayout, setChestPayout] = useState<{
+    tokens: number;
+    usd: number | null;
+  } | null>(null);
 
   const displayPrice = currentPrice ?? BigInt(0);
   const payoutAmount = Number(formatUnits(displayPrice, payoutDecimals));
@@ -179,15 +184,17 @@ export default function Home() {
     setFlyRect(null);
     setSelectedFid(null);
     setWarpletVisible(true);
+    setChestPayout(null);
   }, []);
 
-  const startSellAnimation = useCallback(() => {
-    if (!selectedFid || gobbling || flyingFid) return;
+  const startSellAnimation = useCallback((): boolean => {
+    if (!selectedFid || gobbling || flyingFid) return false;
     const el = cardRefs.current.get(selectedFid);
-    if (!el) return;
+    if (!el) return false;
     const rect = el.getBoundingClientRect();
     setFlyRect({ x: rect.left, y: rect.top, w: rect.width, h: rect.height });
     setFlyingFid(selectedFid);
+    return true;
   }, [selectedFid, gobbling, flyingFid]);
 
   const handleSell = useCallback(async () => {
@@ -199,17 +206,36 @@ export default function Home() {
     setIsSelling(true);
 
     try {
+      if (currentPrice === undefined) {
+        setSellError("Waiting for Gobbler price — try again in a moment.");
+        return;
+      }
+      const payoutWeiSnapshot = currentPrice;
+      const chestTokens = Number(
+        formatUnits(payoutWeiSnapshot, payoutDecimals),
+      );
+      const chestUsd =
+        chestTokens === 0
+          ? 0
+          : warpgobbPriceUsd != null
+            ? chestTokens * warpgobbPriceUsd
+            : null;
+
       if (!isApproved) {
         const approveHash = await approveWarplet(selectedFid);
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
         await refetchApproval();
       }
 
-      const minPrice = (displayPrice * BigInt(99)) / BigInt(100);
+      const minPrice = (payoutWeiSnapshot * BigInt(99)) / BigInt(100);
       const gobbleHash = await gobbleWarplet(selectedFid, minPrice);
       await publicClient.waitForTransactionReceipt({ hash: gobbleHash });
 
-      startSellAnimation();
+      setChestPayout({ tokens: chestTokens, usd: chestUsd });
+      if (!startSellAnimation()) {
+        setChestPayout(null);
+        setSellError("Could not start reveal animation — scroll to your Warplet and try again.");
+      }
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to submit sell transaction";
@@ -226,7 +252,9 @@ export default function Home() {
     isApproved,
     approveWarplet,
     refetchApproval,
-    displayPrice,
+    currentPrice,
+    payoutDecimals,
+    warpgobbPriceUsd,
     gobbleWarplet,
     startSellAnimation,
   ]);
@@ -272,9 +300,9 @@ export default function Home() {
         <GobbleOverlay
           onDone={handleGobbleDone}
           onChestReveal={handleChestReveal}
-          payout={Number(formatUnits(displayPrice, payoutDecimals))}
+          payout={chestPayout?.tokens ?? payoutAmount}
           payoutSymbol={payoutSymbol}
-          payoutUsd={payoutUsd}
+          payoutUsd={chestPayout?.usd ?? payoutUsd}
         />
       )}
 

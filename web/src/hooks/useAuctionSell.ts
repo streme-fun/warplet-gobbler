@@ -76,10 +76,21 @@ export function useAuctionSellAuction() {
   });
 
   const chainLot: AuctionSellLot | null = useMemo(() => {
-    if (!auctionQ.data) return null;
-    const [tokenId, amount, startTime, endTime, bidder, settled] =
-      auctionQ.data;
-    return { tokenId, amount, startTime, endTime, bidder, settled };
+    const d = auctionQ.data;
+    if (d == null) return null;
+    // viem decodes a named tuple as an object, not a positional array.
+    if (Array.isArray(d)) {
+      const [tokenId, amount, startTime, endTime, bidder, settled] = d;
+      return { tokenId, amount, startTime, endTime, bidder, settled };
+    }
+    return {
+      tokenId: d.tokenId,
+      amount: d.amount,
+      startTime: d.startTime,
+      endTime: d.endTime,
+      bidder: d.bidder,
+      settled: d.settled,
+    };
   }, [auctionQ.data]);
 
   const auctionReadError = auctionQ.isError;
