@@ -92,4 +92,5 @@ Dynamic daisyUI classes like `bg-primary/20` are safelisted in `tailwind.config.
 ### Environment Variables
 
 - `web/.env.local`: `NEXT_PUBLIC_WC_PROJECT_ID` (WalletConnect), `NEXT_PUBLIC_BASE_RPC_URL` (optional), `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL` / `NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL` (UI labels)
+- `web/.env.local` (gobbled image pipeline): `GEMINI_API_KEY`, `warpletgobbler_READ_WRITE_TOKEN` (Vercel Blob), `PINATA_JWT`, `PINATA_GATEWAY_URL`
 - `contracts/.env`: `BASE_RPC_URL`, `BASESCAN_API_KEY`, `DEPLOYER_PRIVATE_KEY`
