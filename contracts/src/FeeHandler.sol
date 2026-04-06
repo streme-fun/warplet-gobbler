@@ -11,7 +11,10 @@ interface ILPFactoryv4 {
     function claimRewards(address token) external;
 }
 
-/// @dev Streme `StremeZapUniversal.swapTokenForStreme` — v4 single-hop swap into `stremeCoin`.
+/// @dev Streme `StremeZapUniversal` exposes this swap as the external function `zap` (same name on the ABI;
+///      do not confuse with internal/helper naming elsewhere in Streme source).
+///      `stakingContract == address(0)` sends output to `msg.sender` and skips `stake`; any non-zero address is
+///      treated as a staking target and the zap may call `stake` there — never pass `address(this)` from FeeHandler.
 interface IStremeZapUniversal {
     function zap(address stremeCoin, uint256 amountIn, uint256 amountOutMin, address stakingContract)
         external
@@ -123,7 +126,7 @@ contract FeeHandler is AccessControl {
         streamActive = true;
     }
 
-    /// @notice Claim rewards, swap weth to streme (no `minTokenOut`), then update the auction stream rate.
+    /// @notice Claim rewards, swap weth to streme (respects `minAmountOut`), then update the auction stream rate.
     function rebalance(uint256 minAmountOut) external onlyRebalancerOrAdmin {
         _claimRewardsAndSwapWethToToken(minAmountOut);
         _rebalanceFlowRate();
@@ -162,7 +165,7 @@ contract FeeHandler is AccessControl {
 
     function _swapWethToToken(uint256 wethBefore, uint256 tokenBefore, uint256 minTokenOut) internal {
         if (wethBefore > type(uint128).max) revert AmountInTooLarge();
-        stremeZap.zap{value: 0}(address(stremeToken), uint256(wethBefore), minTokenOut, address(this));
+        stremeZap.zap{value: 0}(address(stremeToken), uint256(wethBefore), minTokenOut, address(0));
         uint256 wethIn = wethBefore - weth.balanceOf(address(this));
         uint256 tokenOut = stremeToken.balanceOf(address(this)) - tokenBefore;
         emit WethSwapped(address(stremeZap), wethIn, tokenOut);

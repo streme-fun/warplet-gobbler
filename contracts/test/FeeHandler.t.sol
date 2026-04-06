@@ -139,7 +139,9 @@ contract MockStremeZap {
         weth.transferFrom(msg.sender, address(this), amountIn);
         amountOut = amountIn * outMultiplier;
         require(amountOut >= amountOutMin, "min-out");
-        streme.mint(stakingContract, amountOut);
+        // Match StremeZapUniversal: zero staking = output to `msg.sender`; non-zero = old path minted to staking address.
+        address to = stakingContract == address(0) ? msg.sender : stakingContract;
+        streme.mint(to, amountOut);
     }
 
     function getLastCall() external view returns (address, uint256, uint256, address) {
@@ -263,7 +265,7 @@ contract FeeHandlerTest is Test {
     //     assertEq(stremeCoin, address(streme));
     //     assertEq(amountIn, reward);
     //     assertEq(amountOutMin, MIN_TOKEN_OUT);
-    //     assertEq(stakingContract, address(handler));
+    //     assertEq(stakingContract, address(0));
     // }
 
     function test_rebalance_reverts_when_amount_in_exceeds_uint128() public {
