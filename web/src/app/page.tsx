@@ -16,6 +16,8 @@ import {
   useWarpgobbUsdPrice,
   useWarpletApproval,
 } from "@/hooks/useDutchAuction";
+import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
+import { useAuctionSellBid } from "@/hooks/useAuctionSellBid";
 import AbyssBackground from "@/components/AbyssBackground";
 import ParallaxBackground from "@/components/ParallaxBackground";
 import Particles from "@/components/Particles";
@@ -78,6 +80,10 @@ export default function Home() {
     h: number;
   } | null>(null);
   const [boughtFids, setBoughtFids] = useState<Set<number>>(new Set());
+  const [bidding, setBidding] = useState(false);
+  const [auctionBidError, setAuctionBidError] = useState<string | null>(null);
+  const auctionSell = useAuctionSellAuction();
+  const { approveAndBid, isPending: bidTxPending } = useAuctionSellBid();
   const dutchAuctionPriceQuery = useDutchAuctionPrice();
   const currentPrice = dutchAuctionPriceQuery.data;
   const { symbol: payoutSymbol, decimals: payoutDecimals } =
@@ -142,6 +148,32 @@ export default function Home() {
       setSelectedFid(null);
     }
   }, [selectedFid, pickerWarplets, setSelectedFid]);
+
+  const nowSecs = Math.floor(Date.now() / 1000);
+  const auctionLot = auctionSell.auction;
+  const auctionExpired =
+    !!auctionLot &&
+    !auctionLot.settled &&
+    nowSecs >= Number(auctionLot.endTime);
+  const auctionChainBidActive =
+    auctionSell.configured &&
+    !auctionSell.isError &&
+    auctionLot != null &&
+    auctionLot.tokenId > 0n;
+
+  const auctionBidDisabled =
+    !isConnected ||
+    bidTxPending ||
+    bidding ||
+    (auctionChainBidActive &&
+      (auctionSell.isPaused ||
+        auctionExpired ||
+        auctionSell.minNextBidAmount == null ||
+        !auctionSell.bidTokenAddress));
+
+  const geckoPoolUrl =
+    process.env.NEXT_PUBLIC_GECKOTERMINAL_POOL_URL ??
+    "https://www.geckoterminal.com/base/pools/0x0000000000000000000000000000000000000000";
 
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [isSelling, setIsSelling] = useState(false);
@@ -260,12 +292,51 @@ export default function Home() {
   ]);
 
   const handleBuy = useCallback(
-    (fid: number, rect: { x: number; y: number; w: number; h: number }) => {
+    async (
+      fid: number,
+      rect: { x: number; y: number; w: number; h: number },
+    ) => {
       if (buyingFid) return;
+
+      const a = auctionSell.auction;
+      const canSubmitOnChain =
+        auctionSell.configured &&
+        !auctionSell.isError &&
+        a != null &&
+        a.tokenId > 0n &&
+        !a.settled &&
+        !auctionSell.isPaused &&
+        Math.floor(Date.now() / 1000) < Number(a.endTime) &&
+        auctionSell.minNextBidAmount != null &&
+        auctionSell.bidTokenAddress != null;
+
+      if (canSubmitOnChain) {
+        setAuctionBidError(null);
+        setBidding(true);
+        try {
+          if (!publicClient) throw new Error("No RPC client");
+          const hash = await approveAndBid({
+            amount: auctionSell.minNextBidAmount!,
+            bidTokenAddress: auctionSell.bidTokenAddress!,
+          });
+          await publicClient.waitForTransactionReceipt({ hash });
+          await auctionSell.refetchAuction();
+          setBuyingFid(fid);
+          setBuyRect(rect);
+        } catch (err) {
+          const msg =
+            err instanceof Error ? err.message : "Failed to place bid";
+          setAuctionBidError(msg);
+        } finally {
+          setBidding(false);
+        }
+        return;
+      }
+
       setBuyingFid(fid);
       setBuyRect(rect);
     },
-    [buyingFid],
+    [buyingFid, auctionSell, publicClient, approveAndBid],
   );
 
   const handleBuyDone = useCallback(() => {
@@ -606,8 +677,13 @@ export default function Home() {
         <GobblerAuctionSection
           auctionBidPlacedFids={boughtFids}
           onBid={handleBuy}
-          bidDisabled={!isConnected}
+          bidDisabled={auctionBidDisabled}
         />
+        {auctionBidError && (
+          <p className="mt-4 max-w-xl mx-auto text-center text-xs text-error/90 break-all px-2">
+            {auctionBidError}
+          </p>
+        )}
 
         <footer className="mt-12 sm:mt-16 pb-8 text-center text-sm text-base-content/30">
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 mb-6">
@@ -628,7 +704,7 @@ export default function Home() {
               Streme
             </a>
             <a
-              href="https://www.geckoterminal.com/base/pools/0x0000000000000000000000000000000000000000"
+              href={geckoPoolUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-base-content/60 transition-colors"

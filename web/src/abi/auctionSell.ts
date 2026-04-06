@@ -43,4 +43,25 @@ export const auctionSellAbi = [
     inputs: [],
     outputs: [{ type: "address" }],
   },
+  {
+    type: "function",
+    name: "reservePrice",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "minBidIncrementPercentage",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint8" }],
+  },
+  {
+    type: "function",
+    name: "paused",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "bool" }],
+  },
 ] as const;

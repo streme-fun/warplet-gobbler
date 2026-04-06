@@ -17,6 +17,19 @@ export type AuctionSellLot = {
   settled: boolean;
 };
 
+/** Matches `AuctionSell._bid` min-bid rule (floor + increment %). */
+export function minBidForAuction(
+  currentHighBid: bigint,
+  reservePrice: bigint,
+  minBidIncrementPercentage: number,
+): bigint {
+  if (currentHighBid === 0n) return reservePrice;
+  return (
+    currentHighBid +
+    (currentHighBid * BigInt(minBidIncrementPercentage)) / 100n
+  );
+}
+
 /**
  * Reads AuctionSell when `NEXT_PUBLIC_AUCTION_SELL_ADDRESS` is set.
  * Full queue bump + ERC777 `send` path matches `feat/auction-linked-list-queue`; older ABIs fail reads → mocks in UI.
@@ -52,6 +65,27 @@ export function useAuctionSellAuction() {
       enabled: configured,
       refetchInterval: 60_000,
     },
+  });
+
+  const reserveQ = useReadContract({
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "reservePrice",
+    query: { enabled: configured },
+  });
+
+  const incrementPctQ = useReadContract({
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "minBidIncrementPercentage",
+    query: { enabled: configured },
+  });
+
+  const pausedQ = useReadContract({
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "paused",
+    query: { enabled: configured, refetchInterval: 15_000 },
   });
 
   const bidTokenAddr =
@@ -114,6 +148,18 @@ export function useAuctionSellAuction() {
     bumpFeeQ.data > 0n &&
     bidTokenAddr != null;
 
+  const minNextBidAmount = useMemo(() => {
+    if (!chainLot || chainLot.settled) return null;
+    if (reserveQ.data === undefined || incrementPctQ.data === undefined) {
+      return null;
+    }
+    return minBidForAuction(
+      chainLot.amount,
+      reserveQ.data,
+      Number(incrementPctQ.data),
+    );
+  }, [chainLot, reserveQ.data, incrementPctQ.data]);
+
   return {
     configured,
     auction: chainLot,
@@ -124,5 +170,10 @@ export function useAuctionSellAuction() {
     queueBumpFeeWei: bumpFeeQ.data,
     queueBumpReady,
     bidTokenAddress: bidTokenAddr,
+    decimals,
+    isPaused: pausedQ.data === true,
+    minNextBidAmount,
+    reservePrice: reserveQ.data,
+    refetchAuction: auctionQ.refetch,
   };
 }

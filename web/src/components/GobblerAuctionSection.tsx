@@ -39,7 +39,7 @@ export default function GobblerAuctionSection({
   onBid?: (
     fid: number,
     rect: { x: number; y: number; w: number; h: number },
-  ) => void;
+  ) => void | Promise<void>;
   bidDisabled?: boolean;
 }) {
   const { address: viewerAddress, isConnected } = useAccount();
