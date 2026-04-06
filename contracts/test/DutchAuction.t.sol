@@ -102,8 +102,6 @@ contract DutchAuctionTest is Test {
         OtherMock721 other = new OtherMock721();
         uint256 otherId = 7;
         other.mint(seller, otherId);
-        vm.prank(seller);
-        other.setApprovalForAll(address(auction), true);
 
         vm.prank(seller);
         vm.expectRevert(bytes("DutchAuction: only Warplets"));

@@ -45,9 +45,6 @@ export const GOBBLE_TRANSACTION_REVERTED_FRIENDLY =
 /** Readable message for simulate/send failures that include the on-chain revert reason. */
 export function formatGobbleSellTxError(e: unknown): string {
   const chain = errorMessageChain(e).toLowerCase();
-  if (chain.includes("user rejected") || /\b4001\b/.test(chain)) {
-    return "transaction cancelled, try again";
-  }
   if (chain.includes(GOBBLE_MIN_PRICE_REVERT)) {
     return GOBBLE_TRANSACTION_REVERTED_FRIENDLY;
   }
