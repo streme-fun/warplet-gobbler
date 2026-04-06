@@ -277,7 +277,7 @@ export default function GobblerAuctionSection({
           bidSymbol={bidSymbol}
           alreadyFirst={alreadyFirst}
           bumpLiveReady={bumpLiveReady}
-          bumpDisabled={!isConnected || bidDisabled}
+          bumpDisabled={!isConnected || Boolean(bidDisabled)}
           bumpHint={bumpError}
           onBump={handleQueueBump}
           isBumping={isBumping}
