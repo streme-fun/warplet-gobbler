@@ -267,6 +267,10 @@ export default function Home() {
     startSellAnimation,
   ]);
 
+  const handleBid = useCallback((fid: number) => {
+    setBoughtFids((prev) => new Set(prev).add(fid));
+  }, []);
+
   if (isMiniApp && !isLoaded) {
     return (
       <main className="min-h-screen flex items-center justify-center">
@@ -591,6 +595,7 @@ export default function Home() {
       >
         <GobblerAuctionSection
           auctionBidPlacedFids={boughtFids}
+          onBid={handleBid}
           bidDisabled={!isConnected}
         />
 

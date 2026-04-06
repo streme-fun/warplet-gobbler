@@ -36,10 +36,7 @@ export default function GobblerAuctionSection({
 }: {
   /** FIDs where the user completed the local bid animation (demo / optimistic). */
   auctionBidPlacedFids: Set<number>;
-  onBid?: (
-    fid: number,
-    rect: { x: number; y: number; w: number; h: number },
-  ) => void;
+  onBid?: (fid: number) => void;
   bidDisabled?: boolean;
 }) {
   const { address: viewerAddress, isConnected } = useAccount();
@@ -61,14 +58,10 @@ export default function GobblerAuctionSection({
   } = useAuctionSellAuction();
 
   const hasParsedLot =
-    auctionSellConfigured &&
-    !auctionReadError &&
-    chainLot != null;
+    auctionSellConfigured && !auctionReadError && chainLot != null;
 
   const liveAuction =
-    hasParsedLot &&
-    chainLot.tokenId > 0n &&
-    !chainLot.settled;
+    hasParsedLot && chainLot.tokenId > 0n && !chainLot.settled;
 
   const queueReadsEnabled = auctionSellConfigured && !auctionReadError;
   const { data: chainQueuedIds = [], refetch: refetchQueue } =
@@ -79,9 +72,7 @@ export default function GobblerAuctionSection({
   const { sendBumpTx, isPending: isBumping } = useAuctionQueueBump();
 
   const displayTokenId =
-    hasParsedLot && chainLot.tokenId > 0n
-      ? Number(chainLot.tokenId)
-      : live.fid;
+    hasParsedLot && chainLot.tokenId > 0n ? Number(chainLot.tokenId) : live.fid;
 
   const hasChainBid =
     liveAuction &&
@@ -104,9 +95,7 @@ export default function GobblerAuctionSection({
 
   const auctionSettled = hasParsedLot && chainLot.settled;
 
-  const countdownEndUnix = liveAuction
-    ? Number(chainLot.endTime)
-    : undefined;
+  const countdownEndUnix = liveAuction ? Number(chainLot.endTime) : undefined;
   const countdownDurationSecs = liveAuction ? undefined : live.endsSecs;
 
   const userCompletedLocalBid = auctionBidPlacedFids.has(displayTokenId);
@@ -118,8 +107,7 @@ export default function GobblerAuctionSection({
     isAddressEqual(chainLot.bidder, viewerAddress);
 
   const viewerIsLeadingBidder =
-    leadingOnChain ||
-    (userCompletedLocalBid && (!liveAuction || hasChainBid));
+    leadingOnChain || (userCompletedLocalBid && (!liveAuction || hasChainBid));
 
   /** After the demo bid animation (mock), show the viewer when connected; on-chain use lot bidder. */
   const displayTopBidder: Address | null =
@@ -159,9 +147,7 @@ export default function GobblerAuctionSection({
   const alreadyFirst = selectedQueueIdx === 0;
 
   const bumpLiveReady =
-    queueReadsEnabled &&
-    queueBumpReady &&
-    selectedQueueIdx > 0;
+    queueReadsEnabled && queueBumpReady && selectedQueueIdx > 0;
 
   useEffect(() => {
     if (selectedQueueFid == null) return;
@@ -171,9 +157,7 @@ export default function GobblerAuctionSection({
   }, [queuedRows, selectedQueueFid, setSelectedQueueFid]);
 
   const skipFeeHuman = humanSkipFee(
-    auctionSellConfigured && !auctionReadError
-      ? skipQueueFeeAmountStr
-      : null,
+    auctionSellConfigured && !auctionReadError ? skipQueueFeeAmountStr : null,
     MOCK_SKIP_QUEUE_FEE,
   );
 
@@ -213,8 +197,7 @@ export default function GobblerAuctionSection({
     sendBumpTx,
   ]);
 
-  const showBumpPanel =
-    selectedInQueueFid != null && selectedQueueIdx >= 0;
+  const showBumpPanel = selectedInQueueFid != null && selectedQueueIdx >= 0;
 
   return (
     <div className="w-full max-w-4xl rounded-2xl bg-base-200/40 border border-secondary/10 backdrop-blur-sm p-6 sm:p-10">
@@ -246,8 +229,12 @@ export default function GobblerAuctionSection({
       </h3>
       <p className="text-xs text-base-content/35 mb-4 max-w-xl">
         Tap a Warplet in the row below (not #2 in line — pick one further back),
-        then use <strong className="font-semibold text-base-content/55">Skip the line</strong>{" "}
-        to pay the bump fee (<code className="text-[10px]">send</code> + userData).
+        then use{" "}
+        <strong className="font-semibold text-base-content/55">
+          Skip the line
+        </strong>{" "}
+        to pay the bump fee (<code className="text-[10px]">send</code> +
+        userData).
       </p>
       <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
         {queuedRows.map((row) => (
@@ -257,9 +244,7 @@ export default function GobblerAuctionSection({
             placeInLine={row.place}
             isSelected={selectedInQueueFid === row.fid}
             onSelect={() =>
-              setSelectedQueueFid(
-                selectedQueueFid === row.fid ? null : row.fid,
-              )
+              setSelectedQueueFid(selectedQueueFid === row.fid ? null : row.fid)
             }
           />
         ))}
