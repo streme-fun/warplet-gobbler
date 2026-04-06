@@ -2,31 +2,42 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { sdk, type Context } from "@farcaster/miniapp-sdk";
-import { isMiniApp } from "@/lib/miniapp";
 
 export function useMiniApp() {
-  const [isLoaded, setIsLoaded] = useState(!isMiniApp);
+  const [isMiniApp, setIsMiniApp] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [context, setContext] = useState<Context.MiniAppContext | null>(null);
 
   useEffect(() => {
-    if (!isMiniApp) return;
+    let cancelled = false;
 
-    const init = async () => {
+    const run = async () => {
       try {
+        const inMiniApp = await sdk.isInMiniApp();
+        if (cancelled) return;
+        setIsMiniApp(inMiniApp);
+
+        if (!inMiniApp) {
+          setIsLoaded(true);
+          return;
+        }
+
         const ctx = await sdk.context;
+        if (cancelled) return;
         setContext(ctx);
         await sdk.actions.ready();
       } catch (e) {
         console.error("Failed to initialize mini app SDK:", e);
       } finally {
-        setIsLoaded(true);
+        if (!cancelled) setIsLoaded(true);
       }
     };
 
-    if (!isLoaded) {
-      init();
-    }
-  }, [isLoaded]);
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const close = useCallback(() => {
     sdk.actions.close();

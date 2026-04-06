@@ -5,7 +5,7 @@
 WarpletGobbler is a PunkStrategy-style flywheel for [Warplets](https://opensea.io/collection/the-warplets-farcaster) NFTs on Base, using Superfluid streaming. Three-part system:
 
 1. **DutchAuction ("The Gobbler")** — USDCx streams in via Superfluid; deposit a Warplet NFT to drain the pot
-2. **AuctionSell** — Gobbled Warplets auctioned for $STRAT tokens (stub, adapted from DegenDogs)
+2. **AuctionSell** — Gobbled Warplets auctioned for the bid token (`NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL`; stub, adapted from DegenDogs)
 3. **StratStaking** — Reuses existing streme.fun staking contract
 
 ## Monorepo Structure
@@ -91,6 +91,6 @@ Dynamic daisyUI classes like `bg-primary/20` are safelisted in `tailwind.config.
 
 ### Environment Variables
 
-- `web/.env.local`: `NEXT_PUBLIC_WC_PROJECT_ID` (WalletConnect), `NEXT_PUBLIC_BASE_RPC_URL` (optional)
+- `web/.env.local`: `NEXT_PUBLIC_WC_PROJECT_ID` (WalletConnect), `NEXT_PUBLIC_BASE_RPC_URL` (optional), `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL` / `NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL` (UI labels)
 - `web/.env.local` (gobbled image pipeline): `GEMINI_API_KEY`, `warpletgobbler_READ_WRITE_TOKEN` (Vercel Blob), `PINATA_JWT`, `PINATA_GATEWAY_URL`
 - `contracts/.env`: `BASE_RPC_URL`, `BASESCAN_API_KEY`, `DEPLOYER_PRIVATE_KEY`

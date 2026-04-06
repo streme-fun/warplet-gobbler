@@ -5,7 +5,7 @@ A PunkStrategy-style flywheel for [Warplets](https://opensea.io/collection/the-w
 ## How It Works
 
 ```
-LP Fees (WETH) ──▸ FeeHandler ──swap──▸ $STRAT (SuperToken)
+LP Fees (WETH) ──▸ FeeHandler ──swap──▸ $WARPGOBB (SuperToken; symbols via env)
                                             │
                                      Superfluid stream
                                             │
@@ -16,25 +16,25 @@ LP Fees (WETH) ──▸ FeeHandler ──swap──▸ $STRAT (SuperToken)
                                             │
                                             ▼
                                      Auction Sell
-                            (highest $STRAT bid wins Warplet)
+                            (highest bid in auction token wins Warplet)
                                             │
-                                $STRAT proceeds ──▸ Staking
+                                Auction proceeds ──▸ Staking
 ```
 
-1. **FeeHandler** — Collects WETH rewards from the Uniswap v4 LP locker, swaps them to $STRAT (a Superfluid SuperToken) via `StremeZapUniversal`, and opens a continuous Superfluid stream to the Gobbler. Admins control the auction target and stream duration; a permissionless `rebalanceFlowRate()` lets anyone adjust the stream rate based on current balance.
+1. **FeeHandler** — Collects WETH rewards from the Uniswap v4 LP locker, swaps them to the streaming SuperToken (e.g. $WARPGOBB; `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL`) via `StremeZapUniversal`, and opens a continuous Superfluid stream to the Gobbler. Admins control the auction target and stream duration; a permissionless `rebalanceFlowRate()` lets anyone adjust the stream rate based on current balance.
 
-2. **The Gobbler** (`DutchAuction`) — Receives the $STRAT stream. The pot grows over time. Anyone can deposit a Warplet NFT and drain the full balance. Arbitrageurs buy Warplets on OpenSea when the pot exceeds floor price, deposit them, and profit the difference. Gobbled NFTs are sent to the `nftReserve` address.
+2. **The Gobbler** (`DutchAuction`) — Receives the Superfluid stream. The pot grows over time. Anyone can deposit a Warplet NFT and drain the full balance. Arbitrageurs buy Warplets on OpenSea when the pot exceeds floor price, deposit them, and profit the difference. Gobbled NFTs are sent to the `nftReserve` address.
 
-3. **Auction Sell** — Gobbled Warplets are auctioned to the highest bidder, denominated in $STRAT tokens. *(stub — not yet implemented)*
+3. **Auction Sell** — Gobbled Warplets are auctioned to the highest bidder, denominated in the auction bid token (`NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL`, defaulting to the payment symbol). *(stub — not yet implemented)*
 
-4. **Staking** — $STRAT from auctions flows to stakers, closing the flywheel. *(reuses existing streme.fun staking contract)*
+4. **Staking** — Auction proceeds flow to stakers, closing the flywheel. *(reuses existing streme.fun staking contract)*
 
 ## Contracts
 
 | Contract | Status | Description |
 |---|---|---|
-| `FeeHandler.sol` | **functional** | Claims LP fees (WETH), swaps to $STRAT via StremeZapUniversal, streams to auction via Superfluid CFA. Role-based access (`DEFAULT_ADMIN_ROLE`, `REBALANCER_ROLE`). |
-| `DutchAuction.sol` | **functional** | Receives $STRAT stream; deposit a Warplet to drain the pot. |
+| `FeeHandler.sol` | **functional** | Claims LP fees (WETH), swaps to the streaming token via StremeZapUniversal, streams to auction via Superfluid CFA. Role-based access (`DEFAULT_ADMIN_ROLE`, `REBALANCER_ROLE`). |
+| `DutchAuction.sol` | **functional** | Receives the token stream; deposit a Warplet to drain the pot. |
 | `AuctionSell.sol` | stub | All functions revert "not implemented". |
 | `StratStaking.sol` | placeholder | Reuses existing streme.fun contract. |
 
@@ -102,7 +102,7 @@ cd contracts && forge test
 - [ ] What happens if auction gets no bids?
 - [x] ~~Superfluid CFA vs GDA for treasury stream~~ → CFA (FeeHandler uses `ISuperToken.flow`)
 - [ ] Hook whitelisting timeline (launching without hook initially)
-- [ ] $STRAT initial supply and distribution
+- [ ] Stream / auction token initial supply and distribution
 - [ ] Streme Staking config (supply? lock? duration?)
-- [ ] Should $STRAT be used to _extend_ Staking rewards or _boost_ them? ( add to the pile or 2nd stream to the pool, respectively)
+- [ ] Should auction proceeds be used to _extend_ Staking rewards or _boost_ them? ( add to the pile or 2nd stream to the pool, respectively)
 - [ ] FeeHandler: test with live v4 locker + real StremeZapUniversal on fork
