@@ -20,6 +20,7 @@ import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
 import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
 import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
 import { CONTRACTS } from "@/lib/contracts";
+import { formatUserFacingTxError } from "@/lib/format-tx-error";
 import {
   MOCK_AUCTIONS,
   MOCK_FALLBACK_TOP_BID_AMOUNT,
@@ -253,7 +254,7 @@ export default function GobblerAuctionSection({
     try {
       await startAuction(head);
     } catch (e) {
-      setStartError(e instanceof Error ? e.message : "Transaction failed");
+      setStartError(formatUserFacingTxError(e));
     }
   }, [chainQueuedIds, startAuction]);
 
@@ -348,7 +349,7 @@ export default function GobblerAuctionSection({
       }
       await refetchQueue();
     } catch (e) {
-      setBumpError(e instanceof Error ? e.message : "Transaction failed");
+      setBumpError(formatUserFacingTxError(e));
     }
   }, [
     bidTokenAddress,
@@ -369,7 +370,7 @@ export default function GobblerAuctionSection({
     try {
       await placeBid(amountWei);
     } catch (e) {
-      setChainBidError(e instanceof Error ? e.message : "Transaction failed");
+      setChainBidError(formatUserFacingTxError(e));
     }
   }, [placeBid]);
 
@@ -378,7 +379,7 @@ export default function GobblerAuctionSection({
     try {
       await settleWhenPaused();
     } catch (e) {
-      setSettleError(e instanceof Error ? e.message : "Transaction failed");
+      setSettleError(formatUserFacingTxError(e));
     }
   }, [settleWhenPaused]);
 
@@ -387,7 +388,7 @@ export default function GobblerAuctionSection({
     try {
       await settleAndStartNext();
     } catch (e) {
-      setSettleError(e instanceof Error ? e.message : "Transaction failed");
+      setSettleError(formatUserFacingTxError(e));
     }
   }, [settleAndStartNext]);
 
@@ -397,7 +398,7 @@ export default function GobblerAuctionSection({
       await extendAuction();
       setExtendSuccessTick((n) => n + 1);
     } catch (e) {
-      setSettleError(e instanceof Error ? e.message : "Transaction failed");
+      setSettleError(formatUserFacingTxError(e));
     }
   }, [extendAuction]);
 
@@ -410,7 +411,7 @@ export default function GobblerAuctionSection({
 
   const postAuctionNoActionHint =
     showExpiredPostAuction && !hasChainBid && auctionPaused
-      ? "This round had no bids and the house is paused. After the owner unpauses, anyone can extend the listing to run another bidding window."
+      ? "No bids — house paused. Unpause, then extend."
       : null;
 
   const viewerIsHighBidderOnExpiredLot =
@@ -423,15 +424,15 @@ export default function GobblerAuctionSection({
   const expiredLotCaption = showExpiredPostAuction
     ? hasChainBid && !auctionPaused
       ? viewerIsHighBidderOnExpiredLot
-        ? `You won this auction. Time is up — finalize below to claim Warplet #${displayTokenId} into your wallet. If more Warplets are queued, the next sale starts automatically; if the queue is empty, this transaction still completes your claim—no new auction is started.`
-        : "Bidding is closed. Anyone can finalize the sale. If more Warplets are queued, the next auction starts automatically; if the queue is empty, only settlement runs—the Warplet still goes to the high bidder."
+        ? "You won — finalize to claim."
+        : "Bidding closed. Anyone can finalize."
       : hasChainBid && auctionPaused
         ? viewerIsHighBidderOnExpiredLot
-          ? `You won this auction. Finalize while paused to claim Warplet #${displayTokenId} into your wallet.`
-          : "Bidding is closed with a winning bid. Finalize while the house is paused."
+          ? "You won — finalize while paused."
+          : "Bidding closed — anyone can finalize."
         : !hasChainBid && !auctionPaused
-          ? "No bids before time ran out. Extend the listing to open another window for bids."
-          : "No bids — the house is paused. Unpause to extend or continue."
+          ? "No bids — extend to reopen."
+          : "No bids — unpause to extend."
     : null;
 
   /** Do not fold in `bidDisabled` — the page uses that to gate *bidding* (e.g. when expired), which would wrongly grey out extend / finalize. */
@@ -444,9 +445,6 @@ export default function GobblerAuctionSection({
     showExpiredPostAuction && hasChainBid && auctionPaused
       ? {
           label: "Finalize sale",
-          hint: viewerIsHighBidderOnExpiredLot
-            ? "Completes the auction and transfers your Warplet to your wallet while the house is paused."
-            : "Completes the auction and transfers the Warplet to the high bidder.",
           onSubmit: handleSettlePaused,
           loading: settlePending,
           disabled: settlementDisabled,
@@ -456,9 +454,6 @@ export default function GobblerAuctionSection({
       : showExpiredPostAuction && hasChainBid && !auctionPaused
         ? {
             label: "Finalize sale",
-            hint: viewerIsHighBidderOnExpiredLot
-              ? `Claims Warplet #${displayTokenId} to your wallet. If more Warplets are queued, the next auction opens afterward; if the queue is empty, this still finishes your claim—nothing else starts.`
-              : "Anyone can submit this. Transfers the Warplet to the winner and pays proceeds. If the queue has more Warplets, the next auction opens; otherwise only this settlement runs.",
             onSubmit: handleSettleAndNext,
             loading: settlePending,
             disabled: settlementDisabled,
@@ -468,7 +463,7 @@ export default function GobblerAuctionSection({
         : showExpiredPostAuction && !hasChainBid && !auctionPaused
           ? {
               label: "Extend listing time",
-              hint: "Adds another full auction length so buyers can bid again. No new bids were received this round.",
+              hint: "Adds another full bidding window.",
               onSubmit: handleExtendAuction,
               loading: settlePending,
               disabled: settlementDisabled,

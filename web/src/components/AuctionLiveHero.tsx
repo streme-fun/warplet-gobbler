@@ -312,11 +312,7 @@ export default function AuctionLiveHero({
             className="w-full flex flex-col gap-3 sm:gap-4 lg:min-h-0 lg:min-w-0"
             style={
               isLgViewport && artFrameHeightPx != null
-                ? {
-                    height: artFrameHeightPx,
-                    minHeight: artFrameHeightPx,
-                    maxHeight: artFrameHeightPx,
-                  }
+                ? { minHeight: artFrameHeightPx }
                 : undefined
             }
           >
@@ -374,9 +370,9 @@ export default function AuctionLiveHero({
 
             <div
               ref={renewFlashRef}
-              className="w-full flex-1 min-h-0 flex flex-col rounded-xl transition-[box-shadow] duration-500"
+              className="w-full flex-1 flex flex-col rounded-xl transition-[box-shadow] duration-500 min-h-0"
             >
-              <div className="w-full flex-1 min-h-0 overflow-y-auto rounded-xl bg-base-100/30 border border-base-content/10 px-4 py-3 sm:py-4 flex flex-col justify-center space-y-3 transition-colors duration-500">
+              <div className="w-full flex-1 rounded-xl bg-base-100/30 border border-base-content/10 px-4 py-3 sm:py-4 flex flex-col justify-center space-y-3 transition-colors duration-500">
             <div>
               <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
                 Top bid
