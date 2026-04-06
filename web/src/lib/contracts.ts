@@ -12,7 +12,10 @@ export const CONTRACTS = {
   dutchAuction: envAddress(process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS),
   auctionSell: envAddress(process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS),
   staking: envAddress(process.env.NEXT_PUBLIC_STAKING_ADDRESS),
-  stratToken: envAddress(process.env.NEXT_PUBLIC_STRAT_TOKEN_ADDRESS),
+  stratToken: envAddress(
+    process.env.NEXT_PUBLIC_STAKING_TOKEN_ADDRESS ??
+      process.env.NEXT_PUBLIC_STRAT_TOKEN_ADDRESS,
+  ),
   warpgobbToken: envAddress(process.env.NEXT_PUBLIC_WARPGOBB_TOKEN_ADDRESS),
   wethToken: envAddress(process.env.NEXT_PUBLIC_WETH_TOKEN_ADDRESS),
   uniswapV4StateView: envAddress(

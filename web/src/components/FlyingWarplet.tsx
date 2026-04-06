@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { warpletImageSrc } from "@/lib/warplet-image-src";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -50,7 +51,7 @@ export default function FlyingWarplet({
       style={{ opacity: 0 }}
     >
       <img
-        src={`/warplets/warplet-${fid}.png`}
+        src={warpletImageSrc(fid)}
         alt=""
         className="w-full h-full rounded-2xl"
         draggable={false}

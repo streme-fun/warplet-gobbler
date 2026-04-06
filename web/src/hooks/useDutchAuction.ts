@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { CONTRACTS, UNISWAP_V4_POOL_IDS } from "@/lib/contracts";
 import { dutchAuctionAbi } from "@/abi/dutchAuction";
@@ -18,9 +19,53 @@ export function useDutchAuctionPrice() {
     address: CONTRACTS.dutchAuction,
     functionName: "currentPrice",
     query: {
-      refetchInterval: 3000,
+      refetchInterval: 1_000,
     },
   });
+}
+
+/**
+ * Human-readable payout + estimated tokens/sec from consecutive balance reads.
+ * Pass `dataUpdatedAt` from the same `useDutchAuctionPrice()` result so each poll
+ * updates the sample even when the bigint value is unchanged (needed for rate = 0).
+ */
+export function useDutchAuctionPayoutStream(
+  priceWei: bigint | undefined,
+  tokenDecimals: number,
+  dataUpdatedAt: number,
+) {
+  const prevRef = useRef<{ v: bigint; updatedAt: number } | null>(null);
+  const rateRef = useRef(0);
+  const [out, setOut] = useState({ start: 0, perSecond: 0 });
+
+  useEffect(() => {
+    if (priceWei === undefined) {
+      prevRef.current = null;
+      rateRef.current = 0;
+      setOut({ start: 0, perSecond: 0 });
+      return;
+    }
+    if (!dataUpdatedAt) return;
+
+    const human = Number(formatUnits(priceWei, tokenDecimals));
+    const prev = prevRef.current;
+
+    if (prev && dataUpdatedAt > prev.updatedAt) {
+      const dtSec = (dataUpdatedAt - prev.updatedAt) / 1000;
+      const delta = priceWei - prev.v;
+      if (delta <= BigInt(0)) {
+        rateRef.current = 0;
+      } else if (dtSec >= 0.12) {
+        const deltaHuman = Number(formatUnits(delta, tokenDecimals));
+        rateRef.current = Math.max(0, deltaHuman / dtSec);
+      }
+    }
+
+    prevRef.current = { v: priceWei, updatedAt: dataUpdatedAt };
+    setOut({ start: human, perSecond: rateRef.current });
+  }, [priceWei, tokenDecimals, dataUpdatedAt]);
+
+  return out;
 }
 
 export function useDutchAuctionPayoutToken() {
