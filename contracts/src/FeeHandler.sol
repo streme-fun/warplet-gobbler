@@ -11,7 +11,8 @@ interface ILPFactoryv4 {
     function claimRewards(address token) external;
 }
 
-/// @dev Streme `StremeZapUniversal.swapTokenForStreme` — v4 single-hop swap into `stremeCoin`.
+/// @dev Streme `StremeZapUniversal.zap` — v4 single-hop swap into `stremeCoin`.
+///      Pass `address(0)` for `stakingContract` to receive swapped tokens on `msg.sender` (no `stake` call).
 interface IStremeZapUniversal {
     function zap(address stremeCoin, uint256 amountIn, uint256 amountOutMin, address stakingContract)
         external
@@ -162,7 +163,7 @@ contract FeeHandler is AccessControl {
 
     function _swapWethToToken(uint256 wethBefore, uint256 tokenBefore, uint256 minTokenOut) internal {
         if (wethBefore > type(uint128).max) revert AmountInTooLarge();
-        stremeZap.zap{value: 0}(address(stremeToken), uint256(wethBefore), minTokenOut, address(this));
+        stremeZap.zap{value: 0}(address(stremeToken), uint256(wethBefore), minTokenOut, address(0));
         uint256 wethIn = wethBefore - weth.balanceOf(address(this));
         uint256 tokenOut = stremeToken.balanceOf(address(this)) - tokenBefore;
         emit WethSwapped(address(stremeZap), wethIn, tokenOut);
