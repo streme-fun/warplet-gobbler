@@ -18,9 +18,9 @@ import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 ///      of `AuctionSell` settlement (after `settled` is written) and matches common auction-house practice.
 contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, IGobbledWarplets {
     uint256 public constant TOKEN_ID_DECIMAL_STRIDE = 100_000_000;
-    /// @dev Must match {TOKEN_ID_DECIMAL_STRIDE}: decode uses `% stride`, so `warpletId` must be `< stride`.
-    ///      Intentionally looser than the historical 100k cap — Warplet ids are sparse on-chain and this avoids false
-    ///      rejects; confirm max id with `web/scripts/scan-warplet-token-ids.mjs` before relying on headroom.
+    /// @dev Must match {TOKEN_ID_DECIMAL_STRIDE}: decode uses `% stride`, so `warpletId` must be `< stride`
+    ///      (same as the remainder of `encode(wid, idx)`). Intentionally looser than the historical 100k cap —
+    ///      Warplet ids are sparse on-chain; confirm max id with `web/scripts/scan-warplet-token-ids.mjs`.
     uint256 public constant MAX_WARPLET_ID_EXCLUSIVE = TOKEN_ID_DECIMAL_STRIDE;
 
     address public minter;

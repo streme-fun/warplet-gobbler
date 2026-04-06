@@ -16,11 +16,14 @@ import {
   useWarpgobbUsdPrice,
   useWarpletApproval,
 } from "@/hooks/useDutchAuction";
+import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
+import { useAuctionSell777Bid } from "@/hooks/useAuctionSell777Bid";
 import AbyssBackground from "@/components/AbyssBackground";
 import ParallaxBackground from "@/components/ParallaxBackground";
 import Particles from "@/components/Particles";
 import GobbleOverlay from "@/components/GobbleOverlay";
 import GobblePeek from "@/components/GobblePeek";
+import BuyOverlay from "@/components/BuyOverlay";
 import GobblerAuctionSection from "@/components/GobblerAuctionSection";
 import FlyingWarplet from "@/components/FlyingWarplet";
 import StreamingNumber from "@/components/StreamingNumber";
@@ -68,7 +71,19 @@ export default function Home() {
     w: number;
     h: number;
   } | null>(null);
+  // Buy overlay state
+  const [buyingFid, setBuyingFid] = useState<number | null>(null);
+  const [buyRect, setBuyRect] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
   const [boughtFids, setBoughtFids] = useState<Set<number>>(new Set());
+  const [bidding, setBidding] = useState(false);
+  const [auctionBidError, setAuctionBidError] = useState<string | null>(null);
+  const auctionSell = useAuctionSellAuction();
+  const { approveAndBid, isPending: bidTxPending } = useAuctionSell777Bid();
   const dutchAuctionPriceQuery = useDutchAuctionPrice();
   const currentPrice = dutchAuctionPriceQuery.data;
   const { symbol: payoutSymbol, decimals: payoutDecimals } =
@@ -134,6 +149,32 @@ export default function Home() {
     }
   }, [selectedFid, pickerWarplets, setSelectedFid]);
 
+  const nowSecs = Math.floor(Date.now() / 1000);
+  const auctionLot = auctionSell.auction;
+  const auctionExpired =
+    !!auctionLot &&
+    !auctionLot.settled &&
+    nowSecs >= Number(auctionLot.endTime);
+  const auctionChainBidActive =
+    auctionSell.configured &&
+    !auctionSell.isError &&
+    auctionLot != null &&
+    auctionLot.tokenId > 0n;
+
+  const auctionBidDisabled =
+    !isConnected ||
+    bidTxPending ||
+    bidding ||
+    (auctionChainBidActive &&
+      (auctionSell.isPaused ||
+        auctionExpired ||
+        auctionSell.minNextBidAmount == null ||
+        !auctionSell.bidTokenAddress));
+
+  const geckoPoolUrl =
+    process.env.NEXT_PUBLIC_GECKOTERMINAL_POOL_URL ??
+    "https://www.geckoterminal.com/base/pools/0x0000000000000000000000000000000000000000";
+
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [isSelling, setIsSelling] = useState(false);
   const [sellError, setSellError] = useState<string | null>(null);
@@ -189,13 +230,7 @@ export default function Home() {
   }, [selectedFid, gobbling, flyingFid]);
 
   const handleSell = useCallback(async () => {
-    if (
-      !selectedFid ||
-      !isConnected ||
-      !publicClient ||
-      isSelling ||
-      isWriting
-    ) {
+    if (!selectedFid || !isConnected || !publicClient || isSelling || isWriting) {
       return;
     }
 
@@ -228,25 +263,14 @@ export default function Home() {
       const gobbleHash = await gobbleWarplet(selectedFid, minPrice);
       await publicClient.waitForTransactionReceipt({ hash: gobbleHash });
 
-      // Fire-and-forget gobbled image generation
-      fetch("/api/gobbled-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tokenId: selectedFid }),
-      }).catch(console.error);
-
       setChestPayout({ tokens: chestTokens, usd: chestUsd });
       if (!startSellAnimation()) {
         setChestPayout(null);
-        setSellError(
-          "Could not start reveal animation — scroll to your Warplet and try again.",
-        );
+        setSellError("Could not start reveal animation — scroll to your Warplet and try again.");
       }
     } catch (err) {
       const msg =
-        err instanceof Error
-          ? err.message
-          : "Failed to submit sell transaction";
+        err instanceof Error ? err.message : "Failed to submit sell transaction";
       setSellError(msg);
     } finally {
       setIsSelling(false);
@@ -267,9 +291,61 @@ export default function Home() {
     startSellAnimation,
   ]);
 
-  const handleBid = useCallback((fid: number) => {
-    setBoughtFids((prev) => new Set(prev).add(fid));
-  }, []);
+  const handleBuy = useCallback(
+    async (
+      fid: number,
+      rect: { x: number; y: number; w: number; h: number },
+    ) => {
+      if (buyingFid) return;
+
+      const a = auctionSell.auction;
+      const canSubmitOnChain =
+        auctionSell.configured &&
+        !auctionSell.isError &&
+        a != null &&
+        a.tokenId > 0n &&
+        !a.settled &&
+        !auctionSell.isPaused &&
+        Math.floor(Date.now() / 1000) < Number(a.endTime) &&
+        auctionSell.minNextBidAmount != null &&
+        auctionSell.bidTokenAddress != null;
+
+      if (canSubmitOnChain) {
+        setAuctionBidError(null);
+        setBidding(true);
+        try {
+          if (!publicClient) throw new Error("No RPC client");
+          const hash = await approveAndBid({
+            amount: auctionSell.minNextBidAmount!,
+            bidTokenAddress: auctionSell.bidTokenAddress!,
+          });
+          await publicClient.waitForTransactionReceipt({ hash });
+          await auctionSell.refetchAuction();
+          setBuyingFid(fid);
+          setBuyRect(rect);
+        } catch (err) {
+          const msg =
+            err instanceof Error ? err.message : "Failed to place bid";
+          setAuctionBidError(msg);
+        } finally {
+          setBidding(false);
+        }
+        return;
+      }
+
+      setBuyingFid(fid);
+      setBuyRect(rect);
+    },
+    [buyingFid, auctionSell, publicClient, approveAndBid],
+  );
+
+  const handleBuyDone = useCallback(() => {
+    if (buyingFid) {
+      setBoughtFids((prev) => new Set(prev).add(buyingFid));
+    }
+    setBuyingFid(null);
+    setBuyRect(null);
+  }, [buyingFid]);
 
   if (isMiniApp && !isLoaded) {
     return (
@@ -281,6 +357,15 @@ export default function Home() {
 
   return (
     <main className="min-h-screen relative overflow-hidden noise-overlay flex flex-col">
+      {/* Buy overlay — Silksong Void combat sequence */}
+      {buyingFid && buyRect && (
+        <BuyOverlay
+          fid={buyingFid}
+          startRect={buyRect}
+          onDone={handleBuyDone}
+        />
+      )}
+
       {/* Gobble overlay — canvas jaws on top of everything */}
       {gobbling && (
         <GobbleOverlay
@@ -384,9 +469,7 @@ export default function Home() {
                 smartHideDecimalsIfIntegerDigitsGt={5}
               />
               <span className="text-base font-normal text-base-content/40 ml-2">
-                {payoutSymbol?.startsWith("$")
-                  ? payoutSymbol
-                  : `$${payoutSymbol}`}
+                {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/40 mt-1">
@@ -409,7 +492,9 @@ export default function Home() {
                   ~$
                   <StreamingNumber
                     start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
-                    perSecond={payoutStream.perSecond * (warpgobbPriceUsd ?? 0)}
+                    perSecond={
+                      payoutStream.perSecond * (warpgobbPriceUsd ?? 0)
+                    }
                     decimals={2}
                     truncateFractionDigits
                     className="inline font-mono"
@@ -477,14 +562,16 @@ export default function Home() {
                 id="warplet-scroll"
                 className="flex gap-2 overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
               >
-                {warpletsConfigured && isConnected && ownedWarpletsError && (
-                  <p className="text-xs text-error/80 px-1">
-                    Couldn&apos;t load Warplets from the chain. Check
-                    NEXT_PUBLIC_WARPLETS_ADDRESS and that the contract supports{" "}
-                    <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
-                    (ERC721Enumerable).
-                  </p>
-                )}
+                {warpletsConfigured &&
+                  isConnected &&
+                  ownedWarpletsError && (
+                    <p className="text-xs text-error/80 px-1">
+                      Couldn&apos;t load Warplets from the chain. Check
+                      NEXT_PUBLIC_WARPLETS_ADDRESS and that the contract supports{" "}
+                      <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
+                      (ERC721Enumerable).
+                    </p>
+                  )}
                 {warpletsConfigured &&
                   isConnected &&
                   !ownedWarpletsLoading &&
@@ -533,11 +620,7 @@ export default function Home() {
                   : "border border-primary/30 text-primary/50 hover:border-primary/50 hover:text-primary/70"
               }`}
               disabled={
-                !!flyingFid ||
-                !selectedFid ||
-                !isConnected ||
-                isSelling ||
-                isWriting
+                !!flyingFid || !selectedFid || !isConnected || isSelling || isWriting
               }
               onClick={selectedFid ? handleSell : undefined}
             >
@@ -550,9 +633,7 @@ export default function Home() {
                     : "Select a Warplet"}
             </button>
             {sellError && (
-              <p className="mt-2 text-xs text-error/90 break-all">
-                {sellError}
-              </p>
+              <p className="mt-2 text-xs text-error/90 break-all">{sellError}</p>
             )}
           </div>
         </section>
@@ -595,9 +676,14 @@ export default function Home() {
       >
         <GobblerAuctionSection
           auctionBidPlacedFids={boughtFids}
-          onBid={handleBid}
-          bidDisabled={!isConnected}
+          onBid={handleBuy}
+          bidDisabled={auctionBidDisabled}
         />
+        {auctionBidError && (
+          <p className="mt-4 max-w-xl mx-auto text-center text-xs text-error/90 break-all px-2">
+            {auctionBidError}
+          </p>
+        )}
 
         <footer className="mt-12 sm:mt-16 pb-8 text-center text-sm text-base-content/30">
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 mb-6">
@@ -618,7 +704,7 @@ export default function Home() {
               Streme
             </a>
             <a
-              href="https://www.geckoterminal.com/base/pools/0x0000000000000000000000000000000000000000"
+              href={geckoPoolUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-base-content/60 transition-colors"

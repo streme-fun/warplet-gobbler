@@ -5,12 +5,22 @@ import { isAddressEqual, zeroAddress } from "viem";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import AuctionLiveHero from "./AuctionLiveHero";
+import LastAuctionWinnerBanner, {
+  getWinnerFingerprint,
+  readDismissedWinnerFp,
+  writeDismissedWinnerFp,
+} from "./LastAuctionWinnerBanner";
 import AuctionQueueCard from "./AuctionQueueCard";
 import AuctionQueueBumpPanel from "./AuctionQueueBumpPanel";
 import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
+import { useAuctionSellBid } from "@/hooks/useAuctionSellBid";
+import { useAuctionSellSettleActions } from "@/hooks/useAuctionSellSettle";
+import { useAuctionSellStartAuction } from "@/hooks/useAuctionSellStartAuction";
 import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
 import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
+import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
 import { CONTRACTS } from "@/lib/contracts";
+import { formatUserFacingTxError } from "@/lib/format-tx-error";
 import {
   MOCK_AUCTIONS,
   MOCK_FALLBACK_TOP_BID_AMOUNT,
@@ -20,10 +30,6 @@ import {
 
 function humanSkipFee(amountStr: string | null, mockNumber: number): string {
   if (amountStr != null) {
-    const n = Number.parseFloat(amountStr);
-    if (Number.isFinite(n)) {
-      return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-    }
     return amountStr;
   }
   return mockNumber.toLocaleString(undefined, { maximumFractionDigits: 6 });
@@ -36,7 +42,10 @@ export default function GobblerAuctionSection({
 }: {
   /** FIDs where the user completed the local bid animation (demo / optimistic). */
   auctionBidPlacedFids: Set<number>;
-  onBid?: (fid: number) => void;
+  onBid?: (
+    fid: number,
+    rect: { x: number; y: number; w: number; h: number },
+  ) => void;
   bidDisabled?: boolean;
 }) {
   const { address: viewerAddress, isConnected } = useAccount();
@@ -44,10 +53,27 @@ export default function GobblerAuctionSection({
   const [live, ...queued] = MOCK_AUCTIONS;
   const [selectedQueueFid, setSelectedQueueFid] = useState<number | null>(null);
   const [bumpError, setBumpError] = useState<string | null>(null);
+  const [chainBidError, setChainBidError] = useState<string | null>(null);
+  const [settleError, setSettleError] = useState<string | null>(null);
+  const [extendSuccessTick, setExtendSuccessTick] = useState(0);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [dismissedWinnerFp, setDismissedWinnerFp] = useState<string | null>(
+    () => (typeof window !== "undefined" ? readDismissedWinnerFp() : null),
+  );
+  const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    const id = setInterval(
+      () => setNowUnix(Math.floor(Date.now() / 1000)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, []);
 
   const {
     configured: auctionSellConfigured,
     auction: chainLot,
+    bidDecimals,
     formatBidAmount,
     bidSymbol,
     isError: auctionReadError,
@@ -55,13 +81,67 @@ export default function GobblerAuctionSection({
     queueBumpFeeWei,
     queueBumpReady,
     bidTokenAddress,
+    auctionPaused,
+    refetchAuction,
   } = useAuctionSellAuction();
 
+  const { priceUsd: warpgobbSpotUsd } = useWarpgobbUsdPrice();
+
+  const bidTokenPriceUsd = useMemo(() => {
+    if (
+      bidTokenAddress == null ||
+      isAddressEqual(bidTokenAddress, zeroAddress)
+    ) {
+      return null;
+    }
+    if (
+      bidTokenAddress.toLowerCase() !== CONTRACTS.warpgobbToken.toLowerCase()
+    ) {
+      return null;
+    }
+    return warpgobbSpotUsd;
+  }, [bidTokenAddress, warpgobbSpotUsd]);
+
+  const onChainMode = auctionSellConfigured;
+
   const hasParsedLot =
-    auctionSellConfigured && !auctionReadError && chainLot != null;
+    auctionSellConfigured &&
+    !auctionReadError &&
+    chainLot != null;
 
   const liveAuction =
-    hasParsedLot && chainLot.tokenId > 0n && !chainLot.settled;
+    hasParsedLot &&
+    chainLot.tokenId > 0n &&
+    !chainLot.settled;
+
+  const idleNoChainAuction =
+    hasParsedLot &&
+    chainLot.startTime === 0n &&
+    !chainLot.settled;
+
+  /** Must use bigint vs chain time — mock countdown must not be the only signal of expiry. */
+  const auctionExpired =
+    liveAuction &&
+    chainLot != null &&
+    BigInt(nowUnix) >= chainLot.endTime;
+
+  const chainBidActive =
+    liveAuction && !auctionPaused && !auctionExpired && onChainMode;
+
+  const {
+    minBidWei,
+    minBidHuman,
+    placeBid,
+    parseHumanToWei,
+    isBidding,
+    rulesLoading,
+  } = useAuctionSellBid({
+    enabled: chainBidActive,
+    lot: chainLot,
+    bidTokenAddress,
+    bidDecimals,
+    refetchAuction,
+  });
 
   const queueReadsEnabled = auctionSellConfigured && !auctionReadError;
   const { data: chainQueuedIds = [], refetch: refetchQueue } =
@@ -69,51 +149,132 @@ export default function GobblerAuctionSection({
       enabled: queueReadsEnabled,
     });
 
+  const {
+    settleWhenPaused,
+    settleAndStartNext,
+    extendAuction,
+    isPending: settlePending,
+  } = useAuctionSellSettleActions({
+    refetchAuction,
+    refetchQueue,
+  });
+
+  const { startAuction, isPending: startAuctionPending } =
+    useAuctionSellStartAuction({
+      refetchAuction,
+      refetchQueue,
+    });
+
   const { sendBumpTx, isPending: isBumping } = useAuctionQueueBump();
 
   const displayTokenId =
-    hasParsedLot && chainLot.tokenId > 0n ? Number(chainLot.tokenId) : live.fid;
+    idleNoChainAuction
+      ? 0
+      : hasParsedLot && chainLot.tokenId > 0n
+        ? Number(chainLot.tokenId)
+        : live.fid;
 
   const hasChainBid =
     liveAuction &&
     chainLot.amount > 0n &&
     !isAddressEqual(chainLot.bidder, zeroAddress);
 
-  const topBidAmountStr = liveAuction
-    ? hasChainBid
-      ? formatBidAmount(chainLot.amount)
-      : "0"
-    : MOCK_FALLBACK_TOP_BID_AMOUNT;
+  const auctionSettled = hasParsedLot && chainLot.settled;
+
+  const topBidAmountStr = idleNoChainAuction
+    ? "—"
+    : liveAuction
+      ? hasChainBid
+        ? formatBidAmount(chainLot.amount)
+        : "0"
+      : auctionSettled && hasParsedLot && chainLot
+        ? formatBidAmount(chainLot.amount)
+        : MOCK_FALLBACK_TOP_BID_AMOUNT;
 
   const chainTopBidder: Address | null = liveAuction
     ? hasChainBid
       ? chainLot.bidder
       : null
-    : (MOCK_FALLBACK_TOP_BIDDER as Address);
+    : auctionSettled && chainLot.amount > 0n
+      ? chainLot.bidder
+      : (MOCK_FALLBACK_TOP_BIDDER as Address);
 
-  const showNoBids = liveAuction && !hasChainBid;
+  const showNoBids =
+    !idleNoChainAuction && liveAuction && !hasChainBid;
 
-  const auctionSettled = hasParsedLot && chainLot.settled;
+  const hasLastSettledWinner =
+    hasParsedLot &&
+    auctionSettled &&
+    chainLot.tokenId > 0n &&
+    chainLot.amount > 0n &&
+    !isAddressEqual(chainLot.bidder, zeroAddress);
 
-  const countdownEndUnix = liveAuction ? Number(chainLot.endTime) : undefined;
-  const countdownDurationSecs = liveAuction ? undefined : live.endsSecs;
+  const winnerFingerprint =
+    hasLastSettledWinner && chainLot
+      ? getWinnerFingerprint(
+          chainLot.tokenId,
+          chainLot.bidder,
+          chainLot.amount,
+        )
+      : null;
+
+  const showLastWinnerBanner = Boolean(
+    onChainMode &&
+      winnerFingerprint &&
+      winnerFingerprint !== dismissedWinnerFp,
+  );
+
+  const onQueueEmptyBetweenSales =
+    queueReadsEnabled &&
+    chainQueuedIds.length === 0 &&
+    !liveAuction &&
+    onChainMode;
+
+  const canManualStartNewAuction =
+    onChainMode &&
+    !auctionReadError &&
+    !auctionPaused &&
+    !liveAuction &&
+    chainQueuedIds.length > 0 &&
+    (auctionSettled || idleNoChainAuction);
+
+  const handleDismissWinnerBanner = useCallback(() => {
+    if (!winnerFingerprint) return;
+    writeDismissedWinnerFp(winnerFingerprint);
+    setDismissedWinnerFp(winnerFingerprint);
+  }, [winnerFingerprint]);
+
+  const handleStartNewAuction = useCallback(async () => {
+    setStartError(null);
+    const head = chainQueuedIds[0];
+    if (head == null) {
+      setStartError("Queue is empty.");
+      return;
+    }
+    try {
+      await startAuction(head);
+    } catch (e) {
+      setStartError(formatUserFacingTxError(e));
+    }
+  }, [chainQueuedIds, startAuction]);
+
+  const chainCountdownLive = liveAuction && !idleNoChainAuction;
+  const countdownEndUnix = chainCountdownLive
+    ? Number(chainLot!.endTime)
+    : undefined;
+  /** Only demo mode uses a relative timer — never fake “time’s up” when an AuctionSell address is configured. */
+  const countdownDurationSecs =
+    !onChainMode && !chainCountdownLive ? live.endsSecs : undefined;
 
   const userCompletedLocalBid = auctionBidPlacedFids.has(displayTokenId);
 
-  const leadingOnChain =
-    liveAuction &&
-    viewerAddress != null &&
-    hasChainBid &&
-    isAddressEqual(chainLot.bidder, viewerAddress);
-
-  const viewerIsLeadingBidder =
-    leadingOnChain || (userCompletedLocalBid && (!liveAuction || hasChainBid));
-
   /** After the demo bid animation (mock), show the viewer when connected; on-chain use lot bidder. */
   const displayTopBidder: Address | null =
-    !liveAuction && userCompletedLocalBid && viewerAddress != null
-      ? viewerAddress
-      : chainTopBidder;
+    idleNoChainAuction
+      ? null
+      : !liveAuction && userCompletedLocalBid && viewerAddress != null
+        ? viewerAddress
+        : chainTopBidder;
 
   const queuedRows = queueReadsEnabled
     ? chainQueuedIds.map((id, i) => ({
@@ -147,7 +308,9 @@ export default function GobblerAuctionSection({
   const alreadyFirst = selectedQueueIdx === 0;
 
   const bumpLiveReady =
-    queueReadsEnabled && queueBumpReady && selectedQueueIdx > 0;
+    queueReadsEnabled &&
+    queueBumpReady &&
+    selectedQueueIdx > 0;
 
   useEffect(() => {
     if (selectedQueueFid == null) return;
@@ -157,7 +320,9 @@ export default function GobblerAuctionSection({
   }, [queuedRows, selectedQueueFid, setSelectedQueueFid]);
 
   const skipFeeHuman = humanSkipFee(
-    auctionSellConfigured && !auctionReadError ? skipQueueFeeAmountStr : null,
+    auctionSellConfigured && !auctionReadError
+      ? skipQueueFeeAmountStr
+      : null,
     MOCK_SKIP_QUEUE_FEE,
   );
 
@@ -184,7 +349,7 @@ export default function GobblerAuctionSection({
       }
       await refetchQueue();
     } catch (e) {
-      setBumpError(e instanceof Error ? e.message : "Transaction failed");
+      setBumpError(formatUserFacingTxError(e));
     }
   }, [
     bidTokenAddress,
@@ -197,10 +362,130 @@ export default function GobblerAuctionSection({
     sendBumpTx,
   ]);
 
-  const showBumpPanel = selectedInQueueFid != null && selectedQueueIdx >= 0;
+  const showBumpPanel =
+    selectedInQueueFid != null && selectedQueueIdx >= 0;
+
+  const handleChainBidSubmit = useCallback(async (amountWei: bigint) => {
+    setChainBidError(null);
+    try {
+      await placeBid(amountWei);
+    } catch (e) {
+      setChainBidError(formatUserFacingTxError(e));
+    }
+  }, [placeBid]);
+
+  const handleSettlePaused = useCallback(async () => {
+    setSettleError(null);
+    try {
+      await settleWhenPaused();
+    } catch (e) {
+      setSettleError(formatUserFacingTxError(e));
+    }
+  }, [settleWhenPaused]);
+
+  const handleSettleAndNext = useCallback(async () => {
+    setSettleError(null);
+    try {
+      await settleAndStartNext();
+    } catch (e) {
+      setSettleError(formatUserFacingTxError(e));
+    }
+  }, [settleAndStartNext]);
+
+  const handleExtendAuction = useCallback(async () => {
+    setSettleError(null);
+    try {
+      await extendAuction();
+      setExtendSuccessTick((n) => n + 1);
+    } catch (e) {
+      setSettleError(formatUserFacingTxError(e));
+    }
+  }, [extendAuction]);
+
+  const showExpiredPostAuction =
+    onChainMode &&
+    hasParsedLot &&
+    liveAuction &&
+    auctionExpired &&
+    !auctionSettled;
+
+  const postAuctionNoActionHint =
+    showExpiredPostAuction && !hasChainBid && auctionPaused
+      ? "No bids — house paused. Unpause, then extend."
+      : null;
+
+  const viewerIsHighBidderOnExpiredLot =
+    liveAuction &&
+    auctionExpired &&
+    hasChainBid &&
+    viewerAddress != null &&
+    isAddressEqual(viewerAddress, chainLot.bidder);
+
+  const expiredLotCaption = showExpiredPostAuction
+    ? hasChainBid && !auctionPaused
+      ? viewerIsHighBidderOnExpiredLot
+        ? "You won — finalize to claim."
+        : "Bidding closed. Anyone can finalize."
+      : hasChainBid && auctionPaused
+        ? viewerIsHighBidderOnExpiredLot
+          ? "You won — finalize while paused."
+          : "Bidding closed — anyone can finalize."
+        : !hasChainBid && !auctionPaused
+          ? "No bids — extend to reopen."
+          : "No bids — unpause to extend."
+    : null;
+
+  /** Do not fold in `bidDisabled` — the page uses that to gate *bidding* (e.g. when expired), which would wrongly grey out extend / finalize. */
+  const settlementDisabled = !isConnected || !!auctionReadError;
+
+  const startNewDisabled =
+    !isConnected || Boolean(bidDisabled) || !!auctionReadError;
+
+  const chainSettlement =
+    showExpiredPostAuction && hasChainBid && auctionPaused
+      ? {
+          label: "Finalize sale",
+          onSubmit: handleSettlePaused,
+          loading: settlePending,
+          disabled: settlementDisabled,
+          error: settleError,
+          onClearError: () => setSettleError(null),
+        }
+      : showExpiredPostAuction && hasChainBid && !auctionPaused
+        ? {
+            label: "Finalize sale",
+            onSubmit: handleSettleAndNext,
+            loading: settlePending,
+            disabled: settlementDisabled,
+            error: settleError,
+            onClearError: () => setSettleError(null),
+          }
+        : showExpiredPostAuction && !hasChainBid && !auctionPaused
+          ? {
+              label: "Extend listing time",
+              hint: "Adds another full bidding window.",
+              onSubmit: handleExtendAuction,
+              loading: settlePending,
+              disabled: settlementDisabled,
+              error: settleError,
+              onClearError: () => setSettleError(null),
+            }
+          : null;
+
+  const bidInviteCopy =
+    onChainMode &&
+    liveAuction &&
+    !auctionExpired &&
+    showNoBids &&
+    !auctionReadError
+      ? "Want this Warplet? Place a bid below."
+      : null;
+
+  const onChainLiveQueueEmpty =
+    queueReadsEnabled && liveAuction && chainQueuedIds.length === 0;
 
   return (
-    <div className="w-full max-w-4xl rounded-2xl bg-base-200/40 border border-secondary/10 backdrop-blur-sm p-6 sm:p-10">
+    <div className="w-full max-w-4xl">
       <h2 className="text-xl sm:text-3xl font-bold tracking-widest uppercase mb-1">
         Gobbled Warplet auctions
       </h2>
@@ -208,6 +493,56 @@ export default function GobblerAuctionSection({
         One auction per day. Everything behind the live lot is waiting in line
         to leave the Gobbler — not on sale until its day.
       </p>
+
+      {auctionSellConfigured && auctionReadError ? (
+        <div
+          role="alert"
+          className="mb-6 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error/95"
+        >
+          Could not read the auction contract from this network. Confirm{" "}
+          <code className="text-xs break-all">NEXT_PUBLIC_AUCTION_SELL_ADDRESS</code>{" "}
+          and that your wallet is on Base. Finalize / bid controls stay hidden until
+          the lot loads.
+        </div>
+      ) : null}
+
+      {showLastWinnerBanner &&
+        hasLastSettledWinner &&
+        chainLot &&
+        winnerFingerprint && (
+          <LastAuctionWinnerBanner
+            tokenId={Number(chainLot.tokenId)}
+            winnerAddress={chainLot.bidder}
+            winAmountLabel={formatBidAmount(chainLot.amount)}
+            bidSymbol={bidSymbol}
+            viewerAddress={viewerAddress}
+            onDismiss={handleDismissWinnerBanner}
+          />
+        )}
+
+      {canManualStartNewAuction && (
+        <div className="w-full max-w-4xl space-y-2 -mt-2 mb-6">
+          <button
+            type="button"
+            onClick={() => void handleStartNewAuction()}
+            disabled={startNewDisabled || startAuctionPending}
+            className="btn btn-secondary btn-outline w-full sm:w-auto min-w-[220px] font-semibold tracking-wide disabled:opacity-50"
+          >
+            {startAuctionPending ? (
+              <span className="loading loading-spinner loading-sm" />
+            ) : (
+              "Start new auction"
+            )}
+          </button>
+          {startError ? (
+            <p className="text-xs text-error/90 break-words">{startError}</p>
+          ) : (
+            <p className="text-xs text-base-content/45 max-w-xl">
+              Pulls the next Warplet from the queue into a fresh timed auction.
+            </p>
+          )}
+        </div>
+      )}
 
       <AuctionLiveHero
         displayTokenId={displayTokenId}
@@ -219,40 +554,86 @@ export default function GobblerAuctionSection({
         countdownEndUnix={countdownEndUnix}
         countdownDurationSecs={countdownDurationSecs}
         auctionSettled={auctionSettled}
-        viewerIsLeadingBidder={viewerIsLeadingBidder}
         bidDisabled={bidDisabled}
-        onBid={onBid}
+        onBid={chainBidActive ? undefined : onBid}
+        chainBid={
+          chainBidActive
+            ? {
+                minBidHuman,
+                minBidWei,
+                parseHumanToWei,
+                onSubmit: handleChainBidSubmit,
+                loading: isBidding || rulesLoading,
+                disabled: bidDisabled || rulesLoading || minBidWei == null,
+                error: chainBidError,
+                onClearTxError: () => setChainBidError(null),
+                bidTokenPriceUsd,
+              }
+            : undefined
+        }
+        idleNoChainAuction={idleNoChainAuction}
+        auctionExpiredOnChain={auctionExpired}
+        contractPaused={auctionPaused}
+        expiredLotCaption={expiredLotCaption}
+        chainSettlement={chainSettlement}
+        postAuctionNoActionHint={postAuctionNoActionHint}
+        bidInviteCopy={bidInviteCopy}
+        extendSuccessTick={extendSuccessTick}
+        countdownResetKey={
+          chainCountdownLive && chainLot != null
+            ? chainLot.endTime.toString()
+            : undefined
+        }
       />
 
-      <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mt-10 mb-1">
-        In line to exit the Gobbler
-      </h3>
-      <p className="text-xs text-base-content/35 mb-4 max-w-xl">
-        Tap a Warplet in the row below (not #2 in line — pick one further back),
-        then use{" "}
-        <strong className="font-semibold text-base-content/55">
-          Skip the line
-        </strong>{" "}
-        to pay the bump fee (<code className="text-[10px]">send</code> +
-        userData).
-      </p>
-      <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
-        {queuedRows.map((row) => (
-          <AuctionQueueCard
-            key={row.fid}
-            fid={row.fid}
-            placeInLine={row.place}
-            isSelected={selectedInQueueFid === row.fid}
-            onSelect={() =>
-              setSelectedQueueFid(selectedQueueFid === row.fid ? null : row.fid)
-            }
-          />
-        ))}
-      </div>
-      {queueReadsEnabled && chainQueuedIds.length === 0 && (
-        <p className="text-xs text-base-content/40 py-2">
-          No Warplets in the on-chain queue yet.
-        </p>
+      {onQueueEmptyBetweenSales ? (
+        <div className="mt-10 rounded-xl border border-base-content/10 bg-base-100/10 px-4 py-5 sm:px-6">
+          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/55 mb-2">
+            In line to exit the Gobbler
+          </h3>
+          <p className="text-sm text-base-content/55 leading-relaxed max-w-prose">
+            The queue is empty. No Warplets are waiting for a future auction, so
+            there is nothing to select, bump, or skip here. New NFTs will appear
+            when they are queued on-chain.
+          </p>
+        </div>
+      ) : (
+        <>
+          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mt-10 mb-1">
+            In line to exit the Gobbler
+          </h3>
+          {queueReadsEnabled && onChainLiveQueueEmpty ? (
+            <p className="text-xs text-base-content/40 mb-4 max-w-xl">
+              No Warplets are queued behind this live lot. When more are lined
+              up, they will show in the row below.
+            </p>
+          ) : (
+            <p className="text-xs text-base-content/35 mb-4 max-w-xl">
+              Tap a Warplet in the row below (not #2 in line — pick one further
+              back), then use{" "}
+              <strong className="font-semibold text-base-content/55">
+                Skip the line
+              </strong>{" "}
+              to pay the bump fee (<code className="text-[10px]">send</code> +
+              userData).
+            </p>
+          )}
+          <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+            {queuedRows.map((row) => (
+              <AuctionQueueCard
+                key={row.fid}
+                fid={row.fid}
+                placeInLine={row.place}
+                isSelected={selectedInQueueFid === row.fid}
+                onSelect={() =>
+                  setSelectedQueueFid(
+                    selectedQueueFid === row.fid ? null : row.fid,
+                  )
+                }
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {showBumpPanel && (

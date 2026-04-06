@@ -17,6 +17,19 @@ export type AuctionSellLot = {
   settled: boolean;
 };
 
+/** Matches `AuctionSell._bid` min-bid rule (floor + increment %). */
+export function minBidForAuction(
+  currentHighBid: bigint,
+  reservePrice: bigint,
+  minBidIncrementPercentage: number,
+): bigint {
+  if (currentHighBid === 0n) return reservePrice;
+  return (
+    currentHighBid +
+    (currentHighBid * BigInt(minBidIncrementPercentage)) / 100n
+  );
+}
+
 /**
  * Reads AuctionSell when `NEXT_PUBLIC_AUCTION_SELL_ADDRESS` is set.
  * Full queue bump + ERC777 `send` path matches `feat/auction-linked-list-queue`; older ABIs fail reads → mocks in UI.
@@ -33,6 +46,8 @@ export function useAuctionSellAuction() {
       refetchInterval: 5_000,
     },
   });
+
+  const refetchAuction = auctionQ.refetch;
 
   const bumpFeeQ = useReadContract({
     abi: auctionSellAbi,
@@ -51,6 +66,30 @@ export function useAuctionSellAuction() {
     query: {
       enabled: configured,
       refetchInterval: 60_000,
+    },
+  });
+
+  const reserveQ = useReadContract({
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "reservePrice",
+    query: { enabled: configured, refetchInterval: 30_000 },
+  });
+
+  const incrementPctQ = useReadContract({
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "minBidIncrementPercentage",
+    query: { enabled: configured, refetchInterval: 30_000 },
+  });
+
+  const pausedQ = useReadContract({
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "paused",
+    query: {
+      enabled: configured,
+      refetchInterval: 12_000,
     },
   });
 
@@ -77,7 +116,6 @@ export function useAuctionSellAuction() {
   const chainLot: AuctionSellLot | null = useMemo(() => {
     const d = auctionQ.data;
     if (d == null) return null;
-    // viem decodes a named tuple as an object, not a positional array.
     if (Array.isArray(d)) {
       const [tokenId, amount, startTime, endTime, bidder, settled] = d;
       return { tokenId, amount, startTime, endTime, bidder, settled };
@@ -114,9 +152,25 @@ export function useAuctionSellAuction() {
     bumpFeeQ.data > 0n &&
     bidTokenAddr != null;
 
+  const minNextBidAmount = useMemo(() => {
+    if (!chainLot || chainLot.settled) return null;
+    if (reserveQ.data === undefined || incrementPctQ.data === undefined) {
+      return null;
+    }
+    return minBidForAuction(
+      chainLot.amount,
+      reserveQ.data,
+      Number(incrementPctQ.data),
+    );
+  }, [chainLot, reserveQ.data, incrementPctQ.data]);
+
+  const isPaused = pausedQ.data === true;
+
   return {
     configured,
     auction: chainLot,
+    bidDecimals: decimals,
+    decimals,
     formatBidAmount,
     bidSymbol,
     isError: auctionReadError,
@@ -124,5 +178,10 @@ export function useAuctionSellAuction() {
     queueBumpFeeWei: bumpFeeQ.data,
     queueBumpReady,
     bidTokenAddress: bidTokenAddr,
+    auctionPaused: isPaused,
+    isPaused,
+    minNextBidAmount,
+    reservePrice: reserveQ.data,
+    refetchAuction,
   };
 }
