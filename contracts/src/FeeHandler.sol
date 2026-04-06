@@ -27,8 +27,6 @@ contract FeeHandler is AccessControl {
     using SuperTokenV1Library for ISuperToken;
 
     bytes32 public constant REBALANCER_ROLE = keccak256("REBALANCER_ROLE");
-    uint256 public immutable MIN_TOKEN_OUT;
-
     IERC20 public immutable weth;
     ISuperToken public immutable stremeToken;
     ILPFactoryv4 public immutable lpFactory;
@@ -43,12 +41,7 @@ contract FeeHandler is AccessControl {
     uint256 public targetDuration;
 
     event WethSwapped(address indexed zap, uint256 wethIn, uint256 tokenOut);
-    event RewardsClaimedAndSwapped(
-        address indexed caller,
-        uint256 wethClaimed,
-        uint256 wethSwapped,
-        uint256 stremeOut
-    );
+    event RewardsClaimedAndSwapped(address indexed caller, uint256 wethClaimed, uint256 wethSwapped, uint256 stremeOut);
     event AuctionUpdated(address indexed oldAuction, address indexed newAuction);
     event TargetDurationUpdated(uint256 oldDuration, uint256 newDuration);
     event FlowRateRebalanced(address indexed auction, int96 flowRate);
@@ -69,12 +62,11 @@ contract FeeHandler is AccessControl {
         address _stremeZap,
         uint256 _targetDuration,
         address _admin,
-        address _rebalancer,
-        uint256 _minTokenOut
+        address _rebalancer
     ) {
         if (
-            _weth == address(0) || _stremeToken == address(0) || _lpFactory == address(0)
-                || _auction == address(0) || _stremeZap == address(0) || _admin == address(0)
+            _weth == address(0) || _stremeToken == address(0) || _lpFactory == address(0) || _auction == address(0)
+                || _stremeZap == address(0) || _admin == address(0)
         ) revert ZeroAddress();
         if (_weth == _stremeToken) revert IdenticalPoolCurrencies();
         if (_targetDuration == 0) revert InvalidDuration();
@@ -86,7 +78,6 @@ contract FeeHandler is AccessControl {
         stremeZap = IStremeZapUniversal(_stremeZap);
         targetDuration = _targetDuration;
         streamActive = true;
-        MIN_TOKEN_OUT = _minTokenOut; // set to 20_000_000 * 1e18
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         if (_rebalancer != address(0)) {
@@ -133,8 +124,8 @@ contract FeeHandler is AccessControl {
     }
 
     /// @notice Claim rewards, swap weth to streme (no `minTokenOut`), then update the auction stream rate.
-    function rebalance() external onlyRebalancerOrAdmin {
-        _claimRewardsAndSwapWethToToken(0);
+    function rebalance(uint256 minAmountOut) external onlyRebalancerOrAdmin {
+        _claimRewardsAndSwapWethToToken(minAmountOut);
         _rebalanceFlowRate();
     }
 
@@ -149,11 +140,6 @@ contract FeeHandler is AccessControl {
         int96 nextRate = _computeFlowRate();
         stremeToken.flow(auction, nextRate);
         emit FlowRateRebalanced(auction, nextRate);
-    }
-
-    /// @notice Permissionless harvest path: claim rewards from LP factory, then swap all weth to streme.
-    function claimRewardsAndSwapWethToToken() external {
-        _claimRewardsAndSwapWethToToken(MIN_TOKEN_OUT);
     }
 
     function _claimRewardsAndSwapWethToToken(uint256 minTokenOut) internal {
