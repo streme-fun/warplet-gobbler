@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { useMiniApp } from "@/hooks/useMiniApp";
 import { useOwnedWarplets } from "@/hooks/useOwnedWarplets";
-import { useAuctionQueueStripFids } from "@/hooks/useAuctionQueueStripFids";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import {
   useDutchAuctionActions,
@@ -102,7 +101,6 @@ export default function Home() {
     isError: ownedWarpletsError,
     warpletsConfigured,
   } = useOwnedWarplets();
-  const auctionQueueStripFids = useAuctionQueueStripFids();
 
   const pickerWarplets = useMemo(() => {
     const demo = MY_WARPLETS.map((w) => ({
@@ -230,7 +228,13 @@ export default function Home() {
   }, [selectedFid, gobbling, flyingFid]);
 
   const handleSell = useCallback(async () => {
-    if (!selectedFid || !isConnected || !publicClient || isSelling || isWriting) {
+    if (
+      !selectedFid ||
+      !isConnected ||
+      !publicClient ||
+      isSelling ||
+      isWriting
+    ) {
       return;
     }
 
@@ -266,11 +270,15 @@ export default function Home() {
       setChestPayout({ tokens: chestTokens, usd: chestUsd });
       if (!startSellAnimation()) {
         setChestPayout(null);
-        setSellError("Could not start reveal animation — scroll to your Warplet and try again.");
+        setSellError(
+          "Could not start reveal animation — scroll to your Warplet and try again.",
+        );
       }
     } catch (err) {
       const msg =
-        err instanceof Error ? err.message : "Failed to submit sell transaction";
+        err instanceof Error
+          ? err.message
+          : "Failed to submit sell transaction";
       setSellError(msg);
     } finally {
       setIsSelling(false);
@@ -410,7 +418,7 @@ export default function Home() {
         style={{ opacity: gobbling ? 0 : 1 }}
       >
         {/* Parallax warplet background */}
-        <ParallaxBackground queueFids={auctionQueueStripFids} />
+        <ParallaxBackground />
 
         {/* Background gradient orbs */}
         <div className="fixed inset-0 pointer-events-none">
@@ -469,7 +477,9 @@ export default function Home() {
                 smartHideDecimalsIfIntegerDigitsGt={5}
               />
               <span className="text-base font-normal text-base-content/40 ml-2">
-                {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
+                {payoutSymbol?.startsWith("$")
+                  ? payoutSymbol
+                  : `$${payoutSymbol}`}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/40 mt-1">
@@ -492,9 +502,7 @@ export default function Home() {
                   ~$
                   <StreamingNumber
                     start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
-                    perSecond={
-                      payoutStream.perSecond * (warpgobbPriceUsd ?? 0)
-                    }
+                    perSecond={payoutStream.perSecond * (warpgobbPriceUsd ?? 0)}
                     decimals={2}
                     truncateFractionDigits
                     className="inline font-mono"
@@ -562,16 +570,14 @@ export default function Home() {
                 id="warplet-scroll"
                 className="flex gap-2 overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
               >
-                {warpletsConfigured &&
-                  isConnected &&
-                  ownedWarpletsError && (
-                    <p className="text-xs text-error/80 px-1">
-                      Couldn&apos;t load Warplets from the chain. Check
-                      NEXT_PUBLIC_WARPLETS_ADDRESS and that the contract supports{" "}
-                      <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
-                      (ERC721Enumerable).
-                    </p>
-                  )}
+                {warpletsConfigured && isConnected && ownedWarpletsError && (
+                  <p className="text-xs text-error/80 px-1">
+                    Couldn&apos;t load Warplets from the chain. Check
+                    NEXT_PUBLIC_WARPLETS_ADDRESS and that the contract supports{" "}
+                    <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
+                    (ERC721Enumerable).
+                  </p>
+                )}
                 {warpletsConfigured &&
                   isConnected &&
                   !ownedWarpletsLoading &&
@@ -620,7 +626,11 @@ export default function Home() {
                   : "border border-primary/30 text-primary/50 hover:border-primary/50 hover:text-primary/70"
               }`}
               disabled={
-                !!flyingFid || !selectedFid || !isConnected || isSelling || isWriting
+                !!flyingFid ||
+                !selectedFid ||
+                !isConnected ||
+                isSelling ||
+                isWriting
               }
               onClick={selectedFid ? handleSell : undefined}
             >
@@ -633,7 +643,9 @@ export default function Home() {
                     : "Select a Warplet"}
             </button>
             {sellError && (
-              <p className="mt-2 text-xs text-error/90 break-all">{sellError}</p>
+              <p className="mt-2 text-xs text-error/90 break-all">
+                {sellError}
+              </p>
             )}
           </div>
         </section>

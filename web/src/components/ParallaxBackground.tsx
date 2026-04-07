@@ -5,50 +5,233 @@ import { warpletImageSrc } from "@/lib/warplet-image-src";
 
 /* eslint-disable @next/next/no-img-element */
 
-/** Layout slots only — FIDs come from `queueFids` (auction queue strip) to warm-reuse cached art. */
+/** FIDs confirmed to exist on the Vercel Blob CDN (≥18 to fill all slots uniquely). */
+const BACKGROUND_FIDS = [
+  2, 3, 5, 9, 13, 20, 42, 48, 59, 69, 83, 99, 114, 139, 194, 239, 280, 680,
+  1725, 2025, 4567, 5062, 5494, 12152, 951257,
+];
+
 const PARALLAX_SLOTS = [
-  { id: 0, x: 5, y: 8, size: 70, opacity: 0.1, speed: 0.02, rotate: 12, blur: 6, smHide: true },
-  { id: 1, x: 25, y: 15, size: 90, opacity: 0.12, speed: 0.025, rotate: -8, blur: 5, smHide: false },
-  { id: 2, x: 70, y: 5, size: 80, opacity: 0.1, speed: 0.02, rotate: 20, blur: 6, smHide: true },
-  { id: 3, x: 85, y: 20, size: 60, opacity: 0.09, speed: 0.015, rotate: -15, blur: 7, smHide: true },
-  { id: 4, x: 50, y: 65, size: 85, opacity: 0.1, speed: 0.02, rotate: 5, blur: 6, smHide: true },
-  { id: 5, x: 15, y: 75, size: 75, opacity: 0.09, speed: 0.018, rotate: -22, blur: 5, smHide: false },
-  { id: 6, x: 90, y: 55, size: 65, opacity: 0.1, speed: 0.022, rotate: 30, blur: 7, smHide: true },
-  { id: 7, x: 12, y: 35, size: 110, opacity: 0.15, speed: 0.05, rotate: -5, blur: 3, smHide: false },
-  { id: 8, x: 42, y: 25, size: 120, opacity: 0.16, speed: 0.06, rotate: 10, blur: 2, smHide: true },
-  { id: 9, x: 78, y: 40, size: 100, opacity: 0.14, speed: 0.045, rotate: -18, blur: 3, smHide: true },
-  { id: 10, x: 55, y: 80, size: 115, opacity: 0.15, speed: 0.055, rotate: 15, blur: 2, smHide: true },
-  { id: 11, x: 30, y: 55, size: 95, opacity: 0.13, speed: 0.04, rotate: -12, blur: 3, smHide: false },
-  { id: 12, x: 92, y: 75, size: 105, opacity: 0.14, speed: 0.05, rotate: 8, blur: 2.5, smHide: true },
-  { id: 13, x: 62, y: 45, size: 100, opacity: 0.13, speed: 0.045, rotate: -8, blur: 3, smHide: true },
-  { id: 14, x: 8, y: 50, size: 160, opacity: 0.2, speed: 0.1, rotate: -3, blur: 0, smHide: false },
-  { id: 15, x: 65, y: 18, size: 180, opacity: 0.22, speed: 0.12, rotate: 7, blur: 0, smHide: false },
-  { id: 16, x: 35, y: 85, size: 150, opacity: 0.18, speed: 0.09, rotate: -10, blur: 0, smHide: true },
-  { id: 17, x: 82, y: 70, size: 170, opacity: 0.2, speed: 0.11, rotate: 14, blur: 0, smHide: true },
+  {
+    id: 0,
+    x: 5,
+    y: 8,
+    size: 70,
+    opacity: 0.1,
+    speed: 0.02,
+    rotate: 12,
+    blur: 6,
+    smHide: true,
+  },
+  {
+    id: 1,
+    x: 25,
+    y: 15,
+    size: 90,
+    opacity: 0.12,
+    speed: 0.025,
+    rotate: -8,
+    blur: 5,
+    smHide: false,
+  },
+  {
+    id: 2,
+    x: 70,
+    y: 5,
+    size: 80,
+    opacity: 0.1,
+    speed: 0.02,
+    rotate: 20,
+    blur: 6,
+    smHide: true,
+  },
+  {
+    id: 3,
+    x: 85,
+    y: 20,
+    size: 60,
+    opacity: 0.09,
+    speed: 0.015,
+    rotate: -15,
+    blur: 7,
+    smHide: true,
+  },
+  {
+    id: 4,
+    x: 50,
+    y: 65,
+    size: 85,
+    opacity: 0.1,
+    speed: 0.02,
+    rotate: 5,
+    blur: 6,
+    smHide: true,
+  },
+  {
+    id: 5,
+    x: 15,
+    y: 75,
+    size: 75,
+    opacity: 0.09,
+    speed: 0.018,
+    rotate: -22,
+    blur: 5,
+    smHide: false,
+  },
+  {
+    id: 6,
+    x: 90,
+    y: 55,
+    size: 65,
+    opacity: 0.1,
+    speed: 0.022,
+    rotate: 30,
+    blur: 7,
+    smHide: true,
+  },
+  {
+    id: 7,
+    x: 12,
+    y: 35,
+    size: 110,
+    opacity: 0.15,
+    speed: 0.05,
+    rotate: -5,
+    blur: 3,
+    smHide: false,
+  },
+  {
+    id: 8,
+    x: 42,
+    y: 25,
+    size: 120,
+    opacity: 0.16,
+    speed: 0.06,
+    rotate: 10,
+    blur: 2,
+    smHide: true,
+  },
+  {
+    id: 9,
+    x: 78,
+    y: 40,
+    size: 100,
+    opacity: 0.14,
+    speed: 0.045,
+    rotate: -18,
+    blur: 3,
+    smHide: true,
+  },
+  {
+    id: 10,
+    x: 55,
+    y: 80,
+    size: 115,
+    opacity: 0.15,
+    speed: 0.055,
+    rotate: 15,
+    blur: 2,
+    smHide: true,
+  },
+  {
+    id: 11,
+    x: 30,
+    y: 55,
+    size: 95,
+    opacity: 0.13,
+    speed: 0.04,
+    rotate: -12,
+    blur: 3,
+    smHide: false,
+  },
+  {
+    id: 12,
+    x: 92,
+    y: 75,
+    size: 105,
+    opacity: 0.14,
+    speed: 0.05,
+    rotate: 8,
+    blur: 2.5,
+    smHide: true,
+  },
+  {
+    id: 13,
+    x: 62,
+    y: 45,
+    size: 100,
+    opacity: 0.13,
+    speed: 0.045,
+    rotate: -8,
+    blur: 3,
+    smHide: true,
+  },
+  {
+    id: 14,
+    x: 8,
+    y: 50,
+    size: 160,
+    opacity: 0.2,
+    speed: 0.1,
+    rotate: -3,
+    blur: 0,
+    smHide: false,
+  },
+  {
+    id: 15,
+    x: 65,
+    y: 18,
+    size: 180,
+    opacity: 0.22,
+    speed: 0.12,
+    rotate: 7,
+    blur: 0,
+    smHide: false,
+  },
+  {
+    id: 16,
+    x: 35,
+    y: 85,
+    size: 150,
+    opacity: 0.18,
+    speed: 0.09,
+    rotate: -10,
+    blur: 0,
+    smHide: true,
+  },
+  {
+    id: 17,
+    x: 82,
+    y: 70,
+    size: 170,
+    opacity: 0.2,
+    speed: 0.11,
+    rotate: 14,
+    blur: 0,
+    smHide: true,
+  },
 ] as const;
 
-function assignQueueFidsToSlots(queueFids: number[]) {
-  const pool =
-    queueFids.length > 0 ? queueFids : [680];
-  return PARALLAX_SLOTS.map((s, i) => ({
-    ...s,
-    fid: pool[i % pool.length],
-  }));
+function shuffled<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
-export default function ParallaxBackground({
-  queueFids,
-}: {
-  /** Same FIDs as the auction queue strip (after the live lot). */
-  queueFids: number[];
-}) {
+export default function ParallaxBackground() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
 
-  const warplets = useMemo(
-    () => assignQueueFidsToSlots(queueFids),
-    [queueFids],
-  );
+  const warplets = useMemo(() => {
+    const pool = shuffled(BACKGROUND_FIDS);
+    return PARALLAX_SLOTS.map((s, i) => ({
+      ...s,
+      fid: pool[i % pool.length],
+    }));
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
