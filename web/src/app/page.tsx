@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { useMiniApp } from "@/hooks/useMiniApp";
 import { useOwnedWarplets } from "@/hooks/useOwnedWarplets";
-import { useAuctionQueueStripFids } from "@/hooks/useAuctionQueueStripFids";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import {
   useDutchAuctionActions,
@@ -18,6 +17,7 @@ import {
 } from "@/hooks/useDutchAuction";
 import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
 import { useAuctionSell777Bid } from "@/hooks/useAuctionSell777Bid";
+import { useAuctionQueueStripFids } from "@/hooks/useAuctionQueueStripFids";
 import AbyssBackground from "@/components/AbyssBackground";
 import ParallaxBackground from "@/components/ParallaxBackground";
 import Particles from "@/components/Particles";
@@ -83,6 +83,7 @@ export default function Home() {
   const [bidding, setBidding] = useState(false);
   const [auctionBidError, setAuctionBidError] = useState<string | null>(null);
   const auctionSell = useAuctionSellAuction();
+  const auctionQueueStripFids = useAuctionQueueStripFids();
   const { approveAndBid, isPending: bidTxPending } = useAuctionSell777Bid();
   const dutchAuctionPriceQuery = useDutchAuctionPrice();
   const currentPrice = dutchAuctionPriceQuery.data;
@@ -102,7 +103,6 @@ export default function Home() {
     isError: ownedWarpletsError,
     warpletsConfigured,
   } = useOwnedWarplets();
-  const auctionQueueStripFids = useAuctionQueueStripFids();
 
   const walletConfirmedNoWarplets =
     isConnected &&
@@ -242,7 +242,13 @@ export default function Home() {
   }, [selectedFid, gobbling, flyingFid]);
 
   const handleSell = useCallback(async () => {
-    if (!selectedFid || !isConnected || !publicClient || isSelling || isWriting) {
+    if (
+      !selectedFid ||
+      !isConnected ||
+      !publicClient ||
+      isSelling ||
+      isWriting
+    ) {
       return;
     }
 
@@ -279,7 +285,9 @@ export default function Home() {
       setChestPayout({ tokens: chestTokens, usd: chestUsd });
       if (!startSellAnimation()) {
         setChestPayout(null);
-        setSellError("Could not start reveal animation — scroll to your Warplet and try again.");
+        setSellError(
+          "Could not start reveal animation — scroll to your Warplet and try again.",
+        );
       }
     } catch (err) {
       setSellError(formatUserFacingTxError(err));
@@ -483,7 +491,9 @@ export default function Home() {
                 smartHideDecimalsIfIntegerDigitsGt={5}
               />
               <span className="text-base font-normal text-base-content/40 ml-2">
-                {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
+                {payoutSymbol?.startsWith("$")
+                  ? payoutSymbol
+                  : `$${payoutSymbol}`}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/40 mt-1">
@@ -506,9 +516,7 @@ export default function Home() {
                   ~$
                   <StreamingNumber
                     start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
-                    perSecond={
-                      payoutStream.perSecond * (warpgobbPriceUsd ?? 0)
-                    }
+                    perSecond={payoutStream.perSecond * (warpgobbPriceUsd ?? 0)}
                     decimals={2}
                     truncateFractionDigits
                     className="inline font-mono"
@@ -576,14 +584,16 @@ export default function Home() {
                 id="warplet-scroll"
                 className="overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
               >
-                {warpletsConfigured &&
-                  isConnected &&
-                  ownedWarpletsError && (
-                    <p className="text-xs text-error/80 px-1 text-center">
-                      Couldn&apos;t load Warplets from this network. Make sure
-                      your wallet is on Base and try again.
-                    </p>
-                  )}
+                {warpletsConfigured && isConnected && ownedWarpletsError && (
+                  <p className="text-xs text-error/80 px-1 text-center max-w-md mx-auto">
+                    Couldn&apos;t load Warplets from the chain. Make sure your
+                    wallet is on Base. Check{" "}
+                    <code className="text-[10px]">NEXT_PUBLIC_WARPLETS_ADDRESS</code>{" "}
+                    and that the contract supports{" "}
+                    <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
+                    (ERC721Enumerable).
+                  </p>
+                )}
                 {warpletsConfigured &&
                   isConnected &&
                   !ownedWarpletsLoading &&
@@ -656,7 +666,11 @@ export default function Home() {
                   : "border border-primary/30 text-primary/50 hover:border-primary/50 hover:text-primary/70"
               }`}
               disabled={
-                !!flyingFid || !selectedFid || !isConnected || isSelling || isWriting
+                !!flyingFid ||
+                !selectedFid ||
+                !isConnected ||
+                isSelling ||
+                isWriting
               }
               onClick={selectedFid ? handleSell : undefined}
             >

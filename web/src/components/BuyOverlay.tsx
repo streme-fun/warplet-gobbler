@@ -61,16 +61,24 @@ export default function BuyOverlay({
     };
     window.addEventListener("resize", onResize);
 
-    // Load images
-    const eggImg = new Image();
-    eggImg.src = "/egg-closed.png";
-    let eggLoaded = false;
-    eggImg.onload = () => { eggLoaded = true; };
+    // Load images — three egg stages synced to hits
+    const eggImgs = [new Image(), new Image(), new Image()];
+    eggImgs[0].src = "/egg-1.png";
+    eggImgs[1].src = "/egg-2.png";
+    eggImgs[2].src = "/egg-3.png";
+    const eggLoaded = [false, false, false];
+    eggImgs.forEach((img, i) => {
+      img.onload = () => {
+        eggLoaded[i] = true;
+      };
+    });
 
     const warpletImg = new Image();
     warpletImg.src = warpletImageSrc(fid);
     let warpletLoaded = false;
-    warpletImg.onload = () => { warpletLoaded = true; };
+    warpletImg.onload = () => {
+      warpletLoaded = true;
+    };
 
     // ========== CONSTANTS ==========
     const HIT_DURATION = 0.6;
@@ -356,10 +364,8 @@ export default function BuyOverlay({
       }
       const fadeDur = hitNum === "finisher" ? 1.8 : 0.6;
       if (dt > fadeDur + 0.06) return;
-      const alpha =
-        Math.max(0, 1 - (dt - 0.06) / fadeDur) * intensity * 0.6;
-      const radius =
-        60 + (dt - 0.06) * (hitNum === "finisher" ? 350 : 150);
+      const alpha = Math.max(0, 1 - (dt - 0.06) / fadeDur) * intensity * 0.6;
+      const radius = 60 + (dt - 0.06) * (hitNum === "finisher" ? 350 : 150);
       const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
       grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
       grad.addColorStop(0.3, `rgba(230,235,245,${alpha * 0.5})`);
@@ -432,9 +438,7 @@ export default function BuyOverlay({
       if (phase !== "resolved" && (phase !== "finisher" || revealTime < 0))
         return;
       const rt =
-        phase === "resolved"
-          ? phaseTime + FINISHER_RESOLVE - 2.0
-          : revealTime;
+        phase === "resolved" ? phaseTime + FINISHER_RESOLVE - 2.0 : revealTime;
       const glowAlpha = Math.min(1, rt / 1.5);
       const breathe = 1 + Math.sin(time * 1.5) * 0.03;
       const grad = ctx.createRadialGradient(
@@ -558,11 +562,13 @@ export default function BuyOverlay({
         const curX = flyFrom.x + (flyTo.x - flyFrom.x) * p;
         const curY = flyFrom.y + (flyTo.y - flyFrom.y) * p;
         const curSize = flyFrom.size + (flyTo.size - flyFrom.size) * p;
-        if (eggLoaded) {
+        if (eggLoaded[0]) {
+          const flyEgg = eggImgs[0];
+          const flyAspect = 373 / 669;
           const eggW = curSize;
-          const eggH = curSize * (360 / 693);
+          const eggH = curSize * flyAspect;
           ctx.save();
-          ctx.drawImage(eggImg, curX - eggW / 2, curY - eggH / 2, eggW, eggH);
+          ctx.drawImage(flyEgg, curX - eggW / 2, curY - eggH / 2, eggW, eggH);
           ctx.restore();
         }
         ctx.restore();
@@ -573,9 +579,9 @@ export default function BuyOverlay({
       // Fog
       if (phase !== "resolved") {
         let fogAlpha = 1;
-        if (phase === "finisher")
-          fogAlpha = Math.max(0, 1 - phaseTime / 2.5);
-        else if (weakenLevel > 0) fogAlpha = Math.min(1.3, 1 + weakenLevel * 0.15);
+        if (phase === "finisher") fogAlpha = Math.max(0, 1 - phaseTime / 2.5);
+        else if (weakenLevel > 0)
+          fogAlpha = Math.min(1.3, 1 + weakenLevel * 0.15);
         if (fogAlpha > 0) {
           const gx = cx + Math.sin(time * 0.18) * 6;
           const gy = cy + Math.cos(time * 0.14) * 5;
@@ -623,17 +629,26 @@ export default function BuyOverlay({
       drawPrizeGlow(cx, cy);
 
       // Image at center: egg during combat, crossfade to warplet after finisher
-      const showWarplet = (phase === "finisher" && phaseTime > 2.0) || phase === "resolved";
-      const crossfade = phase === "finisher" ? Math.min(1, Math.max(0, (phaseTime - 2.0) / 1.0)) : phase === "resolved" ? 1 : 0;
+      const showWarplet =
+        (phase === "finisher" && phaseTime > 2.0) || phase === "resolved";
+      const crossfade =
+        phase === "finisher"
+          ? Math.min(1, Math.max(0, (phaseTime - 2.0) / 1.0))
+          : phase === "resolved"
+            ? 1
+            : 0;
       const imgAlpha =
         phase === "materialize"
           ? Math.min(1, phaseTime / (MATERIALIZE_DURATION * 0.5))
           : 1;
 
-      // Draw egg (fades out during crossfade) — native 693:360 aspect ratio
-      if (eggLoaded && crossfade < 1) {
+      // Draw egg (fades out during crossfade) — pick stage by weakenLevel
+      const eggIdx = Math.min(weakenLevel, 2);
+      const eggImg = eggImgs[eggIdx];
+      if (eggLoaded[eggIdx] && crossfade < 1) {
+        const eggAspect = 373 / 669;
         const eggW = IMG_SIZE;
-        const eggH = IMG_SIZE * (360 / 693);
+        const eggH = IMG_SIZE * eggAspect;
         ctx.save();
         ctx.globalAlpha = imgAlpha * (1 - crossfade) * overlayAlpha;
         ctx.drawImage(eggImg, cx - eggW / 2, cy - eggH / 2, eggW, eggH);
@@ -645,9 +660,21 @@ export default function BuyOverlay({
         ctx.save();
         ctx.globalAlpha = imgAlpha * crossfade * overlayAlpha;
         ctx.beginPath();
-        ctx.roundRect(cx - IMG_HALF, cy - IMG_HALF, IMG_SIZE, IMG_SIZE, IMG_SIZE * 0.12);
+        ctx.roundRect(
+          cx - IMG_HALF,
+          cy - IMG_HALF,
+          IMG_SIZE,
+          IMG_SIZE,
+          IMG_SIZE * 0.12,
+        );
         ctx.clip();
-        ctx.drawImage(warpletImg, cx - IMG_HALF, cy - IMG_HALF, IMG_SIZE, IMG_SIZE);
+        ctx.drawImage(
+          warpletImg,
+          cx - IMG_HALF,
+          cy - IMG_HALF,
+          IMG_SIZE,
+          IMG_SIZE,
+        );
         ctx.restore();
       }
 
