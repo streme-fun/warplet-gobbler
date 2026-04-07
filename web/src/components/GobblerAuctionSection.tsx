@@ -587,7 +587,7 @@ export default function GobblerAuctionSection({
 
   useEffect(() => {
     if (!skipLineOptionVisible) {
-      setSelectedQueueFid((prev) => (prev != null ? null : prev));
+      setSelectedQueueFid(null);
     }
   }, [skipLineOptionVisible]);
 

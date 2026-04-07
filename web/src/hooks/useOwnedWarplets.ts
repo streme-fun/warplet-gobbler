@@ -43,6 +43,8 @@ export function useOwnedWarplets() {
 
   const cachedPayload = useMemo(
     () => (address ? readOwnedWarpletsCache(address) : null),
+    // `cacheEpoch` is not read inside the memo; it is an explicit invalidation
+    // tick when we clear or refresh cache so this recomputes from storage.
     [address, cacheEpoch],
   );
 
@@ -135,6 +137,30 @@ export function useOwnedWarplets() {
     balanceQuery.isFetching,
     balanceQuery.refetch,
     cachedWarplets.length,
+  ]);
+
+  useEffect(() => {
+    if (
+      !address ||
+      !warpletsConfigured ||
+      !balanceQuery.isSuccess ||
+      balanceQuery.isFetching
+    )
+      return;
+    if (balance !== 0n) return;
+    if (warplets.length !== 0) return;
+    if (cacheBalance === 0n) return;
+    if (!mismatchRefetchRef.current) return;
+    clearOwnedWarpletsCache(address);
+    setCacheEpoch((e) => e + 1);
+  }, [
+    address,
+    warpletsConfigured,
+    balance,
+    balanceQuery.isSuccess,
+    balanceQuery.isFetching,
+    warplets.length,
+    cacheBalance,
   ]);
 
   useEffect(() => {

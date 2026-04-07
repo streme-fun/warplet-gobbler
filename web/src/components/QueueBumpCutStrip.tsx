@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 /** Match `queue-bump-cut-sweep` + short tail so the blade finishes before refetch nudge. */
 const CUT_MS = Math.round(500 * 1.2 * 1.2 * 0.9);
@@ -20,12 +20,18 @@ export default function QueueBumpCutStrip({
   const onCompleteRef = useRef(onSequenceComplete);
   onCompleteRef.current = onSequenceComplete;
 
-  useEffect(() => {
-    if (!active) return;
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!active) {
+      setReducedMotion(false);
+      return;
+    }
 
     const reduced =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setReducedMotion(reduced);
 
     const ms = reduced ? 40 : CUT_MS;
     const t = window.setTimeout(() => onCompleteRef.current(), ms);
@@ -34,12 +40,7 @@ export default function QueueBumpCutStrip({
 
   if (!active) return null;
 
-  const reduced =
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  if (reduced) return null;
+  if (reducedMotion) return null;
 
   return (
     <div

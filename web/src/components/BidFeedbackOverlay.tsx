@@ -50,6 +50,7 @@ export default function BidFeedbackOverlay({
     };
     // Intentionally only `active`: a new `onSequenceComplete` identity must not
     // reset timers mid-sequence (felt like “first slash twice” / extra pass).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callback via onSequenceCompleteRef only
   }, [active]);
 
   if (!active) return null;
