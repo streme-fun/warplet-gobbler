@@ -9,9 +9,22 @@ export default function AuctionWarpletImage({
   variant = "default",
 }: {
   fid: number;
-  variant?: "default" | "hero" | "thumb";
+  variant?: "default" | "hero" | "thumb" | "cover";
 }) {
   const src = warpletImageSrc(fid);
+
+  if (variant === "cover") {
+    return (
+      <img
+        src={src}
+        alt={`Warplet #${fid}`}
+        className="absolute inset-0 h-full w-full object-cover"
+        draggable={false}
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
 
   if (variant === "thumb") {
     return (

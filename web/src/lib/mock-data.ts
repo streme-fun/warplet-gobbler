@@ -157,6 +157,34 @@ export const MOCK_FALLBACK_TOP_BIDDER =
 /** Mock skip-queue fee when on-chain fee is unavailable. */
 export const MOCK_SKIP_QUEUE_FEE = 2500;
 
+/**
+ * Skip-line “mock view”: extra queue tiles + local-only bump animation (no tx).
+ * Set `NEXT_PUBLIC_SKIP_LINE_MOCK_FLAG` to `true` / `1` / `yes` in `web/.env.local`. Default off.
+ */
+export const SKIP_LINE_MOCK_FLAG = (() => {
+  const raw = process.env.NEXT_PUBLIC_SKIP_LINE_MOCK_FLAG?.trim().toLowerCase();
+  return raw === "true" || raw === "1" || raw === "yes";
+})();
+
+/** When true, append mock token IDs after `getQueuedTokenIds`. */
+export const DEV_MOCK_QUEUE_APPEND_EXTRAS = SKIP_LINE_MOCK_FLAG;
+
+/** When true, “Skip the line” uses the phased local animation only (no `sendBumpTx`). */
+export const DEV_MOCK_QUEUE_BUMP_LOCAL = SKIP_LINE_MOCK_FLAG;
+
+/** When true, the skip CTA stays disabled (scroll-only). */
+export const DEV_MOCK_QUEUE_SKIP_CTA_DISABLED = false;
+
+/**
+ * Appended after on-chain queue when mock flag is on. Real Warplet **FIDs** / token ids for art CDN.
+ */
+export const DEV_MOCK_EXTRA_QUEUE_TOKEN_IDS = [
+  1415723n,
+  781905n,
+  720166n,
+  1010524n,
+] as const;
+
 // Mock warplets the user "owns" — same fids as background
 export const MY_WARPLETS = [
   { fid: 1, name: "Warplet #1" },

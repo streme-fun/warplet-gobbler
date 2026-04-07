@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { CONTRACTS, UNISWAP_V4_POOL_IDS } from "@/lib/contracts";
@@ -269,6 +269,17 @@ export function useWarpgobbUsdPrice() {
   };
 }
 
+function warpletApprovedForDutchAuction(
+  tokenId: number | null,
+  approvedForAll: boolean | undefined,
+  singleApproved: `0x${string}` | undefined,
+): boolean {
+  if (!tokenId) return false;
+  if (approvedForAll === true) return true;
+  if (typeof singleApproved !== "string") return false;
+  return singleApproved.toLowerCase() === CONTRACTS.dutchAuction.toLowerCase();
+}
+
 export function useWarpletApproval(tokenId: number | null) {
   const { address } = useAccount();
 
@@ -292,21 +303,33 @@ export function useWarpletApproval(tokenId: number | null) {
     },
   });
 
-  const isApproved = useMemo(() => {
+  const isApproved = useMemo(
+    () =>
+      warpletApprovedForDutchAuction(
+        tokenId,
+        approvedForAll.data,
+        approvedForToken.data,
+      ),
+    [tokenId, approvedForAll.data, approvedForToken.data],
+  );
+
+  const refetchApproval = useCallback(async (): Promise<boolean> => {
     if (!tokenId) return false;
-    if (approvedForAll.data) return true;
-    return (
-      typeof approvedForToken.data === "string" &&
-      approvedForToken.data.toLowerCase() === CONTRACTS.dutchAuction.toLowerCase()
+    const [allRes, tokenRes] = await Promise.all([
+      approvedForAll.refetch(),
+      approvedForToken.refetch(),
+    ]);
+    return warpletApprovedForDutchAuction(
+      tokenId,
+      allRes.data,
+      tokenRes.data,
     );
-  }, [tokenId, approvedForAll.data, approvedForToken.data]);
+  }, [tokenId, approvedForAll.refetch, approvedForToken.refetch]);
 
   return {
     isApproved,
     isApprovalLoading: approvedForAll.isLoading || approvedForToken.isLoading,
-    refetchApproval: async () => {
-      await Promise.all([approvedForAll.refetch(), approvedForToken.refetch()]);
-    },
+    refetchApproval,
   };
 }
 

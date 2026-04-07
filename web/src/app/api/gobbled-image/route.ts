@@ -60,13 +60,9 @@ export async function POST(request: NextRequest) {
 
     const result = await ensureGobbledImage(tokenId);
     return NextResponse.json({ success: true, blobUrl: result.url, tokenId });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Generation failed",
-      },
+      { success: false, error: "Could not generate image. Try again later." },
       { status: 500 },
     );
   }

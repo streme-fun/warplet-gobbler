@@ -28,26 +28,32 @@ const PARALLAX_SLOTS = [
 ] as const;
 
 function assignQueueFidsToSlots(queueFids: number[]) {
-  const pool =
-    queueFids.length > 0 ? queueFids : [680];
+  const hasFids = queueFids.length > 0;
+  const pool = hasFids ? queueFids : [];
   return PARALLAX_SLOTS.map((s, i) => ({
     ...s,
-    fid: pool[i % pool.length],
+    fid: hasFids ? pool[i % pool.length]! : null,
   }));
 }
 
 export default function ParallaxBackground({
   queueFids,
+  /** When true, use neutral skeleton tiles (e.g. wallet confirmed empty — avoids “ghost faces” vs empty picker). */
+  neutralTiles = false,
 }: {
   /** Same FIDs as the auction queue strip (after the live lot). */
   queueFids: number[];
+  neutralTiles?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
 
   const warplets = useMemo(
-    () => assignQueueFidsToSlots(queueFids),
-    [queueFids],
+    () =>
+      neutralTiles
+        ? PARALLAX_SLOTS.map((s) => ({ ...s, fid: null as number | null }))
+        : assignQueueFidsToSlots(queueFids),
+    [queueFids, neutralTiles],
   );
 
   useEffect(() => {
@@ -95,19 +101,29 @@ export default function ParallaxBackground({
             "--drift-delay": `${w.id * -2.5}s`,
           }}
         >
-          <img
-            src={warpletImageSrc(w.fid)}
-            alt=""
-            draggable={false}
-            loading="lazy"
-            decoding="async"
-            style={{
-              width: "100%",
-              height: "100%",
-              borderRadius: 8,
-              filter: `brightness(1.3) saturate(1.2)${w.blur ? ` blur(${w.blur}px)` : ""}`,
-            }}
-          />
+          {w.fid != null ? (
+            <img
+              src={warpletImageSrc(w.fid)}
+              alt=""
+              draggable={false}
+              loading="lazy"
+              decoding="async"
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: 8,
+                filter: `brightness(1.3) saturate(1.2)${w.blur ? ` blur(${w.blur}px)` : ""}`,
+              }}
+            />
+          ) : (
+            <div
+              className="skeleton w-full h-full"
+              style={{
+                borderRadius: 8,
+                filter: w.blur ? `blur(${w.blur}px)` : undefined,
+              }}
+            />
+          )}
         </div>
       ))}
     </div>

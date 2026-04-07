@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { formatUnits, parseUnits, type Address, isAddressEqual, zeroAddress } from "viem";
+import {
+  formatUnits,
+  parseUnits,
+  type Address,
+  type Hash,
+  isAddressEqual,
+  zeroAddress,
+} from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -21,6 +28,11 @@ export function minNextBidWei(
   if (currentBid === 0n) return reservePrice;
   return currentBid + (currentBid * BigInt(minIncrementPct)) / 100n;
 }
+
+export type PlaceBidOptions = {
+  /** Fires as soon as the wallet submits the tx (hash available), before receipt. */
+  onTransactionSubmitted?: (txHash: Hash) => void;
+};
 
 export function useAuctionSellBid(opts: {
   enabled: boolean;
@@ -71,7 +83,7 @@ export function useAuctionSellBid(opts: {
     minBidWei != null ? formatUnits(minBidWei, bidDecimals) : null;
 
   const placeBid = useCallback(
-    async (amountWei: bigint) => {
+    async (amountWei: bigint, options?: PlaceBidOptions) => {
       if (
         !bidTokenAddress ||
         address == null ||
@@ -86,6 +98,7 @@ export function useAuctionSellBid(opts: {
         functionName: "send",
         args: [CONTRACTS.auctionSell, amountWei, "0x"],
       });
+      options?.onTransactionSubmitted?.(hash);
       if (publicClient) {
         await publicClient.waitForTransactionReceipt({ hash });
       }

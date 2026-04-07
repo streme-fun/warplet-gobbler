@@ -10,6 +10,7 @@ module.exports = {
     extend: {
       fontFamily: {
         serif: ['var(--font-eb-garamond)', 'EB Garamond', 'serif'],
+        handwritten: ['var(--font-handwritten)', 'Caveat', 'cursive'],
       },
     },
   },
