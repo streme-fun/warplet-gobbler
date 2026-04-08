@@ -43,4 +43,16 @@ export const erc721Abi = [
     outputs: [{ name: "", type: "bool", internalType: "bool" }],
     stateMutability: "view",
   },
+  {
+    type: "function",
+    name: "safeTransferFrom",
+    inputs: [
+      { name: "from", type: "address", internalType: "address" },
+      { name: "to", type: "address", internalType: "address" },
+      { name: "tokenId", type: "uint256", internalType: "uint256" },
+      { name: "data", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
 ] as const;

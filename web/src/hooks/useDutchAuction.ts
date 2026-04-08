@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formatUnits } from "viem";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { type Address, encodeAbiParameters, formatUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { CONTRACTS, UNISWAP_V4_POOL_IDS } from "@/lib/contracts";
 import { dutchAuctionAbi } from "@/abi/dutchAuction";
@@ -269,93 +269,40 @@ export function useWarpgobbUsdPrice() {
   };
 }
 
-function warpletApprovedForDutchAuction(
-  tokenId: number | null,
-  approvedForAll: boolean | undefined,
-  singleApproved: `0x${string}` | undefined,
-): boolean {
-  if (!tokenId) return false;
-  if (approvedForAll === true) return true;
-  if (typeof singleApproved !== "string") return false;
-  return singleApproved.toLowerCase() === CONTRACTS.dutchAuction.toLowerCase();
-}
-
-export function useWarpletApproval(tokenId: number | null) {
-  const { address } = useAccount();
-
-  const approvedForToken = useReadContract({
-    abi: erc721Abi,
-    address: CONTRACTS.warplets,
-    functionName: "getApproved",
-    args: [BigInt(tokenId ?? 0)],
-    query: {
-      enabled: !!tokenId,
-    },
-  });
-
-  const approvedForAll = useReadContract({
-    abi: erc721Abi,
-    address: CONTRACTS.warplets,
-    functionName: "isApprovedForAll",
-    args: [address ?? CONTRACTS.dutchAuction, CONTRACTS.dutchAuction],
-    query: {
-      enabled: !!address,
-    },
-  });
-
-  const isApproved = useMemo(
-    () =>
-      warpletApprovedForDutchAuction(
-        tokenId,
-        approvedForAll.data,
-        approvedForToken.data,
-      ),
-    [tokenId, approvedForAll.data, approvedForToken.data],
-  );
-
-  const refetchApproval = useCallback(async (): Promise<boolean> => {
-    if (!tokenId) return false;
-    const [allRes, tokenRes] = await Promise.all([
-      approvedForAll.refetch(),
-      approvedForToken.refetch(),
-    ]);
-    return warpletApprovedForDutchAuction(
-      tokenId,
-      allRes.data,
-      tokenRes.data,
-    );
-  }, [tokenId, approvedForAll.refetch, approvedForToken.refetch]);
-
-  return {
-    isApproved,
-    isApprovalLoading: approvedForAll.isLoading || approvedForToken.isLoading,
-    refetchApproval,
-  };
+/** `abi.encode(minPrice)` for `DutchAuction.onERC721Received` — required on every gobble tx. */
+export function encodeDutchAuctionGobbleData(minPrice: bigint): `0x${string}` {
+  return encodeAbiParameters([{ type: "uint256" }], [minPrice]);
 }
 
 export function useDutchAuctionActions() {
+  const { address } = useAccount();
   const { writeContractAsync, isPending } = useWriteContract();
 
-  const approveWarplet = async (tokenId: number) => {
+  /**
+   * One-tx gobble: `safeTransferFrom(owner, dutchAuction, tokenId, abi.encode(minPrice))`.
+   * `minPrice` must match the snapshot used for slippage / frontrun protection (on-chain revert if pot < minPrice).
+   */
+  const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
+    if (!address) {
+      throw new Error("Connect wallet to sell");
+    }
+    if (CONTRACTS.warplets.toLowerCase() === ZERO) {
+      throw new Error("NEXT_PUBLIC_WARPLETS_ADDRESS is not configured");
+    }
+    if (CONTRACTS.dutchAuction.toLowerCase() === ZERO) {
+      throw new Error("NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS is not configured");
+    }
+    const data = encodeDutchAuctionGobbleData(minPrice);
+
     return writeContractAsync({
       abi: erc721Abi,
       address: CONTRACTS.warplets,
-      functionName: "approve",
-      args: [CONTRACTS.dutchAuction, BigInt(tokenId)],
-    });
-  };
-
-  const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
-    return writeContractAsync({
-      abi: dutchAuctionAbi,
-      address: CONTRACTS.dutchAuction,
-      functionName: "gobble",
-      args: [BigInt(tokenId), minPrice],
+      functionName: "safeTransferFrom",
+      args: [address as Address, CONTRACTS.dutchAuction, BigInt(tokenId), data],
     });
   };
 
   return {
-    approveWarplet,
     gobbleWarplet,
     isWriting: isPending,
   };

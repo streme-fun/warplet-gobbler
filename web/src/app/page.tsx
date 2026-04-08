@@ -13,7 +13,6 @@ import {
   useDutchAuctionPayoutToken,
   useDutchAuctionPrice,
   useWarpgobbUsdPrice,
-  useWarpletApproval,
 } from "@/hooks/useDutchAuction";
 import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
 import { useAuctionSell777Bid } from "@/hooks/useAuctionSell777Bid";
@@ -28,7 +27,11 @@ import GobblerAuctionSection from "@/components/GobblerAuctionSection";
 import FlyingWarplet from "@/components/FlyingWarplet";
 import StreamingNumber from "@/components/StreamingNumber";
 import { warpletImageSrc } from "@/lib/warplet-image-src";
-import { formatUserFacingTxError } from "@/lib/format-tx-error";
+import {
+  GOBBLE_TRANSACTION_REVERTED_FRIENDLY,
+  formatGobbleSellTxError,
+  formatUserFacingTxError,
+} from "@/lib/format-tx-error";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -95,8 +98,7 @@ export default function Home() {
     dutchAuctionPriceQuery.dataUpdatedAt,
   );
   const { priceUsd: warpgobbPriceUsd } = useWarpgobbUsdPrice();
-  const { refetchApproval } = useWarpletApproval(selectedFid);
-  const { approveWarplet, gobbleWarplet, isWriting } = useDutchAuctionActions();
+  const { gobbleWarplet, isWriting } = useDutchAuctionActions();
   const {
     warplets: ownedWarplets,
     isLoading: ownedWarpletsLoading,
@@ -271,16 +273,16 @@ export default function Home() {
             ? chestTokens * warpgobbPriceUsd
             : null;
 
-      const alreadyApproved = await refetchApproval();
-      if (!alreadyApproved) {
-        const approveHash = await approveWarplet(selectedFid);
-        await publicClient.waitForTransactionReceipt({ hash: approveHash });
-        await refetchApproval();
-      }
-
+      // On-chain min payout for this tx (1% slippage vs snapshot). Always abi-encoded into safeTransferFrom `data`.
       const minPrice = (payoutWeiSnapshot * BigInt(99)) / BigInt(100);
       const gobbleHash = await gobbleWarplet(selectedFid, minPrice);
-      await publicClient.waitForTransactionReceipt({ hash: gobbleHash });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: gobbleHash,
+      });
+      if (receipt.status === "reverted") {
+        setSellError(GOBBLE_TRANSACTION_REVERTED_FRIENDLY);
+        return;
+      }
 
       setChestPayout({ tokens: chestTokens, usd: chestUsd });
       if (!startSellAnimation()) {
@@ -290,7 +292,7 @@ export default function Home() {
         );
       }
     } catch (err) {
-      setSellError(formatUserFacingTxError(err));
+      setSellError(formatGobbleSellTxError(err));
     } finally {
       setIsSelling(false);
     }
@@ -300,8 +302,6 @@ export default function Home() {
     publicClient,
     isSelling,
     isWriting,
-    approveWarplet,
-    refetchApproval,
     currentPrice,
     payoutDecimals,
     warpgobbPriceUsd,
