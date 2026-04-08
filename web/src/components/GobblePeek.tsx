@@ -44,10 +44,22 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     window.addEventListener("gobbler:bid-placed", onBidPlaced);
     window.addEventListener("gobbler:lip-wave", onLipWave);
 
-    // Responsive: smaller jaws + eyes on mobile
+    // Responsive: smaller jaws + eyes on mobile.
+    // Reduced ~10% from the prior 120/190 (top) and 50/70 (bottom) to free up
+    // more vertical UI space.
     const mobile = () => W < 640;
-    const restTop = () => (mobile() ? 120 : 190);
-    const restBot = () => (mobile() ? 50 : 70);
+    const restTop = () => (mobile() ? 108 : 171);
+    const restBot = () => (mobile() ? 45 : 63);
+
+    // Desktop only: jaws bow inward — edges 50% thicker than middle, smooth
+    // quadratic falloff. Returns a multiplier in [1, 1.5] for the jaw thickness
+    // sampled at horizontal position x.
+    const edgeMul = (x: number) => {
+      if (mobile()) return 1;
+      const u = (x / W - 0.5) * 2; // -1 at left edge, 0 in middle, 1 at right edge
+      return 1 + 0.5 * u * u;
+    };
+
     let topY = restTop();
     let botY = H - restBot();
 
@@ -107,8 +119,12 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
           : `rgba(160,120,220,${glowMid})`;
 
       const t = time * 0.01;
-      const ey = topJawY - eyeOffset + Math.sin(t * 0.6) * 2;
-      for (const eyeX of [W * 0.34, W * 0.66]) {
+      // Eye y follows the curved jaw edge at each eye's x position so the
+      // eyes sit just above the jaw on both flat (mobile) and bowed (desktop).
+      const eyeXs = [W * 0.34, W * 0.66];
+      for (const eyeX of eyeXs) {
+        const ey =
+          topJawY * edgeMul(eyeX) - eyeOffset + Math.sin(t * 0.6) * 2;
         ex!.save();
         // Ambient glow
         const g1 = ex!.createRadialGradient(eyeX, ey, 0, eyeX, ey, glowR);
@@ -161,7 +177,12 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
         const x = b.xf * W;
         const br = Math.sin(t * 0.5 + b.ph) * 2;
         let r = b.r + br;
-        let baseY = b.jaw === 0 ? topY + b.yo + 4 : botY + b.yo - 4;
+        const mul = edgeMul(x);
+        // Apply edge curvature: jaw thickness is multiplied by `mul`, so the
+        // jaw edge sits at `topY * mul` (top) or `H - (H - botY) * mul` (bot).
+        const topEdgeY = topY * mul;
+        const botEdgeY = H - (H - botY) * mul;
+        let baseY = b.jaw === 0 ? topEdgeY + b.yo + 4 : botEdgeY + b.yo - 4;
 
         // Lip wave: travelling ripple from center outward
         if (lipWaveTime >= 0) {
@@ -185,9 +206,27 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
         blobData.push({ x, y: baseY, r: Math.max(1, r) });
       }
 
-      // Jaw bodies — extend by wave displacement so no gap behind outward blobs
-      gx!.fillRect(-30, -500, W + 60, 500 + topY + 4 + topWaveMax);
-      gx!.fillRect(-30, botY - 4 - botWaveMax, W + 60, 500 + H + botWaveMax);
+      // Jaw bodies — sampled curved paths so the edges bow inward on desktop.
+      // Extends by max wave displacement so blobs sit on a continuous fill.
+      const SAMPLE = 12;
+      // Top jaw: trace the bottom edge from right to left as a curve.
+      gx!.beginPath();
+      gx!.moveTo(-30, -500);
+      gx!.lineTo(W + 30, -500);
+      for (let x = W + 30; x >= -30; x -= SAMPLE) {
+        gx!.lineTo(x, topY * edgeMul(x) + 4 + topWaveMax);
+      }
+      gx!.closePath();
+      gx!.fill();
+      // Bottom jaw: trace the top edge from left to right as a curve.
+      gx!.beginPath();
+      gx!.moveTo(-30, H + 500);
+      gx!.lineTo(W + 30, H + 500);
+      for (let x = W + 30; x >= -30; x -= SAMPLE) {
+        gx!.lineTo(x, H - (H - botY) * edgeMul(x) - 4 - botWaveMax);
+      }
+      gx!.closePath();
+      gx!.fill();
 
       // Draw blobs
       for (const bd of blobData) {
