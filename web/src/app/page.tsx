@@ -424,7 +424,30 @@ export default function Home() {
       <AbyssBackground />
 
       {/* Ambient gobbler peek — jaws hint at their presence */}
-      <GobblePeek />
+      <GobblePeek hidden={gobbling} />
+
+      {/* DEBUG: test animations */}
+      <div className="fixed top-20 right-4 z-[99] flex flex-col gap-1">
+        <button
+          className="btn btn-xs btn-warning"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("gobbler:bid-placed"));
+            window.dispatchEvent(new CustomEvent("gobbler:lip-wave"));
+          }}
+        >
+          Test Bid
+        </button>
+        <button
+          className="btn btn-xs btn-error"
+          onClick={() => {
+            setFlyingFid(239);
+            setWarpletVisible(true);
+            setGobbling(true);
+          }}
+        >
+          Test Chomp
+        </button>
+      </div>
 
       {/* Everything below fades out during gobble */}
       {/* Nav — fixed on top of everything */}
@@ -619,7 +642,9 @@ export default function Home() {
                   <p className="text-xs text-error/80 px-1 text-center max-w-md mx-auto">
                     Couldn&apos;t load Warplets from the chain. Make sure your
                     wallet is on Base. Check{" "}
-                    <code className="text-[10px]">NEXT_PUBLIC_WARPLETS_ADDRESS</code>{" "}
+                    <code className="text-[10px]">
+                      NEXT_PUBLIC_WARPLETS_ADDRESS
+                    </code>{" "}
                     and that the contract supports{" "}
                     <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
                     (ERC721Enumerable).

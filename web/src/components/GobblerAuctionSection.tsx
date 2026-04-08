@@ -83,7 +83,9 @@ function readInitialWinnerHighlight(): StoredWinnerHighlight | null {
 }
 
 /** Snapshot before finalize — `settleCurrentAndCreateNewAuction` replaces `auction` with the next lot. */
-function settledLotSnapshot(lot: AuctionSellLot | null): StoredWinnerHighlight | null {
+function settledLotSnapshot(
+  lot: AuctionSellLot | null,
+): StoredWinnerHighlight | null {
   if (
     lot == null ||
     lot.tokenId <= 0n ||
@@ -156,9 +158,8 @@ export default function GobblerAuctionSection({
   const [dismissedWinnerFp, setDismissedWinnerFp] = useState<string | null>(
     () => (typeof window !== "undefined" ? readDismissedWinnerFp() : null),
   );
-  const [winnerHighlight, setWinnerHighlight] = useState<
-    StoredWinnerHighlight | null
-  >(readInitialWinnerHighlight);
+  const [winnerHighlight, setWinnerHighlight] =
+    useState<StoredWinnerHighlight | null>(readInitialWinnerHighlight);
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
 
   useEffect(() => {
@@ -203,28 +204,20 @@ export default function GobblerAuctionSection({
   const onChainMode = auctionSellConfigured;
 
   const hasParsedLot =
-    auctionSellConfigured &&
-    !auctionReadError &&
-    chainLot != null;
+    auctionSellConfigured && !auctionReadError && chainLot != null;
 
   const liveAuction =
-    hasParsedLot &&
-    chainLot.tokenId > 0n &&
-    !chainLot.settled;
+    hasParsedLot && chainLot.tokenId > 0n && !chainLot.settled;
 
   const idleNoChainAuction =
-    hasParsedLot &&
-    chainLot.startTime === 0n &&
-    !chainLot.settled;
+    hasParsedLot && chainLot.startTime === 0n && !chainLot.settled;
 
   const showAuctionArtworkSkeleton =
     !idleNoChainAuction && (!onChainMode || !hasParsedLot);
 
   /** Must use bigint vs chain time — mock countdown must not be the only signal of expiry. */
   const auctionExpired =
-    liveAuction &&
-    chainLot != null &&
-    BigInt(nowUnix) >= chainLot.endTime;
+    liveAuction && chainLot != null && BigInt(nowUnix) >= chainLot.endTime;
 
   const chainBidActive =
     liveAuction && !auctionPaused && !auctionExpired && onChainMode;
@@ -337,8 +330,7 @@ export default function GobblerAuctionSection({
   }, [bumpVisualPhase]);
 
   useLayoutEffect(() => {
-    if (!DEV_MOCK_QUEUE_BUMP_LOCAL || bumpVisualPhase !== "finalize")
-      return;
+    if (!DEV_MOCK_QUEUE_BUMP_LOCAL || bumpVisualPhase !== "finalize") return;
     const pending = pendingMockBumpReorderRef.current;
     if (pending == null) return;
     if (!queueReadsEnabled) {
@@ -370,12 +362,11 @@ export default function GobblerAuctionSection({
     return () => clearTimeout(t);
   }, [bumpVisualPhase]);
 
-  const displayTokenId =
-    idleNoChainAuction
-      ? 0
-      : hasParsedLot && chainLot.tokenId > 0n
-        ? Number(chainLot.tokenId)
-        : live.fid;
+  const displayTokenId = idleNoChainAuction
+    ? 0
+    : hasParsedLot && chainLot.tokenId > 0n
+      ? Number(chainLot.tokenId)
+      : live.fid;
 
   const hasChainBid =
     liveAuction &&
@@ -402,8 +393,7 @@ export default function GobblerAuctionSection({
       ? chainLot.bidder
       : (MOCK_FALLBACK_TOP_BIDDER as Address);
 
-  const showNoBids =
-    !idleNoChainAuction && liveAuction && !hasChainBid;
+  const showNoBids = !idleNoChainAuction && liveAuction && !hasChainBid;
 
   const hasLastSettledWinner =
     hasParsedLot &&
@@ -415,7 +405,11 @@ export default function GobblerAuctionSection({
   const chainWinnerBanner = useMemo((): StoredWinnerHighlight | null => {
     if (!hasLastSettledWinner || !chainLot) return null;
     return {
-      fp: getWinnerFingerprint(chainLot.tokenId, chainLot.bidder, chainLot.amount),
+      fp: getWinnerFingerprint(
+        chainLot.tokenId,
+        chainLot.bidder,
+        chainLot.amount,
+      ),
       tokenId: Number(chainLot.tokenId),
       bidder: chainLot.bidder,
       amountWei: chainLot.amount.toString(),
@@ -484,12 +478,11 @@ export default function GobblerAuctionSection({
   const userCompletedLocalBid = auctionBidPlacedFids.has(displayTokenId);
 
   /** After the demo bid animation (mock), show the viewer when connected; on-chain use lot bidder. */
-  const displayTopBidder: Address | null =
-    idleNoChainAuction
-      ? null
-      : !liveAuction && userCompletedLocalBid && viewerAddress != null
-        ? viewerAddress
-        : chainTopBidder;
+  const displayTopBidder: Address | null = idleNoChainAuction
+    ? null
+    : !liveAuction && userCompletedLocalBid && viewerAddress != null
+      ? viewerAddress
+      : chainTopBidder;
 
   const queuedRows = queueReadsEnabled
     ? stripQueueIds.map((id, i) => ({
@@ -614,42 +607,46 @@ export default function GobblerAuctionSection({
     maybeBumpBidLandTick();
   }, [maybeBumpBidLandTick]);
 
-  const handleChainBidSubmit = useCallback(async (amountWei: bigint) => {
-    setChainBidError(null);
-    bidLandGateRef.current = { sequence: false, success: false };
-    bidSubmitSnapshotRef.current = {
-      noBids: showNoBids,
-      amount: topBidAmountStr,
-      bidder: chainTopBidder,
-    };
-    try {
-      await placeBid(amountWei, {
-        onTransactionSubmitted: () => {
-          setBidConfirmingOnChain(true);
-          setBidFeedbackActive(true);
-          const s = bidSubmitSnapshotRef.current;
-          if (s.noBids) setBidHoldNoBidsUi(true);
-          else setBidTopDisplayHold({ amount: s.amount, bidder: s.bidder });
-        },
-      });
-      bidLandGateRef.current.success = true;
-      maybeBumpBidLandTick();
-    } catch (e) {
-      setBidFeedbackActive(false);
+  const handleChainBidSubmit = useCallback(
+    async (amountWei: bigint) => {
+      setChainBidError(null);
       bidLandGateRef.current = { sequence: false, success: false };
-      clearBidTopDisplayHold();
-      setChainBidError(formatUserFacingTxError(e));
-    } finally {
-      setBidConfirmingOnChain(false);
-    }
-  }, [
-    placeBid,
-    maybeBumpBidLandTick,
-    clearBidTopDisplayHold,
-    showNoBids,
-    topBidAmountStr,
-    chainTopBidder,
-  ]);
+      bidSubmitSnapshotRef.current = {
+        noBids: showNoBids,
+        amount: topBidAmountStr,
+        bidder: chainTopBidder,
+      };
+      try {
+        await placeBid(amountWei, {
+          onTransactionSubmitted: () => {
+            setBidConfirmingOnChain(true);
+            setBidFeedbackActive(true);
+            window.dispatchEvent(new CustomEvent("gobbler:bid-placed"));
+            const s = bidSubmitSnapshotRef.current;
+            if (s.noBids) setBidHoldNoBidsUi(true);
+            else setBidTopDisplayHold({ amount: s.amount, bidder: s.bidder });
+          },
+        });
+        bidLandGateRef.current.success = true;
+        maybeBumpBidLandTick();
+      } catch (e) {
+        setBidFeedbackActive(false);
+        bidLandGateRef.current = { sequence: false, success: false };
+        clearBidTopDisplayHold();
+        setChainBidError(formatUserFacingTxError(e));
+      } finally {
+        setBidConfirmingOnChain(false);
+      }
+    },
+    [
+      placeBid,
+      maybeBumpBidLandTick,
+      clearBidTopDisplayHold,
+      showNoBids,
+      topBidAmountStr,
+      chainTopBidder,
+    ],
+  );
 
   const handleSettlePaused = useCallback(async () => {
     setSettleError(null);
@@ -738,8 +735,7 @@ export default function GobblerAuctionSection({
   const settlementDisabled = !isConnected || !!auctionReadError;
 
   /** Do not use `bidDisabled` — after settlement `minNextBidAmount` is null, which incorrectly marked bidding UI disabled. */
-  const startNewDisabled =
-    !isConnected || !!auctionReadError || auctionPaused;
+  const startNewDisabled = !isConnected || !!auctionReadError || auctionPaused;
 
   const chainSettlement =
     showExpiredPostAuction && hasChainBid && auctionPaused
@@ -808,7 +804,9 @@ export default function GobblerAuctionSection({
         <LastAuctionWinnerBanner
           tokenId={winnerBannerDisplay.tokenId}
           winnerAddress={winnerBannerDisplay.bidder}
-          winAmountLabel={formatBidAmount(BigInt(winnerBannerDisplay.amountWei))}
+          winAmountLabel={formatBidAmount(
+            BigInt(winnerBannerDisplay.amountWei),
+          )}
           bidSymbol={bidSymbol}
           viewerAddress={viewerAddress}
           onDismiss={handleDismissWinnerBanner}
@@ -926,16 +924,19 @@ export default function GobblerAuctionSection({
                     </QueueStripCellChrome>
                     <div className="relative z-10 min-w-0 flex-1 overflow-x-auto overflow-y-visible scrollbar-hide snap-x snap-mandatory">
                       <div className="flex w-max min-w-full justify-center gap-2 sm:gap-2">
-                        {Array.from({ length: QUEUE_STRIP_SKELETON_COUNT }, (_, i) => (
-                          <QueueStripCellChrome
-                            key={`queue-sk-${i}`}
-                            shuffleVersion={0}
-                            slotIndex={i + 1}
-                            className="shrink-0 snap-center"
-                          >
-                            <AuctionQueueCardSkeleton />
-                          </QueueStripCellChrome>
-                        ))}
+                        {Array.from(
+                          { length: QUEUE_STRIP_SKELETON_COUNT },
+                          (_, i) => (
+                            <QueueStripCellChrome
+                              key={`queue-sk-${i}`}
+                              shuffleVersion={0}
+                              slotIndex={i + 1}
+                              className="shrink-0 snap-center"
+                            >
+                              <AuctionQueueCardSkeleton />
+                            </QueueStripCellChrome>
+                          ),
+                        )}
                       </div>
                     </div>
                   </>
@@ -992,9 +993,7 @@ export default function GobblerAuctionSection({
                               }
                               onSelect={() =>
                                 setSelectedQueueFid(
-                                  selectedQueueFid === row.fid
-                                    ? null
-                                    : row.fid,
+                                  selectedQueueFid === row.fid ? null : row.fid,
                                 )
                               }
                             />

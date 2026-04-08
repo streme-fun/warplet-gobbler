@@ -211,6 +211,8 @@ export default function AuctionLiveHero({
     null,
   );
   const [showExtendSuccessBanner, setShowExtendSuccessBanner] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [startAuctionPressPulse, setStartAuctionPressPulse] = useState(false);
 
   const chainBlocksBid = Boolean(
@@ -635,7 +637,7 @@ export default function AuctionLiveHero({
       )}
 
       {/* Fixed bottom bid bar — portaled to escape stacking context, above gobbler jaw */}
-      {typeof document !== "undefined" &&
+      {mounted &&
         createPortal(
           <div className="fixed left-0 right-0 bottom-[30px] sm:bottom-[100px] z-[45] flex justify-center pointer-events-none">
             <div className="w-full max-w-2xl px-4 sm:px-6 pointer-events-auto">
