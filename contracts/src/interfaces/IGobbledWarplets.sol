@@ -2,10 +2,10 @@
 pragma solidity ^0.8.26;
 
 /// @title IGobbledWarplets
-/// @notice Receipt NFT minted when a Warplet auction settles (one receipt per successful gobble).
+/// @notice Gobbled Warplet receipt: minter reserves a token id for the winner; the winner completes the NFT via {mint} + signature.
 interface IGobbledWarplets {
-    /// @notice Mint a gobbled Warplet receipt to `to` for underlying `warpletId`.
-    /// @dev `warpletId` must be less than the receipt contract's `MAX_WARPLET_ID_EXCLUSIVE` (equals `TOKEN_ID_DECIMAL_STRIDE`, 1e8 in the canonical deployment).
+    /// @notice Reserve the next gobbled receipt for `warpletId` to `to` (minter only — typically `AuctionSell` on settlement).
+    /// @dev `warpletId` must be less than `MAX_WARPLET_ID_EXCLUSIVE` on the receipt contract.
     /// @return tokenId Encoded id: `gobbleIndex * TOKEN_ID_DECIMAL_STRIDE + warpletId`
-    function mint(address to, uint256 warpletId) external returns (uint256 tokenId);
+    function reserve(address to, uint256 warpletId) external returns (uint256 tokenId);
 }

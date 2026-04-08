@@ -10,24 +10,28 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 
 /// @title GobbledWarplets
-/// @notice ERC721 receipt collection for gobbled Warplets. Only the authorized minter may mint.
+/// @notice ERC721 receipt collection for gobbled Warplets. The authorized minter reserves receipts; the
+///         designated recipient completes the NFT with {mint} (EIP-712 from `tokenURISetter`) so the
+///         final mint appears as their transaction (indexers / marketplaces).
+///
+///      **Logical change:** Before, the minter (`AuctionSell` on settle) created the NFT in the same tx as
+///      settlement and URI flows could be updated out-of-band, so the “birth” transfer was attributed to the
+///      auction contract and metadata was decoupled from the winner’s action. Now settlement only calls
+///      {reserve}: it allocates `tokenId` for the winner but does not `_mint`. The winner calls {mint} in their
+///      own transaction with a signed payload; the ERC-721 mint and `tokenURI` write happen there so wallets
+///      and marketplaces naturally associate the asset with the buyer. There is no separate on-chain URI
+///      setter: metadata is set exactly once inside {mint}.
 /// @dev Token id encoding: `tokenId = gobbleIndex * TOKEN_ID_DECIMAL_STRIDE + warpletId`.
 ///      `warpletId` must be strictly less than {TOKEN_ID_DECIMAL_STRIDE} so decoding is unambiguous.
 ///      Stride is 1e8 (extra decimal zero vs 1e7) so sparse Warplet ids stay safely below the modulus; see `web/scripts/scan-warplet-token-ids.mjs`.
 ///      Uses {ERC721Enumerable} for `totalSupply`, `tokenOfOwnerByIndex`, and `tokenByIndex`.
-///      Mint uses {_mint} (not {_safeMint}) so auction settlement cannot be bricked by a receiver that
-///      reverts in `onERC721Received`. No post-mint receiver callback — avoids re-entrancy in the middle
-///      of `AuctionSell` settlement (after `settled` is written) and matches common auction-house practice.
+///      {mint} uses {_mint} (not {_safeMint}) so completion cannot be bricked by a receiver that
+///      reverts in `onERC721Received`. No post-mint receiver callback — avoids re-entrancy issues.
 ///
-///      URI updates: only the configured {tokenURISetter} may set metadata via {setTokenURI} or
-///      {batchSetTokenURI} (including **before** mint so the receipt is born with metadata already stored).
-///      The owner sets that address via {setTokenURISetter} (same pattern as {setMinter}).
-///      Anyone may call {setTokenURIWithSig} with an EIP-712 signature from `tokenURISetter`; that path
-///      only works while the stored per-token URI is still empty (`tokenId` scopes one signed init).
-///      Default {tokenURI} only resolves after mint; URIs may still be written early into storage.
+///      {reserve}: only {minter} (typically `AuctionSell`) assigns `tokenId` → recipient; emits {Reserved}.
+///      Metadata is set only in {mint}: the reserved recipient submits a `Mint` EIP-712 signature from `tokenURISetter`.
 contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712, IGobbledWarplets {
-    bytes32 private constant _SET_TOKEN_URI_TYPEHASH =
-        keccak256("SetTokenURI(uint256 tokenId,string uri,uint256 deadline)");
+    bytes32 private constant _MINT_TYPEHASH = keccak256("Mint(uint256 tokenId,string uri,uint256 deadline)");
 
     uint256 public constant MAX_WARPLET_ID_EXCLUSIVE = 100_000;
     uint256 public constant TOKEN_ID_DECIMAL_STRIDE = 1_000_000;
@@ -38,19 +42,19 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
 
     mapping(uint256 warpletId => uint256 count) private _gobbles;
 
+    /// @notice Recipient allowed to call {mint} for a reserved `tokenId` (until minted).
+    mapping(uint256 tokenId => address recipient) private _reservedRecipient;
+
     event MinterChanged(address indexed newMinter);
 
     event TokenURISetterChanged(address indexed newTokenURISetter);
+
+    event Reserved(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
 
     event Minted(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
 
     modifier onlyMinter() {
         require(msg.sender == minter, "GobbledWarplets: not minter");
-        _;
-    }
-
-    modifier onlyTokenURISetter() {
-        require(msg.sender == tokenURISetter, "GobbledWarplets: not token URI setter");
         _;
     }
 
@@ -80,49 +84,42 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
     }
 
     /// @inheritdoc IGobbledWarplets
-    function mint(address to, uint256 warpletId) external onlyMinter returns (uint256 tokenId) {
+    function reserve(address to, uint256 warpletId) external onlyMinter returns (uint256 tokenId) {
         require(warpletId < MAX_WARPLET_ID_EXCLUSIVE, "GobbledWarplets: warpletId too large");
         uint256 gobbleIndex = _gobbles[warpletId];
         tokenId = _encodeTokenId(warpletId, gobbleIndex);
         require(_ownerOf(tokenId) == address(0), "GobbledWarplets: already minted");
+        require(_reservedRecipient[tokenId] == address(0), "GobbledWarplets: already reserved");
 
         _gobbles[warpletId] = gobbleIndex + 1;
-        _mint(to, tokenId);
-        emit Minted(to, warpletId, tokenId, gobbleIndex);
+        _reservedRecipient[tokenId] = to;
+        emit Reserved(to, warpletId, tokenId, gobbleIndex);
     }
 
-    /// @notice Token URI setter may set or override URI for a token id (minted or not yet minted).
-    function setTokenURI(uint256 tokenId, string calldata uri) external onlyTokenURISetter {
-        _setTokenURI(tokenId, uri);
-    }
-
-    /// @notice Callable by any address if `signature` is valid EIP-712 from {tokenURISetter}.
-    ///         Only succeeds while no URI is stored yet for `tokenId` (uses {_suffixURI}, not {tokenURI},
-    ///         so this still works before mint). After that, use {setTokenURI} as admin.
+    /// @notice Reserved recipient completes the ERC721 + initial signed metadata in one transaction.
     /// @param deadline Unix timestamp after which the signature is invalid.
-    function setTokenURIWithSig(uint256 tokenId, string calldata uri, uint256 deadline, bytes calldata signature) external {
+    function mint(uint256 tokenId, string calldata uri, uint256 deadline, bytes calldata signature) external {
         require(block.timestamp <= deadline, "GobbledWarplets: signature expired");
+
+        address to = _reservedRecipient[tokenId];
+        require(to != address(0), "GobbledWarplets: not reserved");
+        require(msg.sender == to, "GobbledWarplets: not recipient");
+        require(_ownerOf(tokenId) == address(0), "GobbledWarplets: already minted");
         require(bytes(_suffixURI(tokenId)).length == 0, "GobbledWarplets: uri already set");
 
         address signer = ECDSA.recoverCalldata(
-            _hashTypedDataV4(
-                keccak256(abi.encode(_SET_TOKEN_URI_TYPEHASH, tokenId, keccak256(bytes(uri)), deadline))
-            ),
+            _hashTypedDataV4(keccak256(abi.encode(_MINT_TYPEHASH, tokenId, keccak256(bytes(uri)), deadline))),
             signature
         );
         require(signer == tokenURISetter, "GobbledWarplets: invalid signer");
 
-        _setTokenURI(tokenId, uri);
-    }
+        delete _reservedRecipient[tokenId];
 
-    function batchSetTokenURI(uint256[] calldata tokenIds, string[] calldata uris)
-        external
-        onlyTokenURISetter
-    {
-        require(tokenIds.length == uris.length, "GobbledWarplets: length mismatch");
-        for (uint256 i = 0; i < tokenIds.length; i++) {
-            _setTokenURI(tokenIds[i], uris[i]);
-        }
+        _mint(to, tokenId);
+        _setTokenURI(tokenId, uri);
+
+        (uint256 wid, uint256 idx) = _decodeTokenId(tokenId);
+        emit Minted(to, wid, tokenId, idx);
     }
 
     function gobbleCount(uint256 warpletId) external view returns (uint256) {

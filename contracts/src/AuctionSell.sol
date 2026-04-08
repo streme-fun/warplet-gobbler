@@ -70,7 +70,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     /// @notice WARPGOBB required to move a queued Warplet to the head via ERC777 `send` + `userData`.
     uint256 public queueBumpFee;
 
-    /// @notice `AuctionSettled.gobbledTokenId` uses this value when `GobbledWarplets.mint` reverts so settlement still completes.
+    /// @notice `AuctionSettled.gobbledTokenId` uses this value when `GobbledWarplets.reserve` reverts so settlement still completes.
     uint256 public constant GOBBLED_MINT_FAILED = type(uint256).max;
 
 
@@ -385,7 +385,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         auction.settled = true;
 
         uint256 gobbledTokenId;
-        try gobbledWarplets.mint(_auction.bidder, _auction.tokenId) returns (uint256 tid) {
+        try gobbledWarplets.reserve(_auction.bidder, _auction.tokenId) returns (uint256 tid) {
             gobbledTokenId = tid;
         } catch {
             gobbledTokenId = GOBBLED_MINT_FAILED;
