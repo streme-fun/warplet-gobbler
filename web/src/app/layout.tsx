@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Caveat, Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+});
+
+const handwritten = Caveat({
+  subsets: ["latin"],
+  variable: "--font-handwritten",
+  weight: ["600", "700"],
 });
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://warpletgobbler.xyz";
@@ -37,7 +43,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" data-theme="warplet" className={inter.variable}>
+    <html
+      lang="en"
+      data-theme="warplet"
+      className={`${inter.variable} ${handwritten.variable}`}
+    >
       <body className="min-h-screen bg-base-100 text-base-content">
         <Providers>{children}</Providers>
       </body>

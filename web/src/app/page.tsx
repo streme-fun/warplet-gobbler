@@ -2,17 +2,21 @@
 
 import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
 import { ConnectKitButton } from "connectkit";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { useMiniApp } from "@/hooks/useMiniApp";
+import { useOwnedWarplets } from "@/hooks/useOwnedWarplets";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import {
   useDutchAuctionActions,
+  useDutchAuctionPayoutStream,
   useDutchAuctionPayoutToken,
   useDutchAuctionPrice,
   useWarpgobbUsdPrice,
-  useWarpletApproval,
 } from "@/hooks/useDutchAuction";
+import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
+import { useAuctionSell777Bid } from "@/hooks/useAuctionSell777Bid";
+import { useAuctionQueueStripFids } from "@/hooks/useAuctionQueueStripFids";
 import AbyssBackground from "@/components/AbyssBackground";
 import ParallaxBackground from "@/components/ParallaxBackground";
 import Particles from "@/components/Particles";
@@ -21,7 +25,13 @@ import GobblePeek from "@/components/GobblePeek";
 import BuyOverlay from "@/components/BuyOverlay";
 import GobblerAuctionSection from "@/components/GobblerAuctionSection";
 import FlyingWarplet from "@/components/FlyingWarplet";
-import { MY_WARPLETS } from "@/lib/mock-data";
+import StreamingNumber from "@/components/StreamingNumber";
+import { warpletImageSrc } from "@/lib/warplet-image-src";
+import {
+  GOBBLE_TRANSACTION_REVERTED_FRIENDLY,
+  formatGobbleSellTxError,
+  formatUserFacingTxError,
+} from "@/lib/format-tx-error";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -73,26 +83,123 @@ export default function Home() {
     h: number;
   } | null>(null);
   const [boughtFids, setBoughtFids] = useState<Set<number>>(new Set());
-  const { data: currentPrice } = useDutchAuctionPrice();
+  const [bidding, setBidding] = useState(false);
+  const [auctionBidError, setAuctionBidError] = useState<string | null>(null);
+  const auctionSell = useAuctionSellAuction();
+  const auctionQueueStripFids = useAuctionQueueStripFids();
+  const { approveAndBid, isPending: bidTxPending } = useAuctionSell777Bid();
+  const dutchAuctionPriceQuery = useDutchAuctionPrice();
+  const currentPrice = dutchAuctionPriceQuery.data;
   const { symbol: payoutSymbol, decimals: payoutDecimals } =
     useDutchAuctionPayoutToken();
+  const payoutStream = useDutchAuctionPayoutStream(
+    currentPrice,
+    payoutDecimals,
+    dutchAuctionPriceQuery.dataUpdatedAt,
+  );
   const { priceUsd: warpgobbPriceUsd } = useWarpgobbUsdPrice();
-  const { isApproved, refetchApproval } = useWarpletApproval(selectedFid);
-  const { approveWarplet, gobbleWarplet, isWriting } = useDutchAuctionActions();
+  const { gobbleWarplet, isWriting } = useDutchAuctionActions();
+  const {
+    warplets: ownedWarplets,
+    isLoading: ownedWarpletsLoading,
+    isError: ownedWarpletsError,
+    warpletsConfigured,
+  } = useOwnedWarplets();
+
+  const walletConfirmedNoWarplets =
+    isConnected &&
+    warpletsConfigured &&
+    !ownedWarpletsLoading &&
+    !ownedWarpletsError &&
+    ownedWarplets.length === 0;
+
+  const pickerWarplets = useMemo(() => {
+    if (!warpletsConfigured || !isConnected) {
+      return [];
+    }
+
+    if (ownedWarpletsLoading && ownedWarplets.length === 0) {
+      return [];
+    }
+
+    if (ownedWarpletsError) {
+      return [];
+    }
+
+    if (ownedWarplets.length === 0) {
+      return [];
+    }
+
+    return ownedWarplets.map((w) => ({
+      fid: w.fid,
+      name: w.name,
+      imageSrc: w.imageSrc,
+    }));
+  }, [
+    warpletsConfigured,
+    isConnected,
+    ownedWarpletsLoading,
+    ownedWarpletsError,
+    ownedWarplets,
+  ]);
+
+  const showWarpletPickerSkeleton =
+    !warpletsConfigured ||
+    !isConnected ||
+    (warpletsConfigured &&
+      isConnected &&
+      !ownedWarpletsError &&
+      ownedWarpletsLoading &&
+      ownedWarplets.length === 0);
+
+  const WARPLET_PICKER_SKELETON_COUNT = 8;
+
+  useEffect(() => {
+    if (
+      selectedFid != null &&
+      !pickerWarplets.some((w) => w.fid === selectedFid)
+    ) {
+      setSelectedFid(null);
+    }
+  }, [selectedFid, pickerWarplets, setSelectedFid]);
+
+  const nowSecs = Math.floor(Date.now() / 1000);
+  const auctionLot = auctionSell.auction;
+  const auctionExpired =
+    !!auctionLot &&
+    !auctionLot.settled &&
+    nowSecs >= Number(auctionLot.endTime);
+  const auctionChainBidActive =
+    auctionSell.configured &&
+    !auctionSell.isError &&
+    auctionLot != null &&
+    auctionLot.tokenId > 0n;
+
+  const auctionBidDisabled =
+    !isConnected ||
+    bidTxPending ||
+    bidding ||
+    (auctionChainBidActive &&
+      (auctionSell.isPaused ||
+        auctionExpired ||
+        auctionSell.minNextBidAmount == null ||
+        !auctionSell.bidTokenAddress));
+
+  const geckoPoolUrl =
+    process.env.NEXT_PUBLIC_GECKOTERMINAL_POOL_URL ??
+    "https://www.geckoterminal.com/base/pools/0x0000000000000000000000000000000000000000";
 
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [isSelling, setIsSelling] = useState(false);
   const [sellError, setSellError] = useState<string | null>(null);
+  /** Snapshot for GobbleOverlay: live `currentPrice` hits 0 right after gobble mines. */
+  const [chestPayout, setChestPayout] = useState<{
+    tokens: number;
+    usd: number | null;
+  } | null>(null);
 
   const displayPrice = currentPrice ?? BigInt(0);
   const payoutAmount = Number(formatUnits(displayPrice, payoutDecimals));
-  const formattedPrice = payoutAmount.toLocaleString(
-    undefined,
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 3,
-    },
-  );
   // USD quote fallback rules:
   // - if payout amount is 0 => show $0.00
   // - if the payout amount hasn't loaded yet => show a very conservative $50k estimate
@@ -123,19 +230,27 @@ export default function Home() {
     setFlyRect(null);
     setSelectedFid(null);
     setWarpletVisible(true);
+    setChestPayout(null);
   }, []);
 
-  const startSellAnimation = useCallback(() => {
-    if (!selectedFid || gobbling || flyingFid) return;
+  const startSellAnimation = useCallback((): boolean => {
+    if (!selectedFid || gobbling || flyingFid) return false;
     const el = cardRefs.current.get(selectedFid);
-    if (!el) return;
+    if (!el) return false;
     const rect = el.getBoundingClientRect();
     setFlyRect({ x: rect.left, y: rect.top, w: rect.width, h: rect.height });
     setFlyingFid(selectedFid);
+    return true;
   }, [selectedFid, gobbling, flyingFid]);
 
   const handleSell = useCallback(async () => {
-    if (!selectedFid || !isConnected || !publicClient || isSelling || isWriting) {
+    if (
+      !selectedFid ||
+      !isConnected ||
+      !publicClient ||
+      isSelling ||
+      isWriting
+    ) {
       return;
     }
 
@@ -143,21 +258,41 @@ export default function Home() {
     setIsSelling(true);
 
     try {
-      if (!isApproved) {
-        const approveHash = await approveWarplet(selectedFid);
-        await publicClient.waitForTransactionReceipt({ hash: approveHash });
-        await refetchApproval();
+      if (currentPrice === undefined) {
+        setSellError("Waiting for Gobbler price — try again in a moment.");
+        return;
+      }
+      const payoutWeiSnapshot = currentPrice;
+      const chestTokens = Number(
+        formatUnits(payoutWeiSnapshot, payoutDecimals),
+      );
+      const chestUsd =
+        chestTokens === 0
+          ? 0
+          : warpgobbPriceUsd != null
+            ? chestTokens * warpgobbPriceUsd
+            : null;
+
+      // On-chain min payout for this tx (1% slippage vs snapshot). Always abi-encoded into safeTransferFrom `data`.
+      const minPrice = (payoutWeiSnapshot * BigInt(99)) / BigInt(100);
+      const gobbleHash = await gobbleWarplet(selectedFid, minPrice);
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: gobbleHash,
+      });
+      if (receipt.status === "reverted") {
+        setSellError(GOBBLE_TRANSACTION_REVERTED_FRIENDLY);
+        return;
       }
 
-      const minPrice = (displayPrice * BigInt(99)) / BigInt(100);
-      const gobbleHash = await gobbleWarplet(selectedFid, minPrice);
-      await publicClient.waitForTransactionReceipt({ hash: gobbleHash });
-
-      startSellAnimation();
+      setChestPayout({ tokens: chestTokens, usd: chestUsd });
+      if (!startSellAnimation()) {
+        setChestPayout(null);
+        setSellError(
+          "Could not start reveal animation — scroll to your Warplet and try again.",
+        );
+      }
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to submit sell transaction";
-      setSellError(msg);
+      setSellError(formatGobbleSellTxError(err));
     } finally {
       setIsSelling(false);
     }
@@ -167,21 +302,60 @@ export default function Home() {
     publicClient,
     isSelling,
     isWriting,
-    isApproved,
-    approveWarplet,
-    refetchApproval,
-    displayPrice,
+    currentPrice,
+    payoutDecimals,
+    warpgobbPriceUsd,
     gobbleWarplet,
     startSellAnimation,
   ]);
 
   const handleBuy = useCallback(
-    (fid: number, rect: { x: number; y: number; w: number; h: number }) => {
+    async (
+      fid: number,
+      rect: { x: number; y: number; w: number; h: number },
+    ) => {
       if (buyingFid) return;
+
+      const a = auctionSell.auction;
+      const canSubmitOnChain =
+        auctionSell.configured &&
+        !auctionSell.isError &&
+        a != null &&
+        a.tokenId > 0n &&
+        !a.settled &&
+        !auctionSell.isPaused &&
+        Math.floor(Date.now() / 1000) < Number(a.endTime) &&
+        auctionSell.minNextBidAmount != null &&
+        auctionSell.bidTokenAddress != null;
+
+      if (canSubmitOnChain) {
+        setAuctionBidError(null);
+        setBidding(true);
+        try {
+          if (!publicClient) {
+            setAuctionBidError("Something went wrong. Try again in a moment.");
+            return;
+          }
+          const hash = await approveAndBid({
+            amount: auctionSell.minNextBidAmount!,
+            bidTokenAddress: auctionSell.bidTokenAddress!,
+          });
+          await publicClient.waitForTransactionReceipt({ hash });
+          await auctionSell.refetchAuction();
+          setBuyingFid(fid);
+          setBuyRect(rect);
+        } catch (err) {
+          setAuctionBidError(formatUserFacingTxError(err));
+        } finally {
+          setBidding(false);
+        }
+        return;
+      }
+
       setBuyingFid(fid);
       setBuyRect(rect);
     },
-    [buyingFid],
+    [buyingFid, auctionSell, publicClient, approveAndBid],
   );
 
   const handleBuyDone = useCallback(() => {
@@ -216,9 +390,9 @@ export default function Home() {
         <GobbleOverlay
           onDone={handleGobbleDone}
           onChestReveal={handleChestReveal}
-          payout={Number(formatUnits(displayPrice, payoutDecimals))}
+          payout={chestPayout?.tokens ?? payoutAmount}
           payoutSymbol={payoutSymbol}
-          payoutUsd={payoutUsd}
+          payoutUsd={chestPayout?.usd ?? payoutUsd}
         />
       )}
 
@@ -226,7 +400,7 @@ export default function Home() {
       {gobbling && flyingFid && warpletVisible && (
         <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
           <img
-            src={`/warplets/warplet-${flyingFid}.png`}
+            src={warpletImageSrc(flyingFid)}
             alt=""
             className="w-[280px] h-[280px] sm:w-[350px] sm:h-[350px] rounded-2xl animate-breathe"
             draggable={false}
@@ -255,7 +429,10 @@ export default function Home() {
         style={{ opacity: gobbling ? 0 : 1 }}
       >
         {/* Parallax warplet background */}
-        <ParallaxBackground />
+        <ParallaxBackground
+          queueFids={auctionQueueStripFids}
+          neutralTiles={walletConfirmedNoWarplets}
+        />
 
         {/* Background gradient orbs */}
         <div className="fixed inset-0 pointer-events-none">
@@ -302,35 +479,65 @@ export default function Home() {
           </div>
 
           {/* Price + picker + action — compact layout */}
-          <div className="mt-6 sm:mt-8 w-full max-w-2xl animate-fade-up-delay-2 text-center">
+          <div className="mt-6 sm:mt-8 w-full max-w-4xl animate-fade-up-delay-2 text-center">
             <p className="text-sm sm:text-base text-base-content/50">
               The Gobbler will pay
             </p>
             <div className="text-4xl sm:text-6xl font-mono font-semibold text-primary streaming-glow">
-              {formattedPrice}
+              <StreamingNumber
+                start={payoutStream.start}
+                perSecond={payoutStream.perSecond}
+                smartMinSigFigs={6}
+                smartHideDecimalsIfIntegerDigitsGt={5}
+              />
               <span className="text-base font-normal text-base-content/40 ml-2">
-                {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
+                {payoutSymbol?.startsWith("$")
+                  ? payoutSymbol
+                  : `$${payoutSymbol}`}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/40 mt-1">
-              {payoutUsd === null
-                ? "USD quote unavailable"
-                : `~$${payoutUsd.toLocaleString(undefined, {
-                    maximumFractionDigits: 2,
-                    minimumFractionDigits: 2,
-                  })}`}
+              {isAmountMissing ? (
+                isDutchAuctionConfigured ? (
+                  <>
+                    ~$
+                    {FX_EST_MARKET_CAP_USD.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                      minimumFractionDigits: 0,
+                    })}
+                  </>
+                ) : (
+                  "~$0.00"
+                )
+              ) : payoutAmount > 0 && warpgobbPriceUsd == null ? (
+                "USD quote unavailable"
+              ) : (
+                <>
+                  ~$
+                  <StreamingNumber
+                    start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
+                    perSecond={payoutStream.perSecond * (warpgobbPriceUsd ?? 0)}
+                    decimals={2}
+                    truncateFractionDigits
+                    className="inline font-mono"
+                  />
+                </>
+              )}
             </p>
             <p className="text-sm sm:text-base text-base-content/50">
               for your warplet
             </p>
 
-            {/* Warplet picker — horizontal scroll */}
-            <div className="w-full mt-4 max-w-lg m-auto">
-              <div className="flex items-center justify-between mb-2 ">
-                <p className="text-xs text-base-content/40">
+            {/* Warplet picker — horizontal scroll (width matches auction card column) */}
+            <div className="w-full mt-4">
+              <div className="flex flex-col items-center gap-2 mb-2">
+                <p className="text-xs text-base-content/40 text-center">
                   Select a Warplet to sell
+                  {warpletsConfigured && isConnected && ownedWarpletsLoading
+                    ? " · Loading your Warplets…"
+                    : ""}
                 </p>
-                <div className="flex gap-1">
+                <div className="flex gap-1 justify-center">
                   <button
                     onClick={() => {
                       const el = document.getElementById("warplet-scroll");
@@ -375,35 +582,80 @@ export default function Home() {
               </div>
               <div
                 id="warplet-scroll"
-                className="flex gap-2 overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
+                className="overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
               >
-                {MY_WARPLETS.map((w) => (
-                  <button
-                    key={w.fid}
-                    ref={(el) => {
-                      if (el) cardRefs.current.set(w.fid, el);
-                      else cardRefs.current.delete(w.fid);
-                    }}
-                    onClick={() =>
-                      setSelectedFid(selectedFid === w.fid ? null : w.fid)
-                    }
-                    className={`relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border-2 snap-center transition-all duration-200 ${
-                      selectedFid === w.fid
-                        ? "border-primary shadow-lg shadow-primary/30"
-                        : "border-base-content/10 hover:border-base-content/25"
-                    } ${flyingFid === w.fid ? "opacity-0" : ""}`}
-                  >
-                    <img
-                      src={`/warplets/warplet-${w.fid}.png`}
-                      alt={w.name}
-                      className="w-full h-full object-cover"
-                      draggable={false}
-                    />
-                    <span className="absolute bottom-0 inset-x-0 text-[10px] py-0.5 bg-black/60 text-base-content/70">
-                      #{w.fid}
-                    </span>
-                  </button>
-                ))}
+                {warpletsConfigured && isConnected && ownedWarpletsError && (
+                  <p className="text-xs text-error/80 px-1 text-center max-w-md mx-auto">
+                    Couldn&apos;t load Warplets from the chain. Make sure your
+                    wallet is on Base. Check{" "}
+                    <code className="text-[10px]">NEXT_PUBLIC_WARPLETS_ADDRESS</code>{" "}
+                    and that the contract supports{" "}
+                    <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
+                    (ERC721Enumerable).
+                  </p>
+                )}
+                {warpletsConfigured &&
+                  isConnected &&
+                  !ownedWarpletsLoading &&
+                  !ownedWarpletsError &&
+                  ownedWarplets.length === 0 && (
+                    <p className="text-xs text-base-content/50 px-1 py-4 text-center">
+                      No Warplets in this wallet on Base.
+                    </p>
+                  )}
+                {showWarpletPickerSkeleton ? (
+                  <div className="flex min-w-full justify-center">
+                    <div className="flex gap-2 w-max">
+                      {Array.from(
+                        { length: WARPLET_PICKER_SKELETON_COUNT },
+                        (_, i) => (
+                          <div
+                            key={`picker-sk-${i}`}
+                            className="relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border-2 border-base-content/10 snap-center pointer-events-none text-center"
+                            aria-hidden
+                          >
+                            <div className="absolute inset-0 skeleton rounded-none" />
+                            <span className="absolute bottom-0 inset-x-0 h-[22px] skeleton rounded-none border-t border-base-content/5" />
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                ) : pickerWarplets.length > 0 ? (
+                  <div className="flex min-w-full justify-center">
+                    <div className="flex gap-2 w-max">
+                      {pickerWarplets.map((w) => (
+                        <button
+                          key={w.fid}
+                          ref={(el) => {
+                            if (el) cardRefs.current.set(w.fid, el);
+                            else cardRefs.current.delete(w.fid);
+                          }}
+                          onClick={() =>
+                            setSelectedFid(selectedFid === w.fid ? null : w.fid)
+                          }
+                          className={`relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border-2 snap-center transition-all duration-200 text-center ${
+                            selectedFid === w.fid
+                              ? "border-primary shadow-lg shadow-primary/30"
+                              : "border-base-content/10 hover:border-base-content/25"
+                          } ${flyingFid === w.fid ? "opacity-0" : ""}`}
+                        >
+                          <img
+                            src={w.imageSrc}
+                            alt={w.name}
+                            className="w-full h-full object-cover"
+                            draggable={false}
+                            loading="lazy"
+                            decoding="async"
+                          />
+                          <span className="absolute bottom-0 inset-x-0 text-[10px] py-0.5 bg-black/60 text-base-content/70 text-center">
+                            #{w.fid}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -414,7 +666,11 @@ export default function Home() {
                   : "border border-primary/30 text-primary/50 hover:border-primary/50 hover:text-primary/70"
               }`}
               disabled={
-                !!flyingFid || !selectedFid || !isConnected || isSelling || isWriting
+                !!flyingFid ||
+                !selectedFid ||
+                !isConnected ||
+                isSelling ||
+                isWriting
               }
               onClick={selectedFid ? handleSell : undefined}
             >
@@ -427,7 +683,9 @@ export default function Home() {
                     : "Select a Warplet"}
             </button>
             {sellError && (
-              <p className="mt-2 text-xs text-error/90 break-all">{sellError}</p>
+              <p className="mt-2 text-xs text-error/90 text-center max-w-md mx-auto break-words">
+                {sellError}
+              </p>
             )}
           </div>
         </section>
@@ -471,9 +729,13 @@ export default function Home() {
         <GobblerAuctionSection
           auctionBidPlacedFids={boughtFids}
           onBid={handleBuy}
-          bidDisabled={!isConnected}
-          selectedWarpletTokenId={selectedFid}
+          bidDisabled={auctionBidDisabled}
         />
+        {auctionBidError && (
+          <p className="mt-4 max-w-xl mx-auto text-center text-xs text-error/90 break-words px-2">
+            {auctionBidError}
+          </p>
+        )}
 
         <footer className="mt-12 sm:mt-16 pb-8 text-center text-sm text-base-content/30">
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 mb-6">
@@ -494,7 +756,7 @@ export default function Home() {
               Streme
             </a>
             <a
-              href="https://www.geckoterminal.com/base/pools/0x0000000000000000000000000000000000000000"
+              href={geckoPoolUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-base-content/60 transition-colors"

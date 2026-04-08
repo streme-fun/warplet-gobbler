@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { type Address, encodeAbiParameters, formatUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { CONTRACTS, UNISWAP_V4_POOL_IDS } from "@/lib/contracts";
 import { dutchAuctionAbi } from "@/abi/dutchAuction";
@@ -18,9 +19,53 @@ export function useDutchAuctionPrice() {
     address: CONTRACTS.dutchAuction,
     functionName: "currentPrice",
     query: {
-      refetchInterval: 3000,
+      refetchInterval: 1_000,
     },
   });
+}
+
+/**
+ * Human-readable payout + estimated tokens/sec from consecutive balance reads.
+ * Pass `dataUpdatedAt` from the same `useDutchAuctionPrice()` result so each poll
+ * updates the sample even when the bigint value is unchanged (needed for rate = 0).
+ */
+export function useDutchAuctionPayoutStream(
+  priceWei: bigint | undefined,
+  tokenDecimals: number,
+  dataUpdatedAt: number,
+) {
+  const prevRef = useRef<{ v: bigint; updatedAt: number } | null>(null);
+  const rateRef = useRef(0);
+  const [out, setOut] = useState({ start: 0, perSecond: 0 });
+
+  useEffect(() => {
+    if (priceWei === undefined) {
+      prevRef.current = null;
+      rateRef.current = 0;
+      setOut({ start: 0, perSecond: 0 });
+      return;
+    }
+    if (!dataUpdatedAt) return;
+
+    const human = Number(formatUnits(priceWei, tokenDecimals));
+    const prev = prevRef.current;
+
+    if (prev && dataUpdatedAt > prev.updatedAt) {
+      const dtSec = (dataUpdatedAt - prev.updatedAt) / 1000;
+      const delta = priceWei - prev.v;
+      if (delta <= BigInt(0)) {
+        rateRef.current = 0;
+      } else if (dtSec >= 0.12) {
+        const deltaHuman = Number(formatUnits(delta, tokenDecimals));
+        rateRef.current = Math.max(0, deltaHuman / dtSec);
+      }
+    }
+
+    prevRef.current = { v: priceWei, updatedAt: dataUpdatedAt };
+    setOut({ start: human, perSecond: rateRef.current });
+  }, [priceWei, tokenDecimals, dataUpdatedAt]);
+
+  return out;
 }
 
 export function useDutchAuctionPayoutToken() {
@@ -224,70 +269,40 @@ export function useWarpgobbUsdPrice() {
   };
 }
 
-export function useWarpletApproval(tokenId: number | null) {
-  const { address } = useAccount();
-
-  const approvedForToken = useReadContract({
-    abi: erc721Abi,
-    address: CONTRACTS.warplets,
-    functionName: "getApproved",
-    args: [BigInt(tokenId ?? 0)],
-    query: {
-      enabled: !!tokenId,
-    },
-  });
-
-  const approvedForAll = useReadContract({
-    abi: erc721Abi,
-    address: CONTRACTS.warplets,
-    functionName: "isApprovedForAll",
-    args: [address ?? CONTRACTS.dutchAuction, CONTRACTS.dutchAuction],
-    query: {
-      enabled: !!address,
-    },
-  });
-
-  const isApproved = useMemo(() => {
-    if (!tokenId) return false;
-    if (approvedForAll.data) return true;
-    return (
-      typeof approvedForToken.data === "string" &&
-      approvedForToken.data.toLowerCase() === CONTRACTS.dutchAuction.toLowerCase()
-    );
-  }, [tokenId, approvedForAll.data, approvedForToken.data]);
-
-  return {
-    isApproved,
-    isApprovalLoading: approvedForAll.isLoading || approvedForToken.isLoading,
-    refetchApproval: async () => {
-      await Promise.all([approvedForAll.refetch(), approvedForToken.refetch()]);
-    },
-  };
+/** `abi.encode(minPrice)` for `DutchAuction.onERC721Received` — required on every gobble tx. */
+export function encodeDutchAuctionGobbleData(minPrice: bigint): `0x${string}` {
+  return encodeAbiParameters([{ type: "uint256" }], [minPrice]);
 }
 
 export function useDutchAuctionActions() {
+  const { address } = useAccount();
   const { writeContractAsync, isPending } = useWriteContract();
 
-  const approveWarplet = async (tokenId: number) => {
+  /**
+   * One-tx gobble: `safeTransferFrom(owner, dutchAuction, tokenId, abi.encode(minPrice))`.
+   * `minPrice` must match the snapshot used for slippage / frontrun protection (on-chain revert if pot < minPrice).
+   */
+  const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
+    if (!address) {
+      throw new Error("Connect wallet to sell");
+    }
+    if (CONTRACTS.warplets.toLowerCase() === ZERO) {
+      throw new Error("NEXT_PUBLIC_WARPLETS_ADDRESS is not configured");
+    }
+    if (CONTRACTS.dutchAuction.toLowerCase() === ZERO) {
+      throw new Error("NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS is not configured");
+    }
+    const data = encodeDutchAuctionGobbleData(minPrice);
+
     return writeContractAsync({
       abi: erc721Abi,
       address: CONTRACTS.warplets,
-      functionName: "approve",
-      args: [CONTRACTS.dutchAuction, BigInt(tokenId)],
-    });
-  };
-
-  const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
-    return writeContractAsync({
-      abi: dutchAuctionAbi,
-      address: CONTRACTS.dutchAuction,
-      functionName: "gobble",
-      args: [BigInt(tokenId), minPrice],
+      functionName: "safeTransferFrom",
+      args: [address as Address, CONTRACTS.dutchAuction, BigInt(tokenId), data],
     });
   };
 
   return {
-    approveWarplet,
     gobbleWarplet,
     isWriting: isPending,
   };

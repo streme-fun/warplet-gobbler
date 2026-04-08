@@ -11,7 +11,9 @@ import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 
 /// @title GobbledWarplets
 /// @notice ERC721 receipt collection for gobbled Warplets. Only the authorized minter may mint.
-/// @dev Token id encoding: `tokenId = gobbleIndex * 10**6 + warpletId` (warplet ids must be below 100_000).
+/// @dev Token id encoding: `tokenId = gobbleIndex * TOKEN_ID_DECIMAL_STRIDE + warpletId`.
+///      `warpletId` must be strictly less than {TOKEN_ID_DECIMAL_STRIDE} so decoding is unambiguous.
+///      Stride is 1e8 (extra decimal zero vs 1e7) so sparse Warplet ids stay safely below the modulus; see `web/scripts/scan-warplet-token-ids.mjs`.
 ///      Uses {ERC721Enumerable} for `totalSupply`, `tokenOfOwnerByIndex`, and `tokenByIndex`.
 ///      Mint uses {_mint} (not {_safeMint}) so auction settlement cannot be bricked by a receiver that
 ///      reverts in `onERC721Received`. No post-mint receiver callback — avoids re-entrancy in the middle

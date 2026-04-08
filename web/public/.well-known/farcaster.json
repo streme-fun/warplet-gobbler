@@ -10,11 +10,11 @@
   "miniapp": {
     "version": "1",
     "name": "Warplet Gobbler",
-    "iconUrl": "https://warpletgobbler.xyz/icon.png",
+    "iconUrl": "https://warpletgobbler.xyz/icon.jpeg",
     "homeUrl": "https://warpletgobbler.xyz/",
     "imageUrl": "https://warpletgobbler.xyz/og-image.png",
     "buttonTitle": "Launch",
-    "splashImageUrl": "https://warpletgobbler.xyz/splash.png",
+    "splashImageUrl": "https://warpletgobbler.xyz/splash.jpeg",
     "splashBackgroundColor": "#13111C",
     "webhookUrl": "https://warpletgobbler.xyz/api/webhook",
     "description": "A flywheel for Warplets using Superfluid streaming",
