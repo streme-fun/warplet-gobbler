@@ -468,171 +468,167 @@ export default function AuctionLiveHero({
                 </div>
               ) : null}
 
-                {showExtendSuccessBanner && !idleNoChainAuction && !sold ? (
-                  <div
-                    className="w-full rounded-xl border border-primary/35 bg-primary/10 px-4 py-3 text-left shadow-[0_0_24px_-8px_rgba(0,245,255,0.35)] animate-fade-up shrink-0"
-                    role="status"
-                  >
-                    <p className="text-sm font-medium text-primary/95">
-                      Listing extended
-                    </p>
-                    <p className="text-xs text-base-content/60 mt-1 leading-relaxed">
-                      The chain has opened a fresh window — bidding picks up
-                      from the updated countdown.
-                    </p>
-                  </div>
-                ) : null}
-
+              {showExtendSuccessBanner && !idleNoChainAuction && !sold ? (
                 <div
-                  ref={renewFlashRef}
-                  className="w-full flex-1 flex flex-col rounded-xl transition-[box-shadow] duration-500 min-h-0"
+                  className="w-full rounded-xl border border-primary/35 bg-primary/10 px-4 py-3 text-left shadow-[0_0_24px_-8px_rgba(0,245,255,0.35)] animate-fade-up shrink-0"
+                  role="status"
                 >
-                  <div
-                    className={`w-full space-y-2 sm:space-y-3 transition-colors duration-500 ${
-                      startNewAuction?.loading
-                        ? "animate-auction-tx-pending"
-                        : ""
-                    }`}
-                  >
-                    <div>
-                      <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
-                        Top bid
+                  <p className="text-sm font-medium text-primary/95">
+                    Listing extended
+                  </p>
+                  <p className="text-xs text-base-content/60 mt-1 leading-relaxed">
+                    The chain has opened a fresh window — bidding picks up from
+                    the updated countdown.
+                  </p>
+                </div>
+              ) : null}
+
+              <div
+                ref={renewFlashRef}
+                className="w-full flex-1 flex flex-col rounded-xl transition-[box-shadow] duration-500 min-h-0"
+              >
+                <div
+                  className={`w-full space-y-2 sm:space-y-3 transition-colors duration-500 ${
+                    startNewAuction?.loading ? "animate-auction-tx-pending" : ""
+                  }`}
+                >
+                  <div>
+                    <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
+                      Top bid
+                    </p>
+                    {idleNoChainAuction ? (
+                      <p className="text-lg sm:text-xl font-mono text-base-content/45">
+                        —
                       </p>
-                      {idleNoChainAuction ? (
-                        <p className="text-lg sm:text-xl font-mono text-base-content/45">
-                          —
+                    ) : sold ? (
+                      <div className="space-y-3">
+                        <p
+                          className={`text-xl sm:text-2xl font-mono text-success transition-all duration-300 ${
+                            startNewAuction?.loading
+                              ? "scale-[1.02] drop-shadow-[0_0_12px_rgba(52,211,153,0.35)]"
+                              : ""
+                          }`}
+                        >
+                          Settled
                         </p>
-                      ) : sold ? (
-                        <div className="space-y-3">
-                          <p
-                            className={`text-xl sm:text-2xl font-mono text-success transition-all duration-300 ${
-                              startNewAuction?.loading
-                                ? "scale-[1.02] drop-shadow-[0_0_12px_rgba(52,211,153,0.35)]"
-                                : ""
-                            }`}
-                          >
-                            Settled
-                          </p>
-                          {startNewAuction ? (
-                            <div className="space-y-2">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  if (
-                                    startNewAuction.disabled ||
-                                    startNewAuction.loading
-                                  ) {
-                                    return;
-                                  }
-                                  setStartAuctionPressPulse(true);
-                                  window.setTimeout(
-                                    () => setStartAuctionPressPulse(false),
-                                    220,
-                                  );
-                                  void startNewAuction.onStart();
-                                }}
-                                disabled={
+                        {startNewAuction ? (
+                          <div className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (
                                   startNewAuction.disabled ||
                                   startNewAuction.loading
+                                ) {
+                                  return;
                                 }
-                                className={`btn btn-secondary btn-outline btn-sm w-full sm:w-auto min-w-[200px] font-semibold tracking-wide transition-all duration-200 ease-out hover:shadow-[0_0_22px_-6px_rgba(123,97,255,0.55)] active:scale-[0.97] disabled:opacity-60 ${
-                                  startAuctionPressPulse ? "scale-[0.96]" : ""
-                                }`}
-                              >
-                                {startNewAuction.loading ? (
-                                  <span className="flex items-center gap-2">
-                                    <span className="loading loading-spinner loading-sm text-secondary" />
-                                    <span className="font-normal normal-case tracking-normal">
-                                      {startNewAuction.loadingStage ===
-                                      "confirming"
-                                        ? "Confirming…"
-                                        : "Waiting for wallet…"}
-                                    </span>
+                                setStartAuctionPressPulse(true);
+                                window.setTimeout(
+                                  () => setStartAuctionPressPulse(false),
+                                  220,
+                                );
+                                void startNewAuction.onStart();
+                              }}
+                              disabled={
+                                startNewAuction.disabled ||
+                                startNewAuction.loading
+                              }
+                              className={`btn btn-secondary btn-outline btn-sm w-full sm:w-auto min-w-[200px] font-semibold tracking-wide transition-all duration-200 ease-out hover:shadow-[0_0_22px_-6px_rgba(123,97,255,0.55)] active:scale-[0.97] disabled:opacity-60 ${
+                                startAuctionPressPulse ? "scale-[0.96]" : ""
+                              }`}
+                            >
+                              {startNewAuction.loading ? (
+                                <span className="flex items-center gap-2">
+                                  <span className="loading loading-spinner loading-sm text-secondary" />
+                                  <span className="font-normal normal-case tracking-normal">
+                                    {startNewAuction.loadingStage ===
+                                    "confirming"
+                                      ? "Confirming…"
+                                      : "Waiting for wallet…"}
                                   </span>
-                                ) : (
-                                  "Start new auction"
-                                )}
-                              </button>
-                              {startNewAuction.loading &&
-                              !startNewAuction.error &&
-                              !startNewAuction.housePaused ? (
-                                <p
-                                  className="text-xs text-secondary/80 font-medium animate-pulse"
-                                  role="status"
-                                  aria-live="polite"
-                                >
-                                  {startNewAuction.loadingStage === "confirming"
-                                    ? "Transaction is confirming on Base — hang tight."
-                                    : "Check your wallet or browser wallet popup to sign the transaction."}
-                                </p>
-                              ) : null}
-                              {startNewAuction.error ? (
-                                <p className="text-xs text-error/90 break-words">
-                                  {startNewAuction.error}
-                                </p>
-                              ) : startNewAuction.housePaused ? (
-                                <p className="text-xs text-warning/85 max-w-md leading-relaxed">
-                                  Auction house is paused on-chain — unpause
-                                  (owner) first. You can then start the next lot
-                                  here; unpause may also open it automatically.
-                                </p>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : showNoBids ? (
-                        <div className="space-y-1.5">
-                          <p className="text-lg sm:text-xl font-mono text-base-content/50">
-                            No bids yet
-                          </p>
-                          {bidInviteCopy && !auctionExpiredOnChain ? (
-                            <p className="text-xs text-secondary/80 font-medium">
-                              {bidInviteCopy}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <p
-                          ref={bidTopAmountRef}
-                          className="text-sm sm:text-lg font-mono text-base-content tabular-nums"
-                        >
-                          {topBidAmountStr}{" "}
-                          <span className="text-base-content/40 text-xs sm:text-sm">
-                            {bidSymbol}
-                          </span>
+                                </span>
+                              ) : (
+                                "Start new auction"
+                              )}
+                            </button>
+                            {startNewAuction.loading &&
+                            !startNewAuction.error &&
+                            !startNewAuction.housePaused ? (
+                              <p
+                                className="text-xs text-secondary/80 font-medium animate-pulse"
+                                role="status"
+                                aria-live="polite"
+                              >
+                                {startNewAuction.loadingStage === "confirming"
+                                  ? "Transaction is confirming on Base — hang tight."
+                                  : "Check your wallet or browser wallet popup to sign the transaction."}
+                              </p>
+                            ) : null}
+                            {startNewAuction.error ? (
+                              <p className="text-xs text-error/90 break-words">
+                                {startNewAuction.error}
+                              </p>
+                            ) : startNewAuction.housePaused ? (
+                              <p className="text-xs text-warning/85 max-w-md leading-relaxed">
+                                Auction house is paused on-chain — unpause
+                                (owner) first. You can then start the next lot
+                                here; unpause may also open it automatically.
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : showNoBids ? (
+                      <div className="space-y-1.5">
+                        <p className="text-lg sm:text-xl font-mono text-base-content/50">
+                          No bids yet
                         </p>
-                      )}
-                    </div>
-                    {contractPaused && !sold && !idleNoChainAuction && (
-                      <p className="text-xs text-warning/80">
-                        Auction house is paused — bidding is disabled on-chain.
+                        {bidInviteCopy && !auctionExpiredOnChain ? (
+                          <p className="text-xs text-secondary/80 font-medium">
+                            {bidInviteCopy}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p
+                        ref={bidTopAmountRef}
+                        className="text-sm sm:text-lg font-mono text-base-content tabular-nums"
+                      >
+                        {topBidAmountStr}{" "}
+                        <span className="text-base-content/40 text-xs sm:text-sm">
+                          {bidSymbol}
+                        </span>
                       </p>
                     )}
-                    {auctionExpiredOnChain &&
-                      !sold &&
-                      !idleNoChainAuction &&
-                      expiredLotCaption && (
-                        <p className="text-xs text-base-content/50">
-                          {expiredLotCaption}
-                        </p>
-                      )}
-                    {!sold && !showNoBids && hasHighBidder && topBidder && (
-                      <div>
-                        <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1.5">
-                          High bidder
-                        </p>
-                        <BidderAvatarName
-                          address={topBidder}
-                          viewerAddress={viewerAddress ?? undefined}
-                        />
-                      </div>
-                    )}
                   </div>
+                  {contractPaused && !sold && !idleNoChainAuction && (
+                    <p className="text-xs text-warning/80">
+                      Auction house is paused — bidding is disabled on-chain.
+                    </p>
+                  )}
+                  {auctionExpiredOnChain &&
+                    !sold &&
+                    !idleNoChainAuction &&
+                    expiredLotCaption && (
+                      <p className="text-xs text-base-content/50">
+                        {expiredLotCaption}
+                      </p>
+                    )}
+                  {!sold && !showNoBids && hasHighBidder && topBidder && (
+                    <div>
+                      <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1.5">
+                        High bidder
+                      </p>
+                      <BidderAvatarName
+                        address={topBidder}
+                        viewerAddress={viewerAddress ?? undefined}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
-
             </div>
           </div>
         </>
