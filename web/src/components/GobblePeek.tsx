@@ -51,13 +51,15 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     const restTop = () => (mobile() ? 108 : 171);
     const restBot = () => (mobile() ? 45 : 63);
 
-    // Desktop only: jaws bow inward — edges 50% thicker than middle, smooth
-    // quadratic falloff. Returns a multiplier in [1, 1.5] for the jaw thickness
-    // sampled at horizontal position x.
-    const edgeMul = (x: number) => {
+    // Desktop only: jaws bow inward, smooth quadratic falloff.
+    // Top jaw: edges 50% thicker than middle. Bottom jaw: edges 100% thicker
+    // (2× middle) — bottom curves harder so the lower corners frame the screen
+    // more aggressively.
+    const edgeMul = (x: number, jaw: 0 | 1) => {
       if (mobile()) return 1;
       const u = (x / W - 0.5) * 2; // -1 at left edge, 0 in middle, 1 at right edge
-      return 1 + 0.5 * u * u;
+      const amp = jaw === 0 ? 0.5 : 1.0;
+      return 1 + amp * u * u;
     };
 
     let topY = restTop();
@@ -124,7 +126,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       const eyeXs = [W * 0.34, W * 0.66];
       for (const eyeX of eyeXs) {
         const ey =
-          topJawY * edgeMul(eyeX) - eyeOffset + Math.sin(t * 0.6) * 2;
+          topJawY * edgeMul(eyeX, 0) - eyeOffset + Math.sin(t * 0.6) * 2;
         ex!.save();
         // Ambient glow
         const g1 = ex!.createRadialGradient(eyeX, ey, 0, eyeX, ey, glowR);
@@ -177,11 +179,11 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
         const x = b.xf * W;
         const br = Math.sin(t * 0.5 + b.ph) * 2;
         let r = b.r + br;
-        const mul = edgeMul(x);
-        // Apply edge curvature: jaw thickness is multiplied by `mul`, so the
+        // Apply edge curvature: jaw thickness is multiplied by edgeMul, so the
         // jaw edge sits at `topY * mul` (top) or `H - (H - botY) * mul` (bot).
-        const topEdgeY = topY * mul;
-        const botEdgeY = H - (H - botY) * mul;
+        // Top + bottom use different amplitudes — see edgeMul.
+        const topEdgeY = topY * edgeMul(x, 0);
+        const botEdgeY = H - (H - botY) * edgeMul(x, 1);
         let baseY = b.jaw === 0 ? topEdgeY + b.yo + 4 : botEdgeY + b.yo - 4;
 
         // Lip wave: travelling ripple from center outward
@@ -214,7 +216,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       gx!.moveTo(-30, -500);
       gx!.lineTo(W + 30, -500);
       for (let x = W + 30; x >= -30; x -= SAMPLE) {
-        gx!.lineTo(x, topY * edgeMul(x) + 4 + topWaveMax);
+        gx!.lineTo(x, topY * edgeMul(x, 0) + 4 + topWaveMax);
       }
       gx!.closePath();
       gx!.fill();
@@ -223,7 +225,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       gx!.moveTo(-30, H + 500);
       gx!.lineTo(W + 30, H + 500);
       for (let x = W + 30; x >= -30; x -= SAMPLE) {
-        gx!.lineTo(x, H - (H - botY) * edgeMul(x) - 4 - botWaveMax);
+        gx!.lineTo(x, H - (H - botY) * edgeMul(x, 1) - 4 - botWaveMax);
       }
       gx!.closePath();
       gx!.fill();
