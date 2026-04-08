@@ -1,9 +1,8 @@
 "use client";
 
 export default function AuctionQueueBumpPanel({
-  selectedTokenId,
-  bumpAmountDisplay,
   bidSymbol,
+  hasQueueSelection,
   alreadyFirst,
   bumpLiveReady,
   bumpDisabled,
@@ -11,9 +10,9 @@ export default function AuctionQueueBumpPanel({
   onBump,
   isBumping,
 }: {
-  selectedTokenId: number;
-  bumpAmountDisplay: string;
   bidSymbol: string;
+  /** Matches sell row: filled secondary only after a queue tile is selected. */
+  hasQueueSelection: boolean;
   alreadyFirst: boolean;
   /** On-chain linked-list AuctionSell + ERC777 bid token reads succeeded — wallet tx will work. */
   bumpLiveReady: boolean;
@@ -23,49 +22,56 @@ export default function AuctionQueueBumpPanel({
   isBumping: boolean;
 }) {
   const buttonDisabled =
-    bumpDisabled || isBumping || !bumpLiveReady;
+    !hasQueueSelection ||
+    alreadyFirst ||
+    bumpDisabled ||
+    isBumping ||
+    !bumpLiveReady;
+  const tokenLabel = bidSymbol.startsWith("$") ? bidSymbol : `$${bidSymbol}`;
+  /** Filled CTA only when a real skip is available (not e.g. dev CTA unplugged). */
+  const filledSecondary =
+    hasQueueSelection && !alreadyFirst && bumpLiveReady && !bumpDisabled;
+
+  const buttonLabel = isBumping
+    ? "Confirm…"
+    : alreadyFirst
+      ? "Already #1 in line"
+      : "Skip the line";
 
   return (
-    <div className="mt-8 pt-6 border-t border-base-content/10">
-      <p className="text-xs font-medium text-base-content/60 mb-1">
-        Warplet #{selectedTokenId}
-      </p>
-      {alreadyFirst ? (
-        <p className="text-xs text-base-content/45 max-w-xl">
-          This one is already first in the exit queue. Select a Warplet further
-          back in the row to see the{" "}
-          <strong className="font-semibold text-base-content/55">Skip the line</strong>{" "}
-          button there.
+    <div className="w-full flex flex-col items-center gap-2 text-center">
+      {bumpHint ? (
+        <p className="text-xs text-warning/90 max-w-md mx-auto break-words">
+          {bumpHint}
         </p>
-      ) : (
-        <>
-          <p className="text-xs text-base-content/45 mb-3 max-w-xl">
-            Pay the queue bump fee (ERC777 <code className="text-[10px]">send</code>{" "}
-            with encoded token id and predecessor) to move this NFT to the head of
-            the line.
+      ) : null}
+      <div className="flex min-h-[3rem] w-full max-w-sm flex-col items-center justify-center px-1">
+        {alreadyFirst ? (
+          <p className="text-sm leading-snug text-base-content/55">
+            This Warplet is already at the front of the queue. Pick one behind
+            them to skip the line.
           </p>
-          {!bumpLiveReady && (
-            <p className="text-xs text-base-content/50 mb-3 max-w-xl">
-              Preview only: set <code className="text-[10px]">NEXT_PUBLIC_AUCTION_SELL_ADDRESS</code>{" "}
-              to a linked-list AuctionSell with <code className="text-[10px]">queueBumpFee</code>{" "}
-              and an ERC-777 <code className="text-[10px]">bidToken</code> to pay for real.
-            </p>
-          )}
-          {bumpHint && (
-            <p className="text-xs text-warning/90 mb-2 max-w-xl">{bumpHint}</p>
-          )}
-          <button
-            type="button"
-            className="btn btn-secondary w-full sm:w-auto"
-            disabled={buttonDisabled}
-            onClick={onBump}
-          >
-            {isBumping
-              ? "Confirm in wallet…"
-              : `Pay ${bumpAmountDisplay} ${bidSymbol} · skip the line`}
-          </button>
-        </>
-      )}
+        ) : (
+          <p className="text-sm leading-snug text-base-content/70">
+            Pay 1M{" "}
+            <span className="font-semibold tabular-nums text-secondary/95">
+              {tokenLabel}
+            </span>
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        className={`btn w-full max-w-sm mx-auto mt-1 transition-shadow ${
+          filledSecondary
+            ? "btn-secondary hover:shadow-lg hover:shadow-secondary/25"
+            : "border border-secondary/30 text-secondary/50 hover:border-secondary/50 hover:text-secondary/70"
+        }`}
+        disabled={buttonDisabled}
+        onClick={onBump}
+      >
+        {buttonLabel}
+      </button>
     </div>
   );
 }

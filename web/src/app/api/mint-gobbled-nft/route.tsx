@@ -70,12 +70,11 @@ export async function POST(request: NextRequest) {
     const ipfsLink = await uploadToPinata(imageFile);
 
     return NextResponse.json({ success: true, ipfsLink, tokenId });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Mint preparation failed",
+        error: "Could not prepare mint. Try again later.",
       },
       { status: 500 },
     );

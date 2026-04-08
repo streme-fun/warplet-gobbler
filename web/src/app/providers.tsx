@@ -17,8 +17,14 @@ const walletConnectProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID ?? "";
  * CORS headers for your origin. Some providers (e.g. many `eth.merkle.io` setups) do not,
  * which surfaces as a preflight failure in DevTools.
  */
+/**
+ * Default: Superfluid-hosted Base RPC (override with `NEXT_PUBLIC_BASE_RPC_URL`).
+ * The `app=` query value is a public client-side routing / quota label for that
+ * endpoint, not a secret; it ships in the bundle like any public RPC URL.
+ */
 const baseRpcUrl =
-  process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() || "https://mainnet.base.org";
+  process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() ||
+  "https://rpc-endpoints.superfluid.dev/base-mainnet?app=streme-x8fsj6";
 
 /** One config everywhere: iframe heuristic must not swap connector sets or wagmi/ConnectKit disagree. */
 const config = createConfig(

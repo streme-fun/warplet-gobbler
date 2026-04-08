@@ -7,6 +7,15 @@ import AuctionWarpletImage from "./AuctionWarpletImage";
 import BidderAvatarName from "./BidderAvatarName";
 
 const STORAGE_KEY = "wg:last-auction-winner-dismissed";
+/** Snapshot of the lot that just settled — on-chain `auction` may already be the *next* live lot. */
+const HIGHLIGHT_KEY = "wg:last-auction-winner-highlight";
+
+export type StoredWinnerHighlight = {
+  fp: string;
+  tokenId: number;
+  bidder: Address;
+  amountWei: string;
+};
 
 export function getWinnerFingerprint(
   tokenId: bigint,
@@ -86,6 +95,47 @@ export function readDismissedWinnerFp(): string | null {
 export function writeDismissedWinnerFp(fp: string) {
   try {
     localStorage.setItem(STORAGE_KEY, fp);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readWinnerHighlight(): StoredWinnerHighlight | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(HIGHLIGHT_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw) as Partial<StoredWinnerHighlight>;
+    if (
+      typeof o.fp !== "string" ||
+      typeof o.tokenId !== "number" ||
+      typeof o.bidder !== "string" ||
+      typeof o.amountWei !== "string"
+    ) {
+      return null;
+    }
+    return {
+      fp: o.fp,
+      tokenId: o.tokenId,
+      bidder: o.bidder as Address,
+      amountWei: o.amountWei,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writeWinnerHighlight(h: StoredWinnerHighlight) {
+  try {
+    localStorage.setItem(HIGHLIGHT_KEY, JSON.stringify(h));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearWinnerHighlight() {
+  try {
+    localStorage.removeItem(HIGHLIGHT_KEY);
   } catch {
     /* ignore */
   }
