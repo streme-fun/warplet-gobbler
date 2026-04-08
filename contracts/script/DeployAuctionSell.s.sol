@@ -23,6 +23,7 @@ import {DeployHelpers} from "./DeployHelpers.sol";
 ///   `AUCTION_SELL_OWNER`, `AUCTION_RESERVE_PRICE_WEI`, `AUCTION_TIME_BUFFER_SECONDS`,
 ///   `AUCTION_MIN_BID_INCREMENT_PERCENT`, `AUCTION_DURATION_SECONDS`,
 ///   `GOBBLED_WARPLETS_NAME`, `GOBBLED_WARPLETS_SYMBOL`
+/// - Optional: `AUCTION_SELL_STREME_ZAP` — `StremeZapUniversal` for ETH bids; omit or `address(0)` for pull-only `bid()`
 contract DeployAuctionSell is DeployHelpers {
     function run() external {
         uint256 pk = _loadPrivateKey();
@@ -59,7 +60,8 @@ contract DeployAuctionSell is DeployHelpers {
             vm.envUint("AUCTION_RESERVE_PRICE_WEI"),
             uint8(minPctRaw),
             vm.envUint("AUCTION_DURATION_SECONDS"),
-            vm.envAddress("AUCTION_SELL_OWNER")
+            vm.envAddress("AUCTION_SELL_OWNER"),
+            vm.envOr("AUCTION_SELL_STREME_ZAP", address(0))
         );
     }
 }

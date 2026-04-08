@@ -80,7 +80,8 @@ contract AuctionSellForkTest is Test {
             RESERVE_PRICE,
             MIN_INCREMENT_PCT,
             DURATION,
-            owner
+            owner,
+            address(0)
         );
         gobbled.setMinter(address(sell));
         vm.stopPrank();
