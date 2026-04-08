@@ -51,15 +51,14 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     const restTop = () => (mobile() ? 108 : 171);
     const restBot = () => (mobile() ? 45 : 63);
 
-    // Desktop only: jaws bow inward, smooth quadratic falloff.
-    // Top jaw: edges 50% thicker than middle. Bottom jaw: edges 100% thicker
-    // (2× middle) — bottom curves harder so the lower corners frame the screen
-    // more aggressively.
-    const edgeMul = (x: number, jaw: 0 | 1) => {
-      if (mobile()) return 1;
+    // Desktop only: jaws bow inward as an additive pixel offset, so the
+    // hill-to-valley delta is identical on top and bottom (~85px). Smooth
+    // quadratic falloff: 0 in the middle, peaks at the edges.
+    const EDGE_AMP_PX = 85;
+    const edgeOffset = (x: number) => {
+      if (mobile()) return 0;
       const u = (x / W - 0.5) * 2; // -1 at left edge, 0 in middle, 1 at right edge
-      const amp = jaw === 0 ? 0.5 : 1.0;
-      return 1 + amp * u * u;
+      return EDGE_AMP_PX * u * u;
     };
 
     let topY = restTop();
@@ -72,26 +71,40 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
 
     const VC = "#040404";
 
-    // Jaw edge blobs
-    const bumps: {
+    // Jaw edge blobs.
+    // Count scales with viewport width so that at narrow widths the blobs
+    // don't pack tightly enough for the goo filter (stdDev=6, alpha threshold)
+    // to merge them into a flat band — which made the bottom teeth visually
+    // disappear on small windows. Target spacing ~16px.
+    let bumps: {
       jaw: number;
       xf: number;
       r: number;
       yo: number;
       ph: number;
     }[] = [];
-    for (let jaw = 0; jaw < 2; jaw++) {
-      for (let i = 0; i < 60; i++) {
-        const s = jaw * 1000 + i * 31;
-        bumps.push({
-          jaw,
-          xf: (i + 0.3 + sr(s) * 0.4) / 60,
-          r: 6 + sr(s + 11) * 13,
-          yo: sr(s + 23) * 4 - 2,
-          ph: sr(s + 37) * 6.28,
-        });
+    let lastBumpsCount = 0;
+    const computeBumpsCount = () =>
+      Math.max(28, Math.min(120, Math.round(W / 16)));
+    const regenerateBumps = () => {
+      const count = computeBumpsCount();
+      if (count === lastBumpsCount) return;
+      lastBumpsCount = count;
+      bumps = [];
+      for (let jaw = 0; jaw < 2; jaw++) {
+        for (let i = 0; i < count; i++) {
+          const s = jaw * 1000 + i * 31;
+          bumps.push({
+            jaw,
+            xf: (i + 0.3 + sr(s) * 0.4) / count,
+            r: 6 + sr(s + 11) * 13,
+            yo: sr(s + 23) * 4 - 2,
+            ph: sr(s + 37) * 6.28,
+          });
+        }
       }
-    }
+    };
+    regenerateBumps();
 
     function drawEyes(topJawY: number) {
       ex!.clearRect(0, 0, W, H);
@@ -126,7 +139,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       const eyeXs = [W * 0.34, W * 0.66];
       for (const eyeX of eyeXs) {
         const ey =
-          topJawY * edgeMul(eyeX, 0) - eyeOffset + Math.sin(t * 0.6) * 2;
+          topJawY + edgeOffset(eyeX) - eyeOffset + Math.sin(t * 0.6) * 2;
         ex!.save();
         // Ambient glow
         const g1 = ex!.createRadialGradient(eyeX, ey, 0, eyeX, ey, glowR);
@@ -179,11 +192,11 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
         const x = b.xf * W;
         const br = Math.sin(t * 0.5 + b.ph) * 2;
         let r = b.r + br;
-        // Apply edge curvature: jaw thickness is multiplied by edgeMul, so the
-        // jaw edge sits at `topY * mul` (top) or `H - (H - botY) * mul` (bot).
-        // Top + bottom use different amplitudes — see edgeMul.
-        const topEdgeY = topY * edgeMul(x, 0);
-        const botEdgeY = H - (H - botY) * edgeMul(x, 1);
+        // Apply edge curvature: same additive pixel offset for both jaws so
+        // hill-to-valley delta matches top vs bottom.
+        const off = edgeOffset(x);
+        const topEdgeY = topY + off;
+        const botEdgeY = botY - off;
         let baseY = b.jaw === 0 ? topEdgeY + b.yo + 4 : botEdgeY + b.yo - 4;
 
         // Lip wave: travelling ripple from center outward
@@ -216,7 +229,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       gx!.moveTo(-30, -500);
       gx!.lineTo(W + 30, -500);
       for (let x = W + 30; x >= -30; x -= SAMPLE) {
-        gx!.lineTo(x, topY * edgeMul(x, 0) + 4 + topWaveMax);
+        gx!.lineTo(x, topY + edgeOffset(x) + 4 + topWaveMax);
       }
       gx!.closePath();
       gx!.fill();
@@ -225,7 +238,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       gx!.moveTo(-30, H + 500);
       gx!.lineTo(W + 30, H + 500);
       for (let x = W + 30; x >= -30; x -= SAMPLE) {
-        gx!.lineTo(x, H - (H - botY) * edgeMul(x, 1) - 4 - botWaveMax);
+        gx!.lineTo(x, botY - edgeOffset(x) - 4 - botWaveMax);
       }
       gx!.closePath();
       gx!.fill();
@@ -253,7 +266,9 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       gooCv.height = H;
       eyeCv.width = W;
       eyeCv.height = H;
+      topY = restTop();
       botY = H - restBot();
+      regenerateBumps();
     };
     window.addEventListener("resize", onResize);
 
