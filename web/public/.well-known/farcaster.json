@@ -21,6 +21,6 @@
     "primaryCategory": "finance",
     "tags": ["warplets", "defi", "auction", "staking", "base"],
     "requiredChains": ["eip155:8453"],
-    "requiredCapabilities": []
+    "requiredCapabilities": ["wallet.getEthereumProvider"]
   }
 }

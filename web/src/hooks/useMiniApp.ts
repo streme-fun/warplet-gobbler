@@ -25,6 +25,7 @@ export function useMiniApp() {
         const ctx = await sdk.context;
         if (cancelled) return;
         setContext(ctx);
+        // Host requirement: hide splash once we can render (see miniapps.farcaster.xyz docs).
         await sdk.actions.ready();
       } catch (e) {
         console.error("Failed to initialize mini app SDK:", e);

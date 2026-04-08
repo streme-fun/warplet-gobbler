@@ -5,6 +5,7 @@ import { ConnectKitButton } from "connectkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { useMiniApp } from "@/hooks/useMiniApp";
+import { useFarcasterMiniAppAutoConnect } from "@/hooks/useFarcasterMiniAppAutoConnect";
 import { useOwnedWarplets } from "@/hooks/useOwnedWarplets";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import {
@@ -35,27 +36,59 @@ import {
 
 /* eslint-disable @next/next/no-img-element */
 
-function MiniAppWalletButton() {
+function MiniAppWalletButton({ autoConnectEnabled }: { autoConnectEnabled: boolean }) {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
+  const {
+    isConnectingWallet,
+    connectError,
+    autoFailed,
+    retry,
+  } = useFarcasterMiniAppAutoConnect(autoConnectEnabled);
 
   if (isConnected) {
     return (
-      <button onClick={() => disconnect()} className="btn btn-outline btn-sm">
-        {address?.slice(0, 6)}...{address?.slice(-4)}
+      <button
+        type="button"
+        onClick={() => disconnect()}
+        className="btn btn-outline btn-sm shrink-0 max-w-[8.5rem] truncate"
+        title={address ?? undefined}
+      >
+        {address?.slice(0, 6)}…{address?.slice(-4)}
       </button>
     );
   }
 
-  const connector = connectors[0];
+  if (isConnectingWallet) {
+    return (
+      <span className="text-xs text-base-content/50 tabular-nums shrink-0">
+        Connecting…
+      </span>
+    );
+  }
+
+  if (autoFailed || connectError) {
+    return (
+      <button
+        type="button"
+        onClick={retry}
+        className="btn btn-outline btn-error btn-sm shrink-0"
+      >
+        Wallet retry
+      </button>
+    );
+  }
+
+  const connector = connectors.find((c) => c.id === "farcaster");
   return (
     <button
+      type="button"
       onClick={() => connector && connect({ connector })}
       disabled={!connector}
-      className="btn btn-primary btn-sm"
+      className="btn btn-primary btn-sm shrink-0"
     >
-      Connect Wallet
+      Connect
     </button>
   );
 }
@@ -441,37 +474,58 @@ export default function Home() {
         </div>
 
         {/* Nav */}
-        <nav className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-base-content/5">
-          <div className="flex items-center gap-2 sm:gap-3">
+        <nav className="relative z-10 flex items-center justify-between gap-2 px-3 sm:px-6 py-2.5 sm:py-4 border-b border-base-content/5 pt-[max(0.625rem,env(safe-area-inset-top,0px))]">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
               <span className="text-primary text-sm sm:text-base font-bold">
                 W
               </span>
             </div>
-            <span className="font-semibold text-base sm:text-xl tracking-wide uppercase">
+            <span className="font-semibold text-sm sm:text-xl tracking-wide uppercase truncate">
               Warplet Gobbler
             </span>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center justify-end gap-1.5 sm:gap-4 shrink-0">
             {context?.user && (
-              <span className="text-sm text-base-content/50">
+              <span
+                className="hidden min-[360px]:inline-block text-xs sm:text-sm text-base-content/50 max-w-[7rem] sm:max-w-none truncate align-middle"
+                title={
+                  context.user.displayName ?? `FID ${context.user.fid}`
+                }
+              >
                 {context.user.displayName ?? `FID ${context.user.fid}`}
               </span>
             )}
-            <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <span className="text-sm text-success">Base</span>
+            <div
+              className={`items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-success/10 border border-success/20 ${
+                isMiniApp ? "flex" : "hidden sm:flex"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
+              <span className="text-[10px] sm:text-sm text-success whitespace-nowrap">
+                Base
+              </span>
             </div>
-            {isMiniApp ? <MiniAppWalletButton /> : <ConnectKitButton />}
+            {isMiniApp ? (
+              <MiniAppWalletButton
+                autoConnectEnabled={isMiniApp && isLoaded}
+              />
+            ) : (
+              <ConnectKitButton />
+            )}
           </div>
         </nav>
 
         {/* Single-focus layout: Gobbler + Deposit */}
-        <section className="relative z-10 flex-1 flex flex-col items-center px-4 sm:px-6 pt-16 sm:pt-24 pb-8 sm:pb-12">
+        <section
+          className={`relative z-10 flex-1 flex flex-col items-center px-3 sm:px-6 pb-8 sm:pb-12 ${
+            isMiniApp ? "pt-10 sm:pt-24" : "pt-16 sm:pt-24"
+          }`}
+        >
           {/* Title */}
           <div className="text-center animate-fade-up-delay-1">
             <h2>Sell your Warplet to</h2>
-            <h1 className="text-3xl sm:text-6xl font-bold tracking-widest uppercase">
+            <h1 className="text-2xl min-[360px]:text-3xl sm:text-6xl font-bold tracking-widest uppercase px-1">
               THE INSATIABLE
               <br />
               <span className="text-primary">WARPLET GOBBLER</span>

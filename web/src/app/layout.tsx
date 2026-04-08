@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Caveat, Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -15,6 +15,13 @@ const handwritten = Caveat({
 });
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://warpletgobbler.xyz";
+
+/** Mini apps and mobile webviews: fit device width and respect safe areas. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "WarpletGobbler",
@@ -48,7 +55,7 @@ export default function RootLayout({
       data-theme="warplet"
       className={`${inter.variable} ${handwritten.variable}`}
     >
-      <body className="min-h-screen bg-base-100 text-base-content">
+      <body className="min-h-screen bg-base-100 text-base-content pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] pb-[env(safe-area-inset-bottom,0px)]">
         <Providers>{children}</Providers>
       </body>
     </html>
