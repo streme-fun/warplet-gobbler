@@ -6,9 +6,11 @@ pragma solidity ^0.8.26;
 /// @dev Adapted from NounsAuctionHouse / Zora AuctionHouse (see DegenDogs mission3 branch).
 ///      NFTs are received via safeTransfer into a singly-linked FIFO queue (`_listHead` … `_nextToken`).
 ///      Queue bump (`queueBumpFee` + `userData`) splices a token out using caller-supplied `prev` (the token id
-///      immediately before it in queue order) and prepends it to the head. On settle, the Warplet NFT is
-///      transferred to the winner, bid proceeds to `proceedsRecipient`, and an empty-URI GobbledWarplet
-///      receipt is minted to the winner (admin sets URI separately).
+///      immediately before it in queue order) and prepends it to the head. On settle, bid proceeds go to
+///      `proceedsRecipient` and a GobbledWarplets receipt id is reserved for the winner; the underlying
+///      Warplet NFT stays in this contract until the winner pulls it via `GobbledWarplets.rescueWarplet`,
+///      which calls `IERC721.transferFrom(this, winner, warpletId)` directly — authorized by the
+///      one-shot `setApprovalForAll(gobbledWarplets, true)` granted in this contract's constructor.
 /// @dev ERC777 `send` / `tokensReceived`: use empty or non-bump `userData` to bid. To bump, `send` exactly
 ///      `queueBumpFee` with `userData = abi.encode(uint256 tokenId, uint256 prev)` (64 bytes). `prev` must
 ///      satisfy `_nextToken[prev] == tokenId` (walk `getQueuedTokenIds()` off-chain to compute). If `tokenId`
@@ -84,10 +86,6 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     /// @notice WARPGOBB required to move a queued Warplet to the head via ERC777 `send` + `userData`.
     uint256 public queueBumpFee;
 
-    /// @notice `AuctionSettled.gobbledTokenId` uses this value when `GobbledWarplets.mint` reverts so settlement still completes.
-    uint256 public constant GOBBLED_MINT_FAILED = type(uint256).max;
-
-
     event AuctionExtended(uint256 indexed tokenId, uint256 endTime);
     event AuctionTimeBufferUpdated(uint256 timeBuffer);
     event AuctionReservePriceUpdated(uint256 reservePrice);
@@ -140,6 +138,11 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
             )
         );
         require(ok, "AuctionSell: ERC1820 registration failed");
+
+        // Allow `gobbledWarplets` to pull won Warplets directly via `transferFrom` once a winner calls
+        // `GobbledWarplets.rescueWarplet`. Settlement no longer transfers the underlying NFT; this
+        // approval is the only path out of the auction for held Warplets.
+        _nft.setApprovalForAll(address(_gobbledWarplets), true);
     }
 
     /// @inheritdoc IERC721Receiver
@@ -195,12 +198,20 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
             // here we pass ETH via `msg.value`, so the input size is `msg.value`), `amountOutMin` is the
             // caller’s minimum **out** (the bid size / slippage floor). `stakingContract == address(0)` sends
             // proceeds to `msg.sender` (this contract).
-            uint256 amountOut = stremeZap.zap{value: msg.value}(
+            //
+            // SECURITY: ignore the zap's return value and measure our own balance delta. A misbehaving
+            // zap that over-reports `amountOut` would otherwise pass the slippage check on a partial
+            // delivery, leaving the auction with less bidToken than the recorded bid — bricking
+            // settlement (the auction would be unable to pay `proceedsRecipient`). Same balance-delta
+            // pattern as `FeeHandler._swapWethToToken`.
+            uint256 balanceBefore = bidToken.balanceOf(address(this));
+            stremeZap.zap{value: msg.value}(
                 address(bidToken),
                 msg.value,
                 uint256(amount),
                 address(0)
             );
+            uint256 amountOut = bidToken.balanceOf(address(this)) - balanceBefore;
             require(amountOut >= amount, "AuctionSell: zap slippage");
             _bid(amount, msg.sender);
             if (amountOut > amount) {
@@ -420,14 +431,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
 
         auction.settled = true;
 
-        uint256 gobbledTokenId;
-        try gobbledWarplets.mint(_auction.bidder, _auction.tokenId) returns (uint256 tid) {
-            gobbledTokenId = tid;
-        } catch {
-            gobbledTokenId = GOBBLED_MINT_FAILED;
-        }
-
-        nft.transferFrom(address(this), _auction.bidder, _auction.tokenId);
+        uint256 gobbledTokenId = gobbledWarplets.reserve(_auction.bidder, _auction.tokenId);
 
         require(bidToken.transfer(proceedsRecipient, _auction.amount), "AuctionSell: proceeds failed");
 

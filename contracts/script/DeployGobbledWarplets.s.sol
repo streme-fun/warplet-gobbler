@@ -20,6 +20,7 @@ import {DeployHelpers} from "./DeployHelpers.sol";
 /// - `GOBBLED_WARPLETS_NAME`
 /// - `GOBBLED_WARPLETS_SYMBOL`
 /// - `GOBBLED_WARPLETS_INITIAL_MINTER` — usually your deployer EOA until `AuctionSell` exists, then call `setMinter`.
+/// - `GOBBLED_WARPLETS_TOKEN_URI_SETTER` (optional) — EIP-712 signer for `GobbledWarplets.mint`; defaults to deployer.
 ///
 /// Verification uses `BASESCAN_API_KEY` from `foundry.toml` / `.env`.
 contract DeployGobbledWarplets is DeployHelpers {
@@ -30,10 +31,11 @@ contract DeployGobbledWarplets is DeployHelpers {
         string memory name_ = vm.envString("GOBBLED_WARPLETS_NAME");
         string memory symbol_ = vm.envString("GOBBLED_WARPLETS_SYMBOL");
         address minter = vm.envAddress("GOBBLED_WARPLETS_INITIAL_MINTER");
+        address tokenURISetter = vm.envOr("GOBBLED_WARPLETS_TOKEN_URI_SETTER", deployer);
 
         vm.startBroadcast(pk);
 
-        GobbledWarplets gobbled = new GobbledWarplets(name_, symbol_, minter);
+        GobbledWarplets gobbled = new GobbledWarplets(name_, symbol_, minter, tokenURISetter);
 
         vm.stopBroadcast();
 
@@ -41,6 +43,6 @@ contract DeployGobbledWarplets is DeployHelpers {
         console2.log("GobbledWarplets:", address(gobbled));
         console2.log("Initial minter:", minter);
         console2.log("GobbledWarplets owner (URI / admin):", gobbled.owner());
-        console2.log("TOKEN_ID_DECIMAL_STRIDE:", gobbled.TOKEN_ID_DECIMAL_STRIDE());
+        console2.log("WARPLET_ID_PADDING:", gobbled.WARPLET_ID_PADDING());
     }
 }

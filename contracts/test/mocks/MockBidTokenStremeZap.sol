@@ -18,6 +18,11 @@ contract MockBidTokenStremeZap {
     uint256 public extraOut;
     uint256 public shortfall;
 
+    /// @notice Lie about `amountOut` by this many bid-token wei. The mock mints the *true* amount to
+    ///         the caller (subject to `extraOut` / `shortfall`) but returns `actual + overReportBy`.
+    ///         Used to verify AuctionSell measures its own balance delta and ignores the return value.
+    uint256 public overReportBy;
+
     /// @dev If false, omit `amountOut >= amountOutMin` so a defective zap can under-deliver and
     ///      `AuctionSell`’s `require(amountOut >= amount)` is tested.
     bool public enforceMinOut = true;
@@ -48,6 +53,10 @@ contract MockBidTokenStremeZap {
         enforceMinOut = _enforce;
     }
 
+    function setOverReportBy(uint256 _overReportBy) external {
+        overReportBy = _overReportBy;
+    }
+
     function zap(address stremeCoin, uint256 amountIn, uint256 amountOutMin, address stakingContract)
         external
         payable
@@ -63,17 +72,19 @@ contract MockBidTokenStremeZap {
         require(stakingContract == address(0), "MockZap: stake");
         require(amountIn == msg.value, "MockZap: amountIn != msg.value");
 
-        amountOut = (msg.value * bidOutPerEth) / 1 ether + extraOut;
+        uint256 delivered = (msg.value * bidOutPerEth) / 1 ether + extraOut;
         unchecked {
-            if (shortfall > amountOut) {
-                amountOut = 0;
+            if (shortfall > delivered) {
+                delivered = 0;
             } else {
-                amountOut -= shortfall;
+                delivered -= shortfall;
             }
         }
+        // Mint only the *real* delivered amount; over-report by inflating the return value.
+        bidToken.mint(msg.sender, delivered);
+        amountOut = delivered + overReportBy;
         if (enforceMinOut) {
             require(amountOut >= amountOutMin, "MockZap: min-out");
         }
-        bidToken.mint(msg.sender, amountOut);
     }
 }

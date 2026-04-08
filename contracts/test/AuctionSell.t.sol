@@ -11,8 +11,10 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract AuctionSellTest is Test {
+    using MessageHashUtils for bytes32;
     AuctionSell internal sell;
     GobbledWarplets internal gobbled;
     MockAuctionNFT internal nft;
@@ -23,6 +25,14 @@ contract AuctionSellTest is Test {
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
     address internal carol = makeAddr("carol");
+
+    uint256 internal constant GOBBLED_SETTER_PK = 0xA11CE;
+    bytes32 internal constant _GOBBLED_DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 internal constant _GOBBLED_MINT_TYPEHASH =
+        keccak256("Mint(uint256 tokenId,string uri,uint256 deadline)");
+    address internal gobbledSetter;
+    string internal constant GOBBLED_URI = "ipfs://gobbled-test";
 
     uint256 internal constant DURATION = 24 hours;
     uint256 internal constant TIME_BUFFER = 5 minutes;
@@ -48,7 +58,8 @@ contract AuctionSellTest is Test {
         vm.startPrank(owner);
         nft = new MockAuctionNFT();
         bidToken = new MockBidToken();
-        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner);
+        gobbledSetter = vm.addr(GOBBLED_SETTER_PK);
+        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner, gobbledSetter);
         sell = new AuctionSell(
             IERC721(address(nft)),
             bidToken,
@@ -74,6 +85,40 @@ contract AuctionSellTest is Test {
         bidToken.approve(address(sell), type(uint256).max);
         vm.prank(carol);
         bidToken.approve(address(sell), type(uint256).max);
+    }
+
+    function _gobbledDomainSeparator() internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                _GOBBLED_DOMAIN_TYPEHASH,
+                keccak256(bytes("Gobbled Warplets")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(gobbled)
+            )
+        );
+    }
+
+    function _signGobbledMint(uint256 tokenId, string memory uri, uint256 deadline)
+        internal
+        view
+        returns (bytes memory)
+    {
+        bytes32 structHash =
+            keccak256(abi.encode(_GOBBLED_MINT_TYPEHASH, tokenId, keccak256(bytes(uri)), deadline));
+        bytes32 digest = _gobbledDomainSeparator().toTypedDataHash(structHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(GOBBLED_SETTER_PK, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    /// @dev Settlement only `reserve`s the GobbledWarplets id and leaves the underlying Warplet in
+    ///      the auction. Tests finish the flow with the winner's signed `rescueWarplet` overload, which
+    ///      mints the receipt with metadata AND pulls the underlying NFT in one tx.
+    function _completeReservedGobbled(address recipient, uint256 gobbledTokenId) internal {
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory sig = _signGobbledMint(gobbledTokenId, GOBBLED_URI, deadline);
+        vm.prank(recipient);
+        gobbled.rescueWarplet(gobbledTokenId, GOBBLED_URI, deadline, sig);
     }
 
     function _mintAndSendToSell(address from) internal returns (uint256 tokenId) {
@@ -134,7 +179,7 @@ contract AuctionSellTest is Test {
         assertEq(tid, t2);
     }
 
-    function test_settle_mints_gobbled_to_winner() public {
+    function test_settle_reserves_gobbled_winner_mints_receipt() public {
         uint256 wid = _mintAndSendToSell(owner);
         _unpauseStartsAuction(wid);
 
@@ -143,6 +188,8 @@ contract AuctionSellTest is Test {
 
         vm.warp(block.timestamp + DURATION + 1);
         sell.settleCurrentAndCreateNewAuction();
+
+        _completeReservedGobbled(alice, wid);
 
         assertEq(nft.ownerOf(wid), alice);
         assertEq(gobbled.balanceOf(alice), 1);
@@ -385,6 +432,8 @@ contract AuctionSellTest is Test {
         uint256 proceedsBefore = bidToken.balanceOf(proceeds);
         sell.settleCurrentAndCreateNewAuction();
 
+        _completeReservedGobbled(alice, t1);
+
         assertEq(nft.ownerOf(t1), alice);
         assertEq(bidToken.balanceOf(proceeds), proceedsBefore + RESERVE_PRICE);
         assertEq(gobbled.ownerOf(t1), alice);
@@ -399,7 +448,7 @@ contract AuctionSellTest is Test {
         assertEq(nextId, t2);
     }
 
-    function test_settle_mints_gobbled_receipt_incrementing_gobble_index() public {
+    function test_settle_two_auctions_same_warplet_reserve_then_winners_mint() public {
         uint256 wid = _mintAndSendToSell(owner);
         vm.prank(owner);
         sell.unpause();
@@ -407,6 +456,8 @@ contract AuctionSellTest is Test {
         sell.bid(RESERVE_PRICE);
         vm.warp(block.timestamp + DURATION + 1);
         sell.settleCurrentAndCreateNewAuction();
+
+        _completeReservedGobbled(alice, wid);
 
         assertEq(gobbled.ownerOf(wid), alice);
         assertEq(nft.ownerOf(wid), alice);
@@ -420,8 +471,9 @@ contract AuctionSellTest is Test {
         vm.warp(block.timestamp + DURATION + 1);
         sell.settleCurrentAndCreateNewAuction();
 
-        uint256 stride = gobbled.TOKEN_ID_DECIMAL_STRIDE();
+        uint256 stride = gobbled.WARPLET_ID_PADDING();
         uint256 secondGobbledId = stride + wid;
+        _completeReservedGobbled(bob, secondGobbledId);
         assertEq(gobbled.ownerOf(secondGobbledId), bob);
         assertEq(gobbled.warpletOf(secondGobbledId), wid);
         assertEq(gobbled.gobbleIndexOf(secondGobbledId), 1);
@@ -432,9 +484,9 @@ contract AuctionSellTest is Test {
         assertEq(gobbled.tokenByIndex(1), secondGobbledId);
     }
 
-    function test_settle_succeeds_when_gobbled_mint_reverts_warplet_id_too_large() public {
+    function test_settleCurrent_reverts_when_gobbled_reserve_fails_warplet_id_too_large() public {
         vm.prank(owner);
-        uint256 badId = nft.mintSpecific(owner, gobbled.MAX_WARPLET_ID_EXCLUSIVE());
+        uint256 badId = nft.mintSpecific(owner, gobbled.WARPLET_ID_PADDING());
 
         vm.prank(owner);
         nft.safeTransferFrom(owner, address(sell), badId);
@@ -445,12 +497,15 @@ contract AuctionSellTest is Test {
         sell.bid(RESERVE_PRICE);
         vm.warp(block.timestamp + DURATION + 1);
 
+        uint256 proceedsBefore = bidToken.balanceOf(proceeds);
+        vm.expectRevert(bytes("GobbledWarplets: warpletId too large"));
         sell.settleCurrentAndCreateNewAuction();
 
-        assertEq(nft.ownerOf(badId), alice);
+        assertEq(nft.ownerOf(badId), address(sell));
         assertEq(gobbled.totalSupply(), 0);
+        assertEq(bidToken.balanceOf(proceeds), proceedsBefore);
         (,,,,, bool settled) = sell.auction();
-        assertTrue(settled);
+        assertFalse(settled);
     }
 
     function test_settleCurrent_no_next_when_queue_empty() public {
@@ -511,8 +566,13 @@ contract AuctionSellTest is Test {
         sell.pause();
         sell.settle();
 
-        assertEq(nft.ownerOf(tid), alice);
+        // Settlement no longer transfers the underlying Warplet — it stays in the auction until the
+        // winner pulls it via `GobbledWarplets.rescueWarplet`.
+        assertEq(nft.ownerOf(tid), address(sell));
         assertEq(bidToken.balanceOf(proceeds), RESERVE_PRICE);
+
+        _completeReservedGobbled(alice, tid);
+        assertEq(nft.ownerOf(tid), alice);
     }
 
     function test_settle_reverts_when_not_paused() public {
@@ -998,6 +1058,10 @@ contract AuctionSellTest is Test {
         (uint256 cur,,,) = sell.currentAuction();
         assertEq(cur, 0);
         assertEq(sell.nextQueuedTokenId(), t2);
+        // Underlying Warplet stays in the auction until the winner calls `rescueWarplet`.
+        assertEq(nft.ownerOf(t1), address(sell));
+
+        _completeReservedGobbled(alice, t1);
         assertEq(nft.ownerOf(t1), alice);
     }
 
@@ -1017,11 +1081,11 @@ contract AuctionSellTest is Test {
         sell.settle();
     }
 
-    function test_settle_do_not_reverts_when_warplet_id_too_large_for_gobbled_mint_paused_path() public {
+    function test_settle_when_paused_reverts_when_gobbled_reserve_fails_warplet_id_too_large() public {
         uint256 aliceGobbledBalanceBefore = gobbled.balanceOf(alice);
 
         vm.prank(owner);
-        uint256 badId = nft.mintSpecific(owner, gobbled.MAX_WARPLET_ID_EXCLUSIVE());
+        uint256 badId = nft.mintSpecific(owner, gobbled.WARPLET_ID_PADDING());
 
         vm.prank(owner);
         nft.safeTransferFrom(owner, address(sell), badId);
@@ -1034,13 +1098,169 @@ contract AuctionSellTest is Test {
 
         vm.prank(owner);
         sell.pause();
+
+        vm.expectRevert(bytes("GobbledWarplets: warpletId too large"));
         sell.settle();
 
-        uint256 aliceGobbledBalanceAfter = gobbled.balanceOf(alice);
+        vm.assertEq(gobbled.balanceOf(alice), aliceGobbledBalanceBefore);
+        vm.assertEq(nft.ownerOf(badId), address(sell));
+        (,,,,, bool settled) = sell.auction();
+        vm.assertFalse(settled);
+    }
+}
 
-        // Asserts that settle did not revert and that the warplet mint was attempted, but did not succeed in minting a gobbled receipt
-        vm.assertEq(nft.ownerOf(badId), alice);
-        vm.assertEq(aliceGobbledBalanceAfter, aliceGobbledBalanceBefore);
+/// @dev Pull-only auction (`stremeZap == address(0)`); ETH sends on `bid` must revert.
+contract AuctionSellEthZapUnsetTest is AuctionSellTest {
+    function test_bid_with_eth_reverts_when_zap_unset() public {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        vm.deal(alice, 1 ether);
+        vm.prank(alice);
+        vm.expectRevert(bytes("AuctionSell: zap unset"));
+        sell.bid{value: 1}(RESERVE_PRICE);
+    }
+}
+
+/// @dev Same as `AuctionSellTest` but wires `MockBidTokenStremeZap` so `bid{value: …}` can be tested.
+contract AuctionSellNativeBidTest is AuctionSellTest {
+    MockBidTokenStremeZap internal bidZap;
+
+    /// @dev `amountOut` from zap = `ethSpend * rate / 1 ether`; pick rate so `ethSpend` clears `RESERVE_PRICE`.
+    function _rateForEthBid(uint256 ethSpend) internal pure returns (uint256) {
+        return (RESERVE_PRICE * 1 ether) / ethSpend;
+    }
+
+    function _startAuctionForEthBid() internal {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+    }
+
+    function _stremeZapAddress() internal override returns (address) {
+        bidZap = new MockBidTokenStremeZap(bidToken);
+        return address(bidZap);
+    }
+
+    /// @notice `FeeHandler`-shaped call: out token = `bidToken`, `amountIn == msg.value`, `amountOutMin` = bid.
+    function test_bid_with_eth_zap_passes_feehandler_shape_and_places_bid() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+
+        uint256 aliceTokensBefore = bidToken.balanceOf(alice);
+        vm.deal(alice, ethSpend);
+
+        vm.prank(alice);
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+
+        assertEq(bidZap.lastStremeCoin(), address(bidToken));
+        assertEq(bidZap.lastAmountIn(), ethSpend);
+        assertEq(bidZap.lastAmountOutMin(), RESERVE_PRICE);
+        assertEq(bidZap.lastStaking(), address(0));
+        assertEq(bidZap.lastMsgValue(), ethSpend);
+
+        assertEq(bidToken.balanceOf(alice), aliceTokensBefore);
+        (, address highBidder, uint256 highBid,) = sell.currentAuction();
+        assertEq(highBidder, alice);
+        assertEq(highBid, RESERVE_PRICE);
+        assertEq(bidToken.balanceOf(address(sell)), RESERVE_PRICE);
+    }
+
+    function test_bid_with_eth_zap_refunds_surplus_bid_token() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        bidZap.setExtraOut(7 ether);
+
+        vm.deal(alice, ethSpend);
+        uint256 aliceBefore = bidToken.balanceOf(alice);
+
+        vm.prank(alice);
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+
+        assertEq(bidToken.balanceOf(alice), aliceBefore + 7 ether);
+        (, address highBidder, uint256 highBid,) = sell.currentAuction();
+        assertEq(highBidder, alice);
+        assertEq(highBid, RESERVE_PRICE);
+        assertEq(bidToken.balanceOf(address(sell)), RESERVE_PRICE);
+    }
+
+    function test_bid_with_eth_zap_zap_reverts_when_under_min_out_like_router() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        bidZap.setShortfall(1);
+
+        vm.deal(alice, ethSpend);
+        vm.prank(alice);
+        vm.expectRevert(bytes("MockZap: min-out"));
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+    }
+
+    function test_bid_with_eth_zap_auction_slippage_guard_if_zap_underfills_without_reverting() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        bidZap.setShortfall(1);
+        bidZap.setEnforceMinOut(false);
+
+        vm.deal(alice, ethSpend);
+        vm.prank(alice);
+        vm.expectRevert(bytes("AuctionSell: zap slippage"));
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+    }
+
+    /// @notice A misbehaving zap that **lies about `amountOut`** must not be able to bypass the
+    ///         auction's slippage check. AuctionSell measures its own balance delta, so even if the
+    ///         zap returns a value above the bid amount, an under-delivery still trips
+    ///         `AuctionSell: zap slippage`. Without this defense the bid would record at full size
+    ///         while the auction held less than the recorded amount, bricking settlement.
+    function test_bid_with_eth_zap_ignores_overreported_amountOut_and_reverts_on_real_shortfall() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        // Real delivery will be RESERVE_PRICE - 1 (1 wei short), but the zap returns
+        // RESERVE_PRICE + 100 ether so its own min-out check passes and the OLD AuctionSell
+        // (which trusted the return value) would have happily recorded the bid.
+        bidZap.setShortfall(1);
+        bidZap.setOverReportBy(RESERVE_PRICE + 100 ether);
+
+        vm.deal(alice, ethSpend);
+        vm.prank(alice);
+        vm.expectRevert(bytes("AuctionSell: zap slippage"));
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+    }
+
+    /// @notice When the zap over-reports `amountOut` but actually delivers exactly the bid amount,
+    ///         the bid succeeds and AuctionSell does NOT refund the phantom surplus — protecting
+    ///         any prior bidder funds (or future settlement proceeds) from being drained by a lie.
+    function test_bid_with_eth_zap_overreporting_does_not_drain_existing_balance() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        // Deliver exactly RESERVE_PRICE, but pretend we delivered RESERVE_PRICE + 50 ether.
+        bidZap.setOverReportBy(50 ether);
+
+        // Pre-seed the auction with bidToken to simulate a prior refund balance / settlement reserves.
+        // If AuctionSell trusted the zap's return value, the surplus refund would attempt to send
+        // 50 ether of bidToken to alice and drain this seeded balance.
+        uint256 prePot = 100 ether;
+        bidToken.mint(address(sell), prePot);
+
+        vm.deal(alice, ethSpend);
+        uint256 aliceBefore = bidToken.balanceOf(alice);
+
+        vm.prank(alice);
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+
+        // Alice gets no surplus (delivered == bid), pre-seeded pot is untouched.
+        assertEq(bidToken.balanceOf(alice), aliceBefore);
+        assertEq(bidToken.balanceOf(address(sell)), prePot + RESERVE_PRICE);
+        (, address highBidder, uint256 highBid,) = sell.currentAuction();
+        assertEq(highBidder, alice);
+        assertEq(highBid, RESERVE_PRICE);
     }
 }
 

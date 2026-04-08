@@ -55,7 +55,9 @@ contract AuctionSellNativeBidForkTest is Test {
 
         vm.startPrank(owner);
         nft = new MockAuctionNFT();
-        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner);
+        // The 4th constructor arg is `tokenURISetter` (EIP-712 signer for `rescueWarplet` metadata).
+        // This fork test only exercises the bid path; the URI setter is irrelevant here, so reuse `owner`.
+        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner, owner);
         sell = new AuctionSell(
             nft,
             IERC20(STREME_SUPERTOKEN),
