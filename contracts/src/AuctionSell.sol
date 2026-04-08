@@ -198,12 +198,20 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
             // here we pass ETH via `msg.value`, so the input size is `msg.value`), `amountOutMin` is the
             // caller’s minimum **out** (the bid size / slippage floor). `stakingContract == address(0)` sends
             // proceeds to `msg.sender` (this contract).
-            uint256 amountOut = stremeZap.zap{value: msg.value}(
+            //
+            // SECURITY: ignore the zap's return value and measure our own balance delta. A misbehaving
+            // zap that over-reports `amountOut` would otherwise pass the slippage check on a partial
+            // delivery, leaving the auction with less bidToken than the recorded bid — bricking
+            // settlement (the auction would be unable to pay `proceedsRecipient`). Same balance-delta
+            // pattern as `FeeHandler._swapWethToToken`.
+            uint256 balanceBefore = bidToken.balanceOf(address(this));
+            stremeZap.zap{value: msg.value}(
                 address(bidToken),
                 msg.value,
                 uint256(amount),
                 address(0)
             );
+            uint256 amountOut = bidToken.balanceOf(address(this)) - balanceBefore;
             require(amountOut >= amount, "AuctionSell: zap slippage");
             _bid(amount, msg.sender);
             if (amountOut > amount) {

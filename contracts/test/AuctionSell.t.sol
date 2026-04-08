@@ -1211,4 +1211,55 @@ contract AuctionSellNativeBidTest is AuctionSellTest {
         vm.expectRevert(bytes("AuctionSell: zap slippage"));
         sell.bid{value: ethSpend}(RESERVE_PRICE);
     }
+
+    /// @notice A misbehaving zap that **lies about `amountOut`** must not be able to bypass the
+    ///         auction's slippage check. AuctionSell measures its own balance delta, so even if the
+    ///         zap returns a value above the bid amount, an under-delivery still trips
+    ///         `AuctionSell: zap slippage`. Without this defense the bid would record at full size
+    ///         while the auction held less than the recorded amount, bricking settlement.
+    function test_bid_with_eth_zap_ignores_overreported_amountOut_and_reverts_on_real_shortfall() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        // Real delivery will be RESERVE_PRICE - 1 (1 wei short), but the zap returns
+        // RESERVE_PRICE + 100 ether so its own min-out check passes and the OLD AuctionSell
+        // (which trusted the return value) would have happily recorded the bid.
+        bidZap.setShortfall(1);
+        bidZap.setOverReportBy(RESERVE_PRICE + 100 ether);
+
+        vm.deal(alice, ethSpend);
+        vm.prank(alice);
+        vm.expectRevert(bytes("AuctionSell: zap slippage"));
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+    }
+
+    /// @notice When the zap over-reports `amountOut` but actually delivers exactly the bid amount,
+    ///         the bid succeeds and AuctionSell does NOT refund the phantom surplus — protecting
+    ///         any prior bidder funds (or future settlement proceeds) from being drained by a lie.
+    function test_bid_with_eth_zap_overreporting_does_not_drain_existing_balance() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        // Deliver exactly RESERVE_PRICE, but pretend we delivered RESERVE_PRICE + 50 ether.
+        bidZap.setOverReportBy(50 ether);
+
+        // Pre-seed the auction with bidToken to simulate a prior refund balance / settlement reserves.
+        // If AuctionSell trusted the zap's return value, the surplus refund would attempt to send
+        // 50 ether of bidToken to alice and drain this seeded balance.
+        uint256 prePot = 100 ether;
+        bidToken.mint(address(sell), prePot);
+
+        vm.deal(alice, ethSpend);
+        uint256 aliceBefore = bidToken.balanceOf(alice);
+
+        vm.prank(alice);
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+
+        // Alice gets no surplus (delivered == bid), pre-seeded pot is untouched.
+        assertEq(bidToken.balanceOf(alice), aliceBefore);
+        assertEq(bidToken.balanceOf(address(sell)), prePot + RESERVE_PRICE);
+        (, address highBidder, uint256 highBid,) = sell.currentAuction();
+        assertEq(highBidder, alice);
+        assertEq(highBid, RESERVE_PRICE);
+    }
 }
