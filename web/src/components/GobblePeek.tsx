@@ -52,6 +52,12 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     const mobile = () => W < 640;
     const restTop = () => (mobile() ? 97 : 154);
     const restBot = () => (mobile() ? 41 : 57);
+    // CaFooter (fixed bottom-0, bg-black/90, z-[50]) sits ABOVE the gobbler
+    // canvas (z-40 / z-46) and visually occludes the bottom teeth — at narrow
+    // widths the bot jaw was almost the same height as the footer, so
+    // basically nothing of the teeth poked above it. Lift the bot jaw by the
+    // footer height so teeth always appear above the footer.
+    const footerOverlay = () => (mobile() ? 40 : 52);
 
     // Desktop only: jaws bow inward as an additive pixel offset, so the
     // hill-to-valley delta is identical on top and bottom (~85px). Smooth
@@ -64,7 +70,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     };
 
     let topY = restTop();
-    let botY = H - restBot();
+    let botY = H - footerOverlay() - restBot();
 
     function sr(s: number) {
       const v = Math.sin(s * 127.1 + 311.7) * 43758.5453;
@@ -192,7 +198,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       // Subtle breathing: jaws shift ±4px slowly
       const breath = Math.sin(time * 0.008) * 4;
       topY = restTop() + breath;
-      botY = H - restBot() - breath;
+      botY = H - footerOverlay() - restBot() - breath;
 
       gx!.clearRect(0, 0, W, H);
 
@@ -284,7 +290,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       eyeCv.width = W;
       eyeCv.height = H;
       topY = restTop();
-      botY = H - restBot();
+      botY = H - footerOverlay() - restBot();
       regenerateBumps();
     };
     window.addEventListener("resize", onResize);
