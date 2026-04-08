@@ -1,9 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { warpletImageSrc } from "@/lib/warplet-image-src";
+import { useEffect, useRef } from "react";
 
 /* eslint-disable @next/next/no-img-element */
+
+/** Static warplet images from public/warplets/ — no live chain data needed. */
+const STATIC_WARPLETS = [
+  "warplet-1.png",
+  "warplet-2.png",
+  "warplet-3.png",
+  "warplet-4.png",
+  "warplet-5.png",
+  "warplet-6.png",
+  "warplet-8.png",
+  "warplet-9.png",
+  "warplet-10.png",
+  "warplet-20.png",
+  "warplet-69.png",
+  "warplet-99.png",
+  "warplet-194.png",
+  "warplet-239.png",
+  "warplet-616.png",
+  "warplet-680.png",
+  "warplet-4567.png",
+];
 
 const PARALLAX_SLOTS = [
   {
@@ -11,8 +31,8 @@ const PARALLAX_SLOTS = [
     x: 5,
     y: 8,
     size: 70,
-    opacity: 0.1,
-    speed: 0.02,
+    opacity: 0.12,
+    speed: 0.06,
     rotate: 12,
     blur: 6,
     smHide: true,
@@ -22,8 +42,8 @@ const PARALLAX_SLOTS = [
     x: 25,
     y: 15,
     size: 90,
-    opacity: 0.12,
-    speed: 0.025,
+    opacity: 0.14,
+    speed: 0.075,
     rotate: -8,
     blur: 5,
     smHide: false,
@@ -33,8 +53,8 @@ const PARALLAX_SLOTS = [
     x: 70,
     y: 5,
     size: 80,
-    opacity: 0.1,
-    speed: 0.02,
+    opacity: 0.12,
+    speed: 0.06,
     rotate: 20,
     blur: 6,
     smHide: true,
@@ -44,8 +64,8 @@ const PARALLAX_SLOTS = [
     x: 85,
     y: 20,
     size: 60,
-    opacity: 0.09,
-    speed: 0.015,
+    opacity: 0.11,
+    speed: 0.045,
     rotate: -15,
     blur: 7,
     smHide: true,
@@ -55,19 +75,19 @@ const PARALLAX_SLOTS = [
     x: 50,
     y: 65,
     size: 85,
-    opacity: 0.1,
-    speed: 0.02,
+    opacity: 0.12,
+    speed: 0.06,
     rotate: 5,
     blur: 6,
-    smHide: true,
+    smHide: false,
   },
   {
     id: 5,
     x: 15,
     y: 75,
     size: 75,
-    opacity: 0.09,
-    speed: 0.018,
+    opacity: 0.11,
+    speed: 0.055,
     rotate: -22,
     blur: 5,
     smHide: false,
@@ -77,8 +97,8 @@ const PARALLAX_SLOTS = [
     x: 90,
     y: 55,
     size: 65,
-    opacity: 0.1,
-    speed: 0.022,
+    opacity: 0.12,
+    speed: 0.065,
     rotate: 30,
     blur: 7,
     smHide: true,
@@ -88,8 +108,8 @@ const PARALLAX_SLOTS = [
     x: 12,
     y: 35,
     size: 110,
-    opacity: 0.15,
-    speed: 0.05,
+    opacity: 0.18,
+    speed: 0.15,
     rotate: -5,
     blur: 3,
     smHide: false,
@@ -99,8 +119,8 @@ const PARALLAX_SLOTS = [
     x: 42,
     y: 25,
     size: 120,
-    opacity: 0.16,
-    speed: 0.06,
+    opacity: 0.2,
+    speed: 0.18,
     rotate: 10,
     blur: 2,
     smHide: true,
@@ -110,8 +130,8 @@ const PARALLAX_SLOTS = [
     x: 78,
     y: 40,
     size: 100,
-    opacity: 0.14,
-    speed: 0.045,
+    opacity: 0.16,
+    speed: 0.135,
     rotate: -18,
     blur: 3,
     smHide: true,
@@ -121,19 +141,19 @@ const PARALLAX_SLOTS = [
     x: 55,
     y: 80,
     size: 115,
-    opacity: 0.15,
-    speed: 0.055,
+    opacity: 0.18,
+    speed: 0.165,
     rotate: 15,
     blur: 2,
-    smHide: true,
+    smHide: false,
   },
   {
     id: 11,
     x: 30,
     y: 55,
     size: 95,
-    opacity: 0.13,
-    speed: 0.04,
+    opacity: 0.15,
+    speed: 0.12,
     rotate: -12,
     blur: 3,
     smHide: false,
@@ -143,8 +163,8 @@ const PARALLAX_SLOTS = [
     x: 92,
     y: 75,
     size: 105,
-    opacity: 0.14,
-    speed: 0.05,
+    opacity: 0.16,
+    speed: 0.15,
     rotate: 8,
     blur: 2.5,
     smHide: true,
@@ -154,8 +174,8 @@ const PARALLAX_SLOTS = [
     x: 62,
     y: 45,
     size: 100,
-    opacity: 0.13,
-    speed: 0.045,
+    opacity: 0.15,
+    speed: 0.135,
     rotate: -8,
     blur: 3,
     smHide: true,
@@ -165,8 +185,8 @@ const PARALLAX_SLOTS = [
     x: 8,
     y: 50,
     size: 160,
-    opacity: 0.2,
-    speed: 0.1,
+    opacity: 0.22,
+    speed: 0.3,
     rotate: -3,
     blur: 0,
     smHide: false,
@@ -176,8 +196,8 @@ const PARALLAX_SLOTS = [
     x: 65,
     y: 18,
     size: 180,
-    opacity: 0.22,
-    speed: 0.12,
+    opacity: 0.25,
+    speed: 0.36,
     rotate: 7,
     blur: 0,
     smHide: false,
@@ -187,53 +207,28 @@ const PARALLAX_SLOTS = [
     x: 35,
     y: 85,
     size: 150,
-    opacity: 0.18,
-    speed: 0.09,
+    opacity: 0.2,
+    speed: 0.27,
     rotate: -10,
     blur: 0,
-    smHide: true,
+    smHide: false,
   },
   {
     id: 17,
     x: 82,
     y: 70,
     size: 170,
-    opacity: 0.2,
-    speed: 0.11,
+    opacity: 0.22,
+    speed: 0.33,
     rotate: 14,
     blur: 0,
-    smHide: true,
+    smHide: false,
   },
 ] as const;
 
-function assignQueueFidsToSlots(queueFids: number[]) {
-  const hasFids = queueFids.length > 0;
-  const pool = hasFids ? queueFids : [];
-  return PARALLAX_SLOTS.map((s, i) => ({
-    ...s,
-    fid: hasFids ? pool[i % pool.length]! : null,
-  }));
-}
-
-export default function ParallaxBackground({
-  queueFids,
-  /** When true, use neutral skeleton tiles (e.g. wallet confirmed empty — avoids “ghost faces” vs empty picker). */
-  neutralTiles = false,
-}: {
-  /** Same FIDs as the auction queue strip (after the live lot). */
-  queueFids: number[];
-  neutralTiles?: boolean;
-}) {
+export default function ParallaxBackground() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
-
-  const warplets = useMemo(
-    () =>
-      neutralTiles
-        ? PARALLAX_SLOTS.map((s) => ({ ...s, fid: null as number | null }))
-        : assignQueueFidsToSlots(queueFids),
-    [queueFids, neutralTiles],
-  );
 
   useEffect(() => {
     const handleScroll = () => {
@@ -242,7 +237,7 @@ export default function ParallaxBackground({
         const y = window.scrollY;
         const children = containerRef.current?.children;
         if (!children) return;
-        warplets.forEach((w, i) => {
+        PARALLAX_SLOTS.forEach((w, i) => {
           const el = children[i] as HTMLElement | undefined;
           if (el) {
             el.style.transform = `translateY(${y * w.speed * -1}px) rotate(${w.rotate}deg)`;
@@ -255,15 +250,15 @@ export default function ParallaxBackground({
       window.removeEventListener("scroll", handleScroll);
       cancelAnimationFrame(rafRef.current);
     };
-  }, [warplets]);
+  }, []);
 
   return (
     <div
       ref={containerRef}
       className="fixed inset-0 pointer-events-none overflow-hidden"
-      style={{ zIndex: 0 }}
+      style={{ zIndex: 2 }}
     >
-      {warplets.map((w) => (
+      {PARALLAX_SLOTS.map((w) => (
         <div
           key={w.id}
           className={`absolute warplet-parallax-item${w.smHide ? " hidden sm:block" : ""}`}
@@ -280,29 +275,20 @@ export default function ParallaxBackground({
             "--drift-delay": `${w.id * -2.5}s`,
           }}
         >
-          {w.fid != null ? (
-            <img
-              src={warpletImageSrc(w.fid)}
-              alt=""
-              draggable={false}
-              loading="lazy"
-              decoding="async"
-              style={{
-                width: "100%",
-                height: "100%",
-                borderRadius: 8,
-                filter: `brightness(1.3) saturate(1.2)${w.blur ? ` blur(${w.blur}px)` : ""}`,
-              }}
-            />
-          ) : (
-            <div
-              className="skeleton w-full h-full"
-              style={{
-                borderRadius: 8,
-                filter: w.blur ? `blur(${w.blur}px)` : undefined,
-              }}
-            />
-          )}
+          <img
+            src={`/warplets/${STATIC_WARPLETS[w.id % STATIC_WARPLETS.length]}`}
+            alt=""
+            draggable={false}
+            loading="lazy"
+            decoding="async"
+            style={{
+              width: "100%",
+              height: "100%",
+              borderRadius: 8,
+              objectFit: "cover",
+              filter: `brightness(1.3) saturate(1.2)${w.blur ? ` blur(${w.blur}px)` : ""}`,
+            }}
+          />
         </div>
       ))}
     </div>

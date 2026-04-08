@@ -47,7 +47,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     // Responsive: smaller jaws + eyes on mobile
     const mobile = () => W < 640;
     const restTop = () => (mobile() ? 120 : 190);
-    const restBot = () => (mobile() ? 110 : 180);
+    const restBot = () => (mobile() ? 50 : 70);
     let topY = restTop();
     let botY = H - restBot();
 
@@ -151,11 +151,12 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       const t = time * 0.007;
       gx!.fillStyle = VC;
 
-      // Jaw bodies
-      gx!.fillRect(-30, -500, W + 60, 500 + topY + 4);
-      gx!.fillRect(-30, botY - 4, W + 60, 500 + H);
+      // Compute lip wave max displacement per jaw before drawing rects
+      let topWaveMax = 0;
+      let botWaveMax = 0;
+      const blobData: { x: number; y: number; r: number }[] = [];
 
-      // Edge blobs — with optional lip wave
+      // Edge blobs — with optional lip wave (outward from jaw body)
       for (const b of bumps) {
         const x = b.xf * W;
         const br = Math.sin(t * 0.5 + b.ph) * 2;
@@ -163,26 +164,35 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
         let baseY = b.jaw === 0 ? topY + b.yo + 4 : botY + b.yo - 4;
 
         // Lip wave: travelling ripple from center outward
-        // Bumps push AWAY from the jaw body (downward for top jaw, upward for bottom)
-        // so they protrude visibly past the solid rect edge
         if (lipWaveTime >= 0) {
           const progress = lipWaveTime / LIP_WAVE_DURATION;
           const distFromCenter = Math.abs(b.xf - 0.5);
-          const waveFront = progress * 0.65;
+          const waveFront = progress * 0.35;
           const dist = Math.abs(distFromCenter - waveFront);
           const envelope =
             Math.max(0, 1 - dist * 6) * Math.min(1, (1 - progress) * 2);
           const waveDisp =
             envelope *
-            (Math.sin(distFromCenter * 25 - lipWaveTime * 0.35) * 0.5 + 0.5) *
+            (Math.sin(distFromCenter * 25 - lipWaveTime * 0.25) * 0.5 + 0.5) *
             40;
-          // Top jaw: push down (positive Y), bottom jaw: push up (negative Y)
+          // Top jaw: push down (outward), bottom jaw: push up (outward)
           baseY += b.jaw === 0 ? waveDisp : -waveDisp;
           r += envelope * 8;
+          if (b.jaw === 0 && waveDisp > topWaveMax) topWaveMax = waveDisp;
+          if (b.jaw === 1 && waveDisp > botWaveMax) botWaveMax = waveDisp;
         }
 
+        blobData.push({ x, y: baseY, r: Math.max(1, r) });
+      }
+
+      // Jaw bodies — extend by wave displacement so no gap behind outward blobs
+      gx!.fillRect(-30, -500, W + 60, 500 + topY + 4 + topWaveMax);
+      gx!.fillRect(-30, botY - 4 - botWaveMax, W + 60, 500 + H + botWaveMax);
+
+      // Draw blobs
+      for (const bd of blobData) {
         gx!.beginPath();
-        gx!.arc(x, baseY, Math.max(1, r), 0, 6.28);
+        gx!.arc(bd.x, bd.y, bd.r, 0, 6.28);
         gx!.fill();
       }
 

@@ -56,16 +56,7 @@ export default function BidFeedbackOverlay({
 
   if (!active) return null;
 
-  const backdropClass =
-    phase === "dim"
-      ? "animate-bid-feedback-dim-build"
-      : phase === "wave"
-        ? "bid-feedback-backdrop-peak"
-        : "animate-bid-feedback-dim-release";
-
   return (
-    <div className="fixed inset-0 z-[55] pointer-events-none" aria-hidden>
-      <div className={`absolute inset-0 bg-black ${backdropClass}`} />
-    </div>
+    <div className="fixed inset-0 z-[55] pointer-events-none" aria-hidden />
   );
 }

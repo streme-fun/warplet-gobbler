@@ -721,11 +721,11 @@ export default function GobblerAuctionSection({
     ? hasChainBid && !auctionPaused
       ? viewerIsHighBidderOnExpiredLot
         ? "You won — finalize to claim."
-        : "Bidding closed. Anyone can finalize."
+        : "Bidding closed. Click to finalize."
       : hasChainBid && auctionPaused
         ? viewerIsHighBidderOnExpiredLot
           ? "You won — finalize while paused."
-          : "Bidding closed — anyone can finalize."
+          : "Bidding closed — Click to finalize."
         : !hasChainBid && !auctionPaused
           ? "No bids — extend to reopen."
           : "No bids — unpause to extend."
@@ -774,7 +774,7 @@ export default function GobblerAuctionSection({
     !auctionExpired &&
     showNoBids &&
     !auctionReadError
-      ? "Want this Warplet? Place a bid below."
+      ? ""
       : null;
 
   const onChainLiveQueueEmpty =
@@ -792,13 +792,6 @@ export default function GobblerAuctionSection({
         active={bidFeedbackActive}
         onSequenceComplete={onBidFeedbackSequenceComplete}
       />
-      <h2 className="text-xl sm:text-3xl font-bold tracking-widest uppercase mb-1">
-        Gobbled Warplet auctions
-      </h2>
-      <p className="text-sm text-base-content/40 mb-6 sm:mb-8">
-        One auction per day. Everything behind the live lot is waiting in line
-        to leave the Gobbler — not on sale until its day.
-      </p>
 
       {showLastWinnerBanner && winnerBannerDisplay ? (
         <LastAuctionWinnerBanner
@@ -881,28 +874,18 @@ export default function GobblerAuctionSection({
       />
 
       {onQueueEmptyBetweenSales ? (
-        <div className="mt-10 rounded-xl border border-base-content/10 bg-base-100/10 px-4 py-5 sm:px-6">
-          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/55 mb-2">
-            In line to exit the Gobbler
-          </h3>
-          <p className="text-sm text-base-content/55 leading-relaxed max-w-prose">
-            The queue is empty. No Warplets are waiting for a future auction, so
-            there is nothing to select, bump, or skip here. New NFTs will appear
-            when they are queued on-chain.
-          </p>
-        </div>
+        <div className="mt-10 "></div>
       ) : (
         <>
-          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mt-10 mb-1 text-center">
-            In line to exit the Gobbler
+          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mb-1 px-2">
+            Skip the line
           </h3>
           {queueReadsEnabled && onChainLiveQueueEmpty ? (
-            <p className="text-xs text-base-content/40 mb-4 max-w-xl mx-auto text-center">
-              No Warplets are queued behind this live lot. When more are lined
-              up, they will show in the row below.
+            <p className="text-xs text-base-content/40 mb-4 max-w-xl mx-auto px-2">
+              No Warplets currently queued. The Gobbler is hungry.
             </p>
           ) : skipLineOptionVisible ? (
-            <p className="text-xs text-base-content/35 mb-4 max-w-xl mx-auto text-center">
+            <p className="text-xs text-base-content/35 mb-4 max-w-xl mx-auto px-2">
               Tap a Warplet and help them skip the line.
             </p>
           ) : null}

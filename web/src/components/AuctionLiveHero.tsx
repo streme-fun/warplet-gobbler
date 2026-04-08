@@ -3,7 +3,6 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { isAddressEqual, zeroAddress } from "viem";
 import type { Address } from "viem";
 import AuctionWarpletImage from "./AuctionWarpletImage";
@@ -24,7 +23,7 @@ function AuctionBundleMini() {
           />
         </div>
         <span className="text-[8px] sm:text-[9px] text-base-content/45 text-center leading-none">
-          Warplet
+          Original
         </span>
       </div>
       <span className="text-base-content/25 text-xs pb-4">+</span>
@@ -211,8 +210,6 @@ export default function AuctionLiveHero({
     null,
   );
   const [showExtendSuccessBanner, setShowExtendSuccessBanner] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   const [startAuctionPressPulse, setStartAuctionPressPulse] = useState(false);
 
   const chainBlocksBid = Boolean(
@@ -378,17 +375,15 @@ export default function AuctionLiveHero({
         />
       ) : (
         <>
-          <div className="text-center lg:text-left mb-4">
-            <h2 className="text-[10px] sm:text-xs font-semibold tracking-[0.2em] uppercase text-secondary m-0">
-              Today&apos;s auction
+          <div className="text-center sm:text-left mb-4">
+            <h2 className="text-2xl sm:text-4xl font-bold tracking-wider uppercase text-secondary m-0">
+              DAILY WARPLET AUCTION
             </h2>
-            <p className="text-sm text-base-content/55 mt-1 mb-0 max-w-md mx-auto lg:mx-0">
-              Every day, the Gobbler sells one Warplet.
-              <br />
-              Bid to win the Warplet and more.
+            <p className="text-xs sm:text-lg text-base-content mt-1 mb-0 max-w-md mx-auto lg:mx-0">
+              A Warplet a day keeps the Gobbler away. Bid to win.
             </p>
           </div>
-          <div className="grid grid-cols-[2fr_1fr] gap-3 sm:gap-6 lg:gap-10 items-center">
+          <div className="grid grid-cols-[2fr_2fr] gap-3 sm:gap-6 lg:gap-10 items-center">
             {/* Left column — warplet image (2/3) */}
             <div className="flex flex-col items-center">
               {idleNoChainAuction ? (
@@ -437,7 +432,7 @@ export default function AuctionLiveHero({
                       </div>
                     </div>
                   </div>
-                  <div className="hidden sm:block">
+                  <div className="block">
                     <AuctionBundleMini />
                   </div>
                 </>
@@ -584,7 +579,7 @@ export default function AuctionLiveHero({
                       </div>
                     ) : showNoBids ? (
                       <div className="space-y-1.5">
-                        <p className="text-lg sm:text-xl font-mono text-base-content/50">
+                        <p className="text-base sm:text-lg font-mono text-base-content/50">
                           No bids yet
                         </p>
                         {bidInviteCopy && !auctionExpiredOnChain ? (
@@ -633,139 +628,131 @@ export default function AuctionLiveHero({
               </div>
             </div>
           </div>
-        </>
-      )}
 
-      {/* Fixed bottom bid bar — portaled to escape stacking context, above gobbler jaw */}
-      {mounted &&
-        createPortal(
-          <div className="fixed left-0 right-0 bottom-[30px] sm:bottom-[100px] z-[45] flex justify-center pointer-events-none">
-            <div className="w-full max-w-2xl px-4 sm:px-6 pointer-events-auto">
-              {sold ? (
-                <p
-                  className={`text-sm text-center transition-all duration-300 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10 ${
-                    startNewAuction?.loading
-                      ? "text-secondary/75 animate-pulse font-medium"
-                      : "text-base-content/40"
-                  }`}
+          {/* Bid bar — full width under the warplet card */}
+          <div className="mt-4 sm:mt-6 w-full">
+            {sold ? (
+              <p
+                className={`text-sm text-center transition-all duration-300 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10 ${
+                  startNewAuction?.loading
+                    ? "text-secondary/75 animate-pulse font-medium"
+                    : "text-base-content/40"
+                }`}
+              >
+                {settledFooterCopy ??
+                  "The last auction has ended. Click to start a new auction"}
+              </p>
+            ) : idleNoChainAuction ? null : chainSettlement ? (
+              <div className="space-y-2 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
+                <button
+                  type="button"
+                  onClick={() => void chainSettlement.onSubmit()}
+                  disabled={chainSettlement.disabled || chainSettlement.loading}
+                  className="btn btn-secondary w-full text-base font-semibold tracking-wide disabled:opacity-50"
                 >
-                  {settledFooterCopy ??
-                    "The last auction has ended. Click to start a new auction"}
-                </p>
-              ) : idleNoChainAuction ? null : chainSettlement ? (
-                <div className="space-y-2 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
-                  <button
-                    type="button"
-                    onClick={() => void chainSettlement.onSubmit()}
-                    disabled={
-                      chainSettlement.disabled || chainSettlement.loading
-                    }
-                    className="btn btn-secondary w-full text-base font-semibold tracking-wide disabled:opacity-50"
-                  >
-                    {chainSettlement.loading ? (
-                      <span className="loading loading-spinner loading-sm" />
-                    ) : (
-                      chainSettlement.label
-                    )}
-                  </button>
-                  {chainSettlement.hint ? (
-                    <p className="text-xs text-base-content/45 text-center">
-                      {chainSettlement.hint}
-                    </p>
-                  ) : null}
-                  {chainSettlement.error ? (
-                    <p className="text-xs text-error/90 break-words text-center">
-                      {chainSettlement.error}
-                    </p>
-                  ) : null}
-                </div>
-              ) : postAuctionNoActionHint ? (
-                <p className="text-xs text-base-content/50 leading-relaxed text-center bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
-                  {postAuctionNoActionHint}
-                </p>
-              ) : chainBid ? (
-                <div className="space-y-2 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
-                  <label className="form-control w-full">
-                    <span className="label py-0 min-h-0 pb-1.5 justify-start">
-                      <span className="label-text text-[10px] sm:text-xs uppercase tracking-wider text-base-content/50">
-                        Your bid ({bidSymbol})
-                      </span>
+                  {chainSettlement.loading ? (
+                    <span className="loading loading-spinner loading-sm" />
+                  ) : (
+                    chainSettlement.label
+                  )}
+                </button>
+                {chainSettlement.hint ? (
+                  <p className="text-xs text-base-content/45 text-center">
+                    {chainSettlement.hint}
+                  </p>
+                ) : null}
+                {chainSettlement.error ? (
+                  <p className="text-xs text-error/90 break-words text-center">
+                    {chainSettlement.error}
+                  </p>
+                ) : null}
+              </div>
+            ) : postAuctionNoActionHint ? (
+              <p className="text-xs text-base-content/50 leading-relaxed text-center bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
+                {postAuctionNoActionHint}
+              </p>
+            ) : chainBid ? (
+              <div className="space-y-2 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
+                <label className="form-control w-full">
+                  <span className="label py-0 min-h-0 pb-1.5 justify-start">
+                    <span className="label-text text-[10px] sm:text-xs uppercase tracking-wider text-base-content/50">
+                      Your bid ({bidSymbol})
                     </span>
-                    <div className="flex gap-2 sm:gap-3 items-center w-full min-w-0">
-                      <div
-                        className={`flex flex-1 min-w-0 min-h-10 items-center gap-2 rounded-lg border border-base-content/10 bg-base-200/40 px-2 sm:px-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] transition-[box-shadow,border-color] focus-within:border-secondary/50 focus-within:ring-1 focus-within:ring-secondary/25 ${
+                  </span>
+                  <div className="flex gap-2 sm:gap-3 items-center w-full min-w-0">
+                    <div
+                      className={`flex flex-1 min-w-0 min-h-10 items-center gap-2 rounded-lg border border-base-content/10 bg-base-200/40 px-2 sm:px-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] transition-[box-shadow,border-color] focus-within:border-secondary/50 focus-within:ring-1 focus-within:ring-secondary/25 ${
+                        chainBid.disabled ||
+                        chainBid.loading ||
+                        chainBid.minBidHuman == null
+                          ? "opacity-50 pointer-events-none"
+                          : ""
+                      }`}
+                    >
+                      <span
+                        className="shrink-0 text-left text-sm font-mono tabular-nums text-base-content/50 select-none"
+                        title="Approximate USD (spot)"
+                      >
+                        {formatUsdTilde(bidUsdEstimate)}
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        className="min-w-0 flex-1 bg-transparent py-2 text-right font-mono text-sm tabular-nums text-base-content placeholder:text-base-content/25 outline-none border-0 focus:ring-0"
+                        value={bidAmountRaw}
+                        onChange={(e) => {
+                          setBidAmountRaw(e.target.value);
+                          setBidValidationError(null);
+                          chainBid.onClearTxError?.();
+                        }}
+                        disabled={
                           chainBid.disabled ||
                           chainBid.loading ||
                           chainBid.minBidHuman == null
-                            ? "opacity-50 pointer-events-none"
-                            : ""
-                        }`}
-                      >
-                        <span
-                          className="shrink-0 text-left text-sm font-mono tabular-nums text-base-content/50 select-none"
-                          title="Approximate USD (spot)"
-                        >
-                          {formatUsdTilde(bidUsdEstimate)}
-                        </span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          autoComplete="off"
-                          className="min-w-0 flex-1 bg-transparent py-2 text-right font-mono text-sm tabular-nums text-base-content placeholder:text-base-content/25 outline-none border-0 focus:ring-0"
-                          value={bidAmountRaw}
-                          onChange={(e) => {
-                            setBidAmountRaw(e.target.value);
-                            setBidValidationError(null);
-                            chainBid.onClearTxError?.();
-                          }}
-                          disabled={
-                            chainBid.disabled ||
-                            chainBid.loading ||
-                            chainBid.minBidHuman == null
-                          }
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleChainBidSubmit}
-                        disabled={
-                          bidDisabled ||
-                          chainBlocksBid ||
-                          chainBid.disabled ||
-                          chainBid.loading ||
-                          chainBid.minBidWei == null
                         }
-                        className="btn btn-secondary shrink-0 min-w-[4.75rem] px-3 font-semibold tracking-wide disabled:opacity-50"
-                      >
-                        {chainBid.loading ? (
-                          <span className="loading loading-spinner loading-sm" />
-                        ) : (
-                          "BID"
-                        )}
-                      </button>
+                      />
                     </div>
-                  </label>
-                  {txOrValidationError ? (
-                    <p className="text-xs text-error/90 text-left break-words pl-0.5">
-                      {txOrValidationError}
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <button
-                  ref={btnRef}
-                  type="button"
-                  onClick={handleDemoBid}
-                  disabled={bidDisabled || chainBlocksBid}
-                  className="btn btn-secondary w-full text-base font-semibold tracking-wide disabled:opacity-50 bg-base-200/80 backdrop-blur-sm border border-base-content/10"
-                >
-                  Bid
-                </button>
-              )}
-            </div>
-          </div>,
-          document.body,
-        )}
+                    <button
+                      type="button"
+                      onClick={handleChainBidSubmit}
+                      disabled={
+                        bidDisabled ||
+                        chainBlocksBid ||
+                        chainBid.disabled ||
+                        chainBid.loading ||
+                        chainBid.minBidWei == null
+                      }
+                      className="btn btn-secondary shrink-0 min-w-[4.75rem] px-3 font-semibold tracking-wide disabled:opacity-50"
+                    >
+                      {chainBid.loading ? (
+                        <span className="loading loading-spinner loading-sm" />
+                      ) : (
+                        "BID"
+                      )}
+                    </button>
+                  </div>
+                </label>
+                {txOrValidationError ? (
+                  <p className="text-xs text-error/90 text-left break-words pl-0.5">
+                    {txOrValidationError}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <button
+                ref={btnRef}
+                type="button"
+                onClick={handleDemoBid}
+                disabled={bidDisabled || chainBlocksBid}
+                className="btn btn-secondary w-full text-base font-semibold tracking-wide disabled:opacity-50 bg-base-200/80 backdrop-blur-sm border border-base-content/10"
+              >
+                Bid
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
