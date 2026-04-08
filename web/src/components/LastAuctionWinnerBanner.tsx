@@ -5,6 +5,7 @@
 import type { Address } from "viem";
 import AuctionWarpletImage from "./AuctionWarpletImage";
 import BidderAvatarName from "./BidderAvatarName";
+import type { RescueStage } from "@/hooks/useGobbledRescue";
 
 const STORAGE_KEY = "wg:last-auction-winner-dismissed";
 /** Snapshot of the lot that just settled — on-chain `auction` may already be the *next* live lot. */
@@ -25,6 +26,29 @@ export function getWinnerFingerprint(
   return `${tokenId}-${bidder}-${amountWei}`;
 }
 
+function rescueStageLabel(stage: RescueStage): string {
+  switch (stage) {
+    case "preparing":
+      return "Preparing metadata…";
+    case "awaiting-wallet":
+      return "Confirm in wallet…";
+    case "confirming":
+      return "Submitting…";
+    case "success":
+      return "Claimed!";
+    default:
+      return "Claim Warplet";
+  }
+}
+
+export type ClaimAction = {
+  /** True only when the connected viewer is the winner of the last settled auction. */
+  visible: boolean;
+  stage: RescueStage;
+  error: string | null;
+  onClaim: () => void;
+};
+
 export default function LastAuctionWinnerBanner({
   tokenId,
   winnerAddress,
@@ -32,6 +56,7 @@ export default function LastAuctionWinnerBanner({
   bidSymbol,
   viewerAddress,
   onDismiss,
+  claim,
 }: {
   tokenId: number;
   winnerAddress: Address;
@@ -39,7 +64,14 @@ export default function LastAuctionWinnerBanner({
   bidSymbol: string;
   viewerAddress?: Address | null;
   onDismiss: () => void;
+  claim?: ClaimAction;
 }) {
+  const claimBusy =
+    claim?.stage === "preparing" ||
+    claim?.stage === "awaiting-wallet" ||
+    claim?.stage === "confirming";
+  const claimDone = claim?.stage === "success";
+
   return (
     <div className="relative w-full max-w-4xl rounded-xl border border-success/25 bg-success/5 px-4 py-4 sm:px-5 sm:py-4 mb-6 pr-12 sm:pr-14">
       <button
@@ -78,6 +110,26 @@ export default function LastAuctionWinnerBanner({
             <span className="text-base-content/35">{bidSymbol}</span>
           </p>
         </div>
+        {claim?.visible ? (
+          <div className="flex flex-col items-stretch sm:items-end gap-1 border-t sm:border-t-0 sm:border-l border-base-content/10 pt-3 sm:pt-0 sm:pl-6">
+            <button
+              type="button"
+              onClick={claim.onClaim}
+              disabled={claimBusy || claimDone}
+              className="btn btn-success btn-sm whitespace-nowrap"
+            >
+              {claimBusy ? (
+                <span className="loading loading-spinner loading-xs mr-2" />
+              ) : null}
+              {rescueStageLabel(claim.stage)}
+            </button>
+            {claim.error ? (
+              <p className="text-xs text-error text-right max-w-[14rem] break-words">
+                {claim.error}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

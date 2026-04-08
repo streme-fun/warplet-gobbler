@@ -23,6 +23,7 @@ export const CONTRACTS = {
       "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
   ),
   warplets: envAddress(process.env.NEXT_PUBLIC_WARPLETS_ADDRESS), // Warplets NFT collection on Base
+  gobbledWarplets: envAddress(process.env.NEXT_PUBLIC_GOBBLED_WARPLETS_ADDRESS), // Gobbled receipt collection
   usdcToken: envAddress(process.env.NEXT_PUBLIC_USDC_TOKEN_ADDRESS),
   warpgobbWethPool: envAddress(process.env.NEXT_PUBLIC_WARPGOBB_WETH_POOL_ADDRESS),
   wethUsdcPool: envAddress(process.env.NEXT_PUBLIC_WETH_USDC_POOL_ADDRESS),

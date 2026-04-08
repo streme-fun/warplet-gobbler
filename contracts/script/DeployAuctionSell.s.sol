@@ -23,16 +23,21 @@ import {DeployHelpers} from "./DeployHelpers.sol";
 ///   `AUCTION_SELL_OWNER`, `AUCTION_RESERVE_PRICE_WEI`, `AUCTION_TIME_BUFFER_SECONDS`,
 ///   `AUCTION_MIN_BID_INCREMENT_PERCENT`, `AUCTION_DURATION_SECONDS`,
 ///   `GOBBLED_WARPLETS_NAME`, `GOBBLED_WARPLETS_SYMBOL`
+///   Optional: `GOBBLED_WARPLETS_TOKEN_URI_SETTER` (defaults to deployer) — signer for user `mint` signatures.
 contract DeployAuctionSell is DeployHelpers {
     function run() external {
         uint256 pk = _loadPrivateKey();
 
         vm.startBroadcast(pk);
 
+        address deployer = vm.addr(pk);
+        address tokenURISetter = vm.envOr("GOBBLED_WARPLETS_TOKEN_URI_SETTER", deployer);
+
         GobbledWarplets gobbled = new GobbledWarplets(
             vm.envString("GOBBLED_WARPLETS_NAME"),
             vm.envString("GOBBLED_WARPLETS_SYMBOL"),
-            vm.addr(pk)
+            deployer,
+            tokenURISetter
         );
 
         AuctionSell sell = _newAuctionSell(gobbled);

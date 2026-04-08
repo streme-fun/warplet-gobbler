@@ -10,8 +10,10 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract AuctionSellTest is Test {
+    using MessageHashUtils for bytes32;
     AuctionSell internal sell;
     GobbledWarplets internal gobbled;
     MockAuctionNFT internal nft;
@@ -22,6 +24,14 @@ contract AuctionSellTest is Test {
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
     address internal carol = makeAddr("carol");
+
+    uint256 internal constant GOBBLED_SETTER_PK = 0xA11CE;
+    bytes32 internal constant _GOBBLED_DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 internal constant _GOBBLED_MINT_TYPEHASH =
+        keccak256("Mint(uint256 tokenId,string uri,uint256 deadline)");
+    address internal gobbledSetter;
+    string internal constant GOBBLED_URI = "ipfs://gobbled-test";
 
     uint256 internal constant DURATION = 24 hours;
     uint256 internal constant TIME_BUFFER = 5 minutes;
@@ -43,7 +53,8 @@ contract AuctionSellTest is Test {
         vm.startPrank(owner);
         nft = new MockAuctionNFT();
         bidToken = new MockBidToken();
-        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner);
+        gobbledSetter = vm.addr(GOBBLED_SETTER_PK);
+        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner, gobbledSetter);
         sell = new AuctionSell(
             IERC721(address(nft)),
             bidToken,
@@ -68,6 +79,40 @@ contract AuctionSellTest is Test {
         bidToken.approve(address(sell), type(uint256).max);
         vm.prank(carol);
         bidToken.approve(address(sell), type(uint256).max);
+    }
+
+    function _gobbledDomainSeparator() internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                _GOBBLED_DOMAIN_TYPEHASH,
+                keccak256(bytes("Gobbled Warplets")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(gobbled)
+            )
+        );
+    }
+
+    function _signGobbledMint(uint256 tokenId, string memory uri, uint256 deadline)
+        internal
+        view
+        returns (bytes memory)
+    {
+        bytes32 structHash =
+            keccak256(abi.encode(_GOBBLED_MINT_TYPEHASH, tokenId, keccak256(bytes(uri)), deadline));
+        bytes32 digest = _gobbledDomainSeparator().toTypedDataHash(structHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(GOBBLED_SETTER_PK, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    /// @dev Settlement only `reserve`s the GobbledWarplets id and leaves the underlying Warplet in
+    ///      the auction. Tests finish the flow with the winner's signed `rescueWarplet` overload, which
+    ///      mints the receipt with metadata AND pulls the underlying NFT in one tx.
+    function _completeReservedGobbled(address recipient, uint256 gobbledTokenId) internal {
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory sig = _signGobbledMint(gobbledTokenId, GOBBLED_URI, deadline);
+        vm.prank(recipient);
+        gobbled.rescueWarplet(gobbledTokenId, GOBBLED_URI, deadline, sig);
     }
 
     function _mintAndSendToSell(address from) internal returns (uint256 tokenId) {
@@ -128,7 +173,7 @@ contract AuctionSellTest is Test {
         assertEq(tid, t2);
     }
 
-    function test_settle_mints_gobbled_to_winner() public {
+    function test_settle_reserves_gobbled_winner_mints_receipt() public {
         uint256 wid = _mintAndSendToSell(owner);
         _unpauseStartsAuction(wid);
 
@@ -137,6 +182,8 @@ contract AuctionSellTest is Test {
 
         vm.warp(block.timestamp + DURATION + 1);
         sell.settleCurrentAndCreateNewAuction();
+
+        _completeReservedGobbled(alice, wid);
 
         assertEq(nft.ownerOf(wid), alice);
         assertEq(gobbled.balanceOf(alice), 1);
@@ -379,6 +426,8 @@ contract AuctionSellTest is Test {
         uint256 proceedsBefore = bidToken.balanceOf(proceeds);
         sell.settleCurrentAndCreateNewAuction();
 
+        _completeReservedGobbled(alice, t1);
+
         assertEq(nft.ownerOf(t1), alice);
         assertEq(bidToken.balanceOf(proceeds), proceedsBefore + RESERVE_PRICE);
         assertEq(gobbled.ownerOf(t1), alice);
@@ -393,7 +442,7 @@ contract AuctionSellTest is Test {
         assertEq(nextId, t2);
     }
 
-    function test_settle_mints_gobbled_receipt_incrementing_gobble_index() public {
+    function test_settle_two_auctions_same_warplet_reserve_then_winners_mint() public {
         uint256 wid = _mintAndSendToSell(owner);
         vm.prank(owner);
         sell.unpause();
@@ -401,6 +450,8 @@ contract AuctionSellTest is Test {
         sell.bid(RESERVE_PRICE);
         vm.warp(block.timestamp + DURATION + 1);
         sell.settleCurrentAndCreateNewAuction();
+
+        _completeReservedGobbled(alice, wid);
 
         assertEq(gobbled.ownerOf(wid), alice);
         assertEq(nft.ownerOf(wid), alice);
@@ -414,8 +465,9 @@ contract AuctionSellTest is Test {
         vm.warp(block.timestamp + DURATION + 1);
         sell.settleCurrentAndCreateNewAuction();
 
-        uint256 stride = gobbled.TOKEN_ID_DECIMAL_STRIDE();
+        uint256 stride = gobbled.WARPLET_ID_PADDING();
         uint256 secondGobbledId = stride + wid;
+        _completeReservedGobbled(bob, secondGobbledId);
         assertEq(gobbled.ownerOf(secondGobbledId), bob);
         assertEq(gobbled.warpletOf(secondGobbledId), wid);
         assertEq(gobbled.gobbleIndexOf(secondGobbledId), 1);
@@ -426,9 +478,9 @@ contract AuctionSellTest is Test {
         assertEq(gobbled.tokenByIndex(1), secondGobbledId);
     }
 
-    function test_settle_succeeds_when_gobbled_mint_reverts_warplet_id_too_large() public {
+    function test_settleCurrent_reverts_when_gobbled_reserve_fails_warplet_id_too_large() public {
         vm.prank(owner);
-        uint256 badId = nft.mintSpecific(owner, gobbled.MAX_WARPLET_ID_EXCLUSIVE());
+        uint256 badId = nft.mintSpecific(owner, gobbled.WARPLET_ID_PADDING());
 
         vm.prank(owner);
         nft.safeTransferFrom(owner, address(sell), badId);
@@ -439,12 +491,15 @@ contract AuctionSellTest is Test {
         sell.bid(RESERVE_PRICE);
         vm.warp(block.timestamp + DURATION + 1);
 
+        uint256 proceedsBefore = bidToken.balanceOf(proceeds);
+        vm.expectRevert(bytes("GobbledWarplets: warpletId too large"));
         sell.settleCurrentAndCreateNewAuction();
 
-        assertEq(nft.ownerOf(badId), alice);
+        assertEq(nft.ownerOf(badId), address(sell));
         assertEq(gobbled.totalSupply(), 0);
+        assertEq(bidToken.balanceOf(proceeds), proceedsBefore);
         (,,,,, bool settled) = sell.auction();
-        assertTrue(settled);
+        assertFalse(settled);
     }
 
     function test_settleCurrent_no_next_when_queue_empty() public {
@@ -505,8 +560,13 @@ contract AuctionSellTest is Test {
         sell.pause();
         sell.settle();
 
-        assertEq(nft.ownerOf(tid), alice);
+        // Settlement no longer transfers the underlying Warplet — it stays in the auction until the
+        // winner pulls it via `GobbledWarplets.rescueWarplet`.
+        assertEq(nft.ownerOf(tid), address(sell));
         assertEq(bidToken.balanceOf(proceeds), RESERVE_PRICE);
+
+        _completeReservedGobbled(alice, tid);
+        assertEq(nft.ownerOf(tid), alice);
     }
 
     function test_settle_reverts_when_not_paused() public {
@@ -992,6 +1052,10 @@ contract AuctionSellTest is Test {
         (uint256 cur,,,) = sell.currentAuction();
         assertEq(cur, 0);
         assertEq(sell.nextQueuedTokenId(), t2);
+        // Underlying Warplet stays in the auction until the winner calls `rescueWarplet`.
+        assertEq(nft.ownerOf(t1), address(sell));
+
+        _completeReservedGobbled(alice, t1);
         assertEq(nft.ownerOf(t1), alice);
     }
 
@@ -1011,11 +1075,11 @@ contract AuctionSellTest is Test {
         sell.settle();
     }
 
-    function test_settle_do_not_reverts_when_warplet_id_too_large_for_gobbled_mint_paused_path() public {
+    function test_settle_when_paused_reverts_when_gobbled_reserve_fails_warplet_id_too_large() public {
         uint256 aliceGobbledBalanceBefore = gobbled.balanceOf(alice);
 
         vm.prank(owner);
-        uint256 badId = nft.mintSpecific(owner, gobbled.MAX_WARPLET_ID_EXCLUSIVE());
+        uint256 badId = nft.mintSpecific(owner, gobbled.WARPLET_ID_PADDING());
 
         vm.prank(owner);
         nft.safeTransferFrom(owner, address(sell), badId);
@@ -1028,12 +1092,13 @@ contract AuctionSellTest is Test {
 
         vm.prank(owner);
         sell.pause();
+
+        vm.expectRevert(bytes("GobbledWarplets: warpletId too large"));
         sell.settle();
 
-        uint256 aliceGobbledBalanceAfter = gobbled.balanceOf(alice);
-
-        // Asserts that settle did not revert and that the warplet mint was attempted, but did not succeed in minting a gobbled receipt
-        vm.assertEq(nft.ownerOf(badId), alice);
-        vm.assertEq(aliceGobbledBalanceAfter, aliceGobbledBalanceBefore);
+        vm.assertEq(gobbled.balanceOf(alice), aliceGobbledBalanceBefore);
+        vm.assertEq(nft.ownerOf(badId), address(sell));
+        (,,,,, bool settled) = sell.auction();
+        vm.assertFalse(settled);
     }
 }

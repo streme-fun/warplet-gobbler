@@ -19,6 +19,7 @@ import LastAuctionWinnerBanner, {
   readWinnerHighlight,
   writeDismissedWinnerFp,
   writeWinnerHighlight,
+  type ClaimAction,
   type StoredWinnerHighlight,
 } from "./LastAuctionWinnerBanner";
 import AuctionQueueCard from "./AuctionQueueCard";
@@ -39,6 +40,7 @@ import { useAuctionSellSettleActions } from "@/hooks/useAuctionSellSettle";
 import { useAuctionSellStartAuction } from "@/hooks/useAuctionSellStartAuction";
 import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
 import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
+import { useGobbledRescue } from "@/hooks/useGobbledRescue";
 import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
 import { CONTRACTS } from "@/lib/contracts";
 import { formatUserFacingTxError } from "@/lib/format-tx-error";
@@ -375,7 +377,9 @@ export default function GobblerAuctionSection({
       ? 0
       : hasParsedLot && chainLot.tokenId > 0n
         ? Number(chainLot.tokenId)
-        : live.fid;
+        : onChainMode
+          ? 0
+          : live.fid;
 
   const hasChainBid =
     liveAuction &&
@@ -392,7 +396,9 @@ export default function GobblerAuctionSection({
         : "0"
       : auctionSettled && hasParsedLot && chainLot
         ? formatBidAmount(chainLot.amount)
-        : MOCK_FALLBACK_TOP_BID_AMOUNT;
+        : onChainMode
+          ? "—"
+          : MOCK_FALLBACK_TOP_BID_AMOUNT;
 
   const chainTopBidder: Address | null = liveAuction
     ? hasChainBid
@@ -400,7 +406,9 @@ export default function GobblerAuctionSection({
       : null
     : auctionSettled && chainLot.amount > 0n
       ? chainLot.bidder
-      : (MOCK_FALLBACK_TOP_BIDDER as Address);
+      : onChainMode
+        ? null
+        : (MOCK_FALLBACK_TOP_BIDDER as Address);
 
   const showNoBids =
     !idleNoChainAuction && liveAuction && !hasChainBid;
@@ -458,6 +466,57 @@ export default function GobblerAuctionSection({
     clearWinnerHighlight();
     setWinnerHighlight(null);
   }, [winnerBannerDisplay?.fp]);
+
+  // ---------- Gobbled-warplet rescue (signed mint + NFT pull) ----------
+  const rescue = useGobbledRescue();
+
+  const viewerIsWinner = useMemo(() => {
+    if (!winnerBannerDisplay || viewerAddress == null) return false;
+    return isAddressEqual(viewerAddress, winnerBannerDisplay.bidder);
+  }, [winnerBannerDisplay, viewerAddress]);
+
+  // Reset the rescue hook whenever we move to a different winner / lot, otherwise stale
+  // success/error state from a previous lot would leak into the new banner.
+  const lastClaimedFpRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!winnerBannerDisplay) return;
+    if (lastClaimedFpRef.current !== winnerBannerDisplay.fp) {
+      lastClaimedFpRef.current = winnerBannerDisplay.fp;
+      rescue.reset();
+    }
+  }, [winnerBannerDisplay, rescue]);
+
+  // After a successful rescue, dismiss the banner so we don't keep showing the CTA.
+  useEffect(() => {
+    if (rescue.stage !== "success") return;
+    const fp = winnerBannerDisplay?.fp;
+    if (fp == null) return;
+    const t = setTimeout(() => {
+      writeDismissedWinnerFp(fp);
+      setDismissedWinnerFp(fp);
+      clearWinnerHighlight();
+      setWinnerHighlight(null);
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [rescue.stage, winnerBannerDisplay?.fp]);
+
+  const handleClaimWarplet = useCallback(() => {
+    if (!winnerBannerDisplay) return;
+    void rescue.claim(winnerBannerDisplay.tokenId);
+  }, [rescue, winnerBannerDisplay]);
+
+  // No explicit gate here: the banner only renders when `winnerBannerDisplay` is set, which
+  // requires either `chainWinnerBanner` (auctionSettled === true on-chain) or `winnerHighlight`
+  // (only ever written *after* an awaited settle tx confirms). Both paths guarantee a
+  // reservation exists, so the button is safe to enable whenever it's visible.
+  const claimAction: ClaimAction | undefined = winnerBannerDisplay
+    ? {
+        visible: viewerIsWinner && rescue.ready,
+        stage: rescue.stage,
+        error: rescue.error,
+        onClaim: handleClaimWarplet,
+      }
+    : undefined;
 
   const handleStartNewAuction = useCallback(async () => {
     setStartError(null);
@@ -812,6 +871,7 @@ export default function GobblerAuctionSection({
           bidSymbol={bidSymbol}
           viewerAddress={viewerAddress}
           onDismiss={handleDismissWinnerBanner}
+          claim={claimAction}
         />
       ) : null}
 
