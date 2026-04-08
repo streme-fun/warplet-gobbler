@@ -28,6 +28,17 @@ import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {Pausable} from "openzeppelin-contracts/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
+/// @dev Streme `StremeZapUniversal` exposes this swap as the external function `zap` (same name on the ABI;
+///      do not confuse with internal/helper naming elsewhere in Streme source).
+///      `stakingContract == address(0)` sends output to `msg.sender` and skips `stake`; any non-zero address is
+///      treated as a staking target and the zap may call `stake` there — never pass `address(this)` from FeeHandler.
+interface IStremeZapUniversal {
+    function zap(address stremeCoin, uint256 amountIn, uint256 amountOutMin, address stakingContract)
+        external
+        payable
+        returns (uint256 amountOut);
+}
+
 interface IERC777Recipient {
     function tokensReceived(
         address operator,
@@ -52,6 +63,9 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     IERC721 public immutable nft;
     IERC20 public immutable bidToken;
     IGobbledWarplets public immutable gobbledWarplets;
+
+    /// @notice Streme zap used when `bid` is called with `msg.value > 0`. May be `address(0)` if only ERC20 pulls are used.
+    IStremeZapUniversal public immutable stremeZap;
 
     address public proceedsRecipient;
 
@@ -90,7 +104,8 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         uint256 _reservePrice,
         uint8 _minBidIncrementPercentage,
         uint256 _duration,
-        address initialOwner
+        address initialOwner,
+        address _stremeZap
     ) Ownable(initialOwner) {
         require(address(_nft) != address(0) && address(_bidToken) != address(0), "AuctionSell: zero token");
         require(address(_gobbledWarplets) != address(0), "AuctionSell: zero gobbled");
@@ -98,6 +113,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         nft = _nft;
         bidToken = _bidToken;
         gobbledWarplets = _gobbledWarplets;
+        stremeZap = IStremeZapUniversal(_stremeZap);
         proceedsRecipient = _proceedsRecipient;
         timeBuffer = _timeBuffer;
         reservePrice = _reservePrice;
@@ -174,9 +190,37 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     }
 
     /// @inheritdoc IAuctionSell
-    function bid(uint256 amount) external override nonReentrant whenNotPaused {
-        require(bidToken.transferFrom(msg.sender, address(this), amount), "AuctionSell: pull failed");
-        _bid(amount, msg.sender);
+    function bid(uint256 amount) external payable override nonReentrant whenNotPaused {
+        if (msg.value > 0) {
+            require(address(stremeZap) != address(0), "AuctionSell: zap unset");
+            // Same `zap` semantics as `FeeHandler._swapWethToToken`: `stremeCoin` is the **out** token,
+            // `amountIn` is how much **native / wrapper input** is spent (`FeeHandler` passes WETH balance;
+            // here we pass ETH via `msg.value`, so the input size is `msg.value`), `amountOutMin` is the
+            // caller’s minimum **out** (the bid size / slippage floor). `stakingContract == address(0)` sends
+            // proceeds to `msg.sender` (this contract).
+            //
+            // SECURITY: ignore the zap's return value and measure our own balance delta. A misbehaving
+            // zap that over-reports `amountOut` would otherwise pass the slippage check on a partial
+            // delivery, leaving the auction with less bidToken than the recorded bid — bricking
+            // settlement (the auction would be unable to pay `proceedsRecipient`). Same balance-delta
+            // pattern as `FeeHandler._swapWethToToken`.
+            uint256 balanceBefore = bidToken.balanceOf(address(this));
+            stremeZap.zap{value: msg.value}(
+                address(bidToken),
+                msg.value,
+                uint256(amount),
+                address(0)
+            );
+            uint256 amountOut = bidToken.balanceOf(address(this)) - balanceBefore;
+            require(amountOut >= amount, "AuctionSell: zap slippage");
+            _bid(amount, msg.sender);
+            if (amountOut > amount) {
+                require(bidToken.transfer(msg.sender, amountOut - amount), "AuctionSell: refund failed");
+            }
+        } else {
+            require(bidToken.transferFrom(msg.sender, address(this), amount), "AuctionSell: pull failed");
+            _bid(amount, msg.sender);
+        }
     }
 
     function tokensReceived(

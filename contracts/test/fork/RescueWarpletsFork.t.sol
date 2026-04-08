@@ -96,7 +96,9 @@ contract RescueWarpletsForkTest is Test {
             RESERVE_PRICE,
             MIN_INCREMENT_PCT,
             DURATION,
-            owner
+            owner,
+            // No zap — this fork test only exercises the rescue flow, not native ETH bidding.
+            address(0)
         );
         gobbled.setMinter(address(sell));
         vm.stopPrank();

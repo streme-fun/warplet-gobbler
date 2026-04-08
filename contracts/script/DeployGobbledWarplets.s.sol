@@ -43,6 +43,6 @@ contract DeployGobbledWarplets is DeployHelpers {
         console2.log("GobbledWarplets:", address(gobbled));
         console2.log("Initial minter:", minter);
         console2.log("GobbledWarplets owner (URI / admin):", gobbled.owner());
-        console2.log("TOKEN_ID_DECIMAL_STRIDE:", gobbled.TOKEN_ID_DECIMAL_STRIDE());
+        console2.log("WARPLET_ID_PADDING:", gobbled.WARPLET_ID_PADDING());
     }
 }
