@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {AuctionSell} from "../src/AuctionSell.sol";
 import {GobbledWarplets} from "../src/GobbledWarplets.sol";
 import {MockBidToken} from "./mocks/MockBidToken.sol";
+import {MockBidTokenStremeZap} from "./mocks/MockBidTokenStremeZap.sol";
 import {MockAuctionNFT} from "./mocks/MockAuctionNFT.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
@@ -49,7 +50,11 @@ contract AuctionSellTest is Test {
     event QueueBumped(address indexed payer, uint256 indexed tokenId, uint256 fee);
     event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId);
 
-    function setUp() public {
+    function _stremeZapAddress() internal virtual returns (address) {
+        return address(0);
+    }
+
+    function setUp() public virtual {
         vm.startPrank(owner);
         nft = new MockAuctionNFT();
         bidToken = new MockBidToken();
@@ -64,7 +69,8 @@ contract AuctionSellTest is Test {
             RESERVE_PRICE,
             MIN_INCREMENT_PCT,
             DURATION,
-            owner
+            owner,
+            _stremeZapAddress()
         );
         gobbled.setMinter(address(sell));
         vm.stopPrank();
@@ -1100,5 +1106,109 @@ contract AuctionSellTest is Test {
         vm.assertEq(nft.ownerOf(badId), address(sell));
         (,,,,, bool settled) = sell.auction();
         vm.assertFalse(settled);
+    }
+}
+
+/// @dev Pull-only auction (`stremeZap == address(0)`); ETH sends on `bid` must revert.
+contract AuctionSellEthZapUnsetTest is AuctionSellTest {
+    function test_bid_with_eth_reverts_when_zap_unset() public {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+
+        vm.deal(alice, 1 ether);
+        vm.prank(alice);
+        vm.expectRevert(bytes("AuctionSell: zap unset"));
+        sell.bid{value: 1}(RESERVE_PRICE);
+    }
+}
+
+/// @dev Same as `AuctionSellTest` but wires `MockBidTokenStremeZap` so `bid{value: …}` can be tested.
+contract AuctionSellNativeBidTest is AuctionSellTest {
+    MockBidTokenStremeZap internal bidZap;
+
+    /// @dev `amountOut` from zap = `ethSpend * rate / 1 ether`; pick rate so `ethSpend` clears `RESERVE_PRICE`.
+    function _rateForEthBid(uint256 ethSpend) internal pure returns (uint256) {
+        return (RESERVE_PRICE * 1 ether) / ethSpend;
+    }
+
+    function _startAuctionForEthBid() internal {
+        _mintAndSendToSell(owner);
+        vm.prank(owner);
+        sell.unpause();
+    }
+
+    function _stremeZapAddress() internal override returns (address) {
+        bidZap = new MockBidTokenStremeZap(bidToken);
+        return address(bidZap);
+    }
+
+    /// @notice `FeeHandler`-shaped call: out token = `bidToken`, `amountIn == msg.value`, `amountOutMin` = bid.
+    function test_bid_with_eth_zap_passes_feehandler_shape_and_places_bid() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+
+        uint256 aliceTokensBefore = bidToken.balanceOf(alice);
+        vm.deal(alice, ethSpend);
+
+        vm.prank(alice);
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+
+        assertEq(bidZap.lastStremeCoin(), address(bidToken));
+        assertEq(bidZap.lastAmountIn(), ethSpend);
+        assertEq(bidZap.lastAmountOutMin(), RESERVE_PRICE);
+        assertEq(bidZap.lastStaking(), address(0));
+        assertEq(bidZap.lastMsgValue(), ethSpend);
+
+        assertEq(bidToken.balanceOf(alice), aliceTokensBefore);
+        (, address highBidder, uint256 highBid,) = sell.currentAuction();
+        assertEq(highBidder, alice);
+        assertEq(highBid, RESERVE_PRICE);
+        assertEq(bidToken.balanceOf(address(sell)), RESERVE_PRICE);
+    }
+
+    function test_bid_with_eth_zap_refunds_surplus_bid_token() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        bidZap.setExtraOut(7 ether);
+
+        vm.deal(alice, ethSpend);
+        uint256 aliceBefore = bidToken.balanceOf(alice);
+
+        vm.prank(alice);
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+
+        assertEq(bidToken.balanceOf(alice), aliceBefore + 7 ether);
+        (, address highBidder, uint256 highBid,) = sell.currentAuction();
+        assertEq(highBidder, alice);
+        assertEq(highBid, RESERVE_PRICE);
+        assertEq(bidToken.balanceOf(address(sell)), RESERVE_PRICE);
+    }
+
+    function test_bid_with_eth_zap_zap_reverts_when_under_min_out_like_router() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        bidZap.setShortfall(1);
+
+        vm.deal(alice, ethSpend);
+        vm.prank(alice);
+        vm.expectRevert(bytes("MockZap: min-out"));
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
+    }
+
+    function test_bid_with_eth_zap_auction_slippage_guard_if_zap_underfills_without_reverting() public {
+        _startAuctionForEthBid();
+        uint256 ethSpend = 0.5 ether;
+        bidZap.setBidOutPerEth(_rateForEthBid(ethSpend));
+        bidZap.setShortfall(1);
+        bidZap.setEnforceMinOut(false);
+
+        vm.deal(alice, ethSpend);
+        vm.prank(alice);
+        vm.expectRevert(bytes("AuctionSell: zap slippage"));
+        sell.bid{value: ethSpend}(RESERVE_PRICE);
     }
 }

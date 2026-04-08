@@ -7,7 +7,9 @@ pragma solidity ^0.8.26;
 interface IAuctionSell {
     /// @notice Place a bid on the current Warplet auction
     /// @param amount The bid token amount
-    function bid(uint256 amount) external;
+    /// @dev Payable: with `msg.value > 0`, swaps via `StremeZapUniversal` to this auction's `bidToken` then bids;
+    ///      with `msg.value == 0`, pulls `amount` from the caller with `transferFrom`.
+    function bid(uint256 amount) external payable;
 
     /// @notice Settle the current auction and start the next from the queue (normal user path)
     function settleCurrentAndCreateNewAuction() external;
