@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -11,22 +12,35 @@ import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 
 /// @title GobbledWarplets
 /// @notice ERC721 receipt collection for gobbled Warplets. The authorized minter reserves receipts; the
-///         designated recipient completes the NFT with {mint} (EIP-712 from `tokenURISetter`) so the
-///         final mint appears as their transaction (indexers / marketplaces).
-/// @dev Token id encoding: `tokenId = gobbleIndex * TOKEN_ID_DECIMAL_STRIDE + warpletId`.
-///      `warpletId` must be strictly less than {TOKEN_ID_DECIMAL_STRIDE} so decoding is unambiguous.
-///      Stride is 1e8 (extra decimal zero vs 1e7) so sparse Warplet ids stay safely below the modulus; see `web/scripts/scan-warplet-token-ids.mjs`.
+///         designated recipient later either walks away with just the underlying Warplet via
+///         {rescueWarplet}, or claims the receipt with signed metadata AND the underlying Warplet in one
+///         tx via the overloaded {rescueWarplet} (EIP-712 from `tokenURISetter`) so the receipt mint
+///         appears as their transaction (indexers / marketplaces).
+/// @dev Token id encoding: `tokenId = gobbleIndex * WARPLET_ID_PADDING + warpletId`.
+///      `warpletId` must be strictly less than {WARPLET_ID_PADDING} so decoding is unambiguous.
+///      Padding is 1e8 (extra decimal zero vs 1e7) so sparse Warplet ids stay safely below the modulus; see `web/scripts/scan-warplet-token-ids.mjs`.
 ///      Uses {ERC721Enumerable} for `totalSupply`, `tokenOfOwnerByIndex`, and `tokenByIndex`.
-///      {mint} uses {_mint} (not {_safeMint}) so completion cannot be bricked by a receiver that
-///      reverts in `onERC721Received`. No post-mint receiver callback — avoids re-entrancy issues.
+///      The metadata-rescuing overload uses {_mint} (not {_safeMint}) so completion cannot be bricked by a
+///      receiver that reverts in `onERC721Received`. No post-mint receiver callback — avoids re-entrancy issues.
 ///
 ///      {reserve}: only {minter} (typically `AuctionSell`) assigns `tokenId` → recipient; emits {Reserved}.
-///      Metadata is set only in {mint}: the reserved recipient submits a `Mint` EIP-712 signature from `tokenURISetter`.
+///      The reservation also gates {rescueWarplet}, which reads the underlying Warplet ERC721 from
+///      `minter.nft()` and pulls it directly via `IERC721.transferFrom(minter, to, warpletId)` —
+///      authorized by the `setApprovalForAll` AuctionSell grants this contract in its constructor.
+///      The metadata-bearing overload additionally mints the receipt and sets its `tokenURI` from a
+///      `Mint` EIP-712 signature by `tokenURISetter`.
+/// @dev Minimal view of the AuctionSell minter that GobbledWarplets needs to pull held Warplets out of
+///      the auction. AuctionSell pre-approves this contract via `setApprovalForAll` in its constructor.
+interface IGobbledWarpletsMinter {
+    function nft() external view returns (IERC721);
+}
+
 contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712, IGobbledWarplets {
     bytes32 private constant _MINT_TYPEHASH = keccak256("Mint(uint256 tokenId,string uri,uint256 deadline)");
 
-    uint256 public constant MAX_WARPLET_ID_EXCLUSIVE = 100_000;
-    uint256 public constant TOKEN_ID_DECIMAL_STRIDE = 1_000_000;
+    /// @dev Gobbled `tokenId` packs `(gobbleIndex, warpletId)` as `gobbleIndex * padding + warpletId`.
+    ///      Underlying Warplet ERC-721 ids must be `< padding` (same bound used in `%` / `/` decode).
+    uint256 public constant WARPLET_ID_PADDING = 100_000_000;
 
     address public minter;
 
@@ -34,8 +48,15 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
 
     mapping(uint256 warpletId => uint256 count) private _gobbles;
 
-    /// @notice Recipient allowed to call {mint} for a reserved `tokenId` (until minted).
+    /// @notice Recipient allowed to call {rescueWarplet} for a reserved `tokenId`. Cleared once the
+    ///         metadata-bearing overload mints the receipt; the bare overload leaves it set so the
+    ///         recipient can still come back later and mint the receipt with metadata.
     mapping(uint256 tokenId => address recipient) private _reservedRecipient;
+
+    /// @notice True once the underlying Warplet for `tokenId` has been pulled out of the auction (by
+    ///         either {rescueWarplet} overload). Used to make the metadata overload skip the second
+    ///         transfer if the bare overload was called first.
+    mapping(uint256 tokenId => bool) public warpletRescued;
 
     event MinterChanged(address indexed newMinter);
 
@@ -43,6 +64,11 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
 
     event Reserved(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
 
+    /// @notice Emitted when a winner pulls the underlying Warplet without minting the receipt. The receipt
+    ///         id `tokenId` is permanently burned (no future receipt can ever be minted for that slot).
+    event WarpletRescued(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
+
+    /// @notice Emitted when a winner mints the receipt with signed metadata AND pulls the underlying Warplet.
     event Minted(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
 
     modifier onlyMinter() {
@@ -77,7 +103,7 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
 
     /// @inheritdoc IGobbledWarplets
     function reserve(address to, uint256 warpletId) external onlyMinter returns (uint256 tokenId) {
-        require(warpletId < MAX_WARPLET_ID_EXCLUSIVE, "GobbledWarplets: warpletId too large");
+        require(warpletId < WARPLET_ID_PADDING, "GobbledWarplets: warpletId too large");
         uint256 gobbleIndex = _gobbles[warpletId];
         tokenId = _encodeTokenId(warpletId, gobbleIndex);
         require(_ownerOf(tokenId) == address(0), "GobbledWarplets: already minted");
@@ -88,16 +114,35 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
         emit Reserved(to, warpletId, tokenId, gobbleIndex);
     }
 
-    /// @notice Reserved recipient completes the ERC721 + initial signed metadata in one transaction.
+    /// @notice Reserved recipient pulls the underlying Warplet from the auction without minting a receipt.
+    /// @dev Leaves the reservation in place so the recipient can still call the metadata overload later
+    ///      to mint the gobbled receipt (which will skip the second NFT transfer).
+    function rescueWarplet(uint256 tokenId) external {
+        address to = _reservedRecipient[tokenId];
+        require(to != address(0), "GobbledWarplets: not reserved");
+        require(msg.sender == to, "GobbledWarplets: not recipient");
+        require(!warpletRescued[tokenId], "GobbledWarplets: already rescued");
+
+        warpletRescued[tokenId] = true;
+
+        (uint256 wid, uint256 idx) = _decodeTokenId(tokenId);
+        IERC721 warplets = IGobbledWarpletsMinter(minter).nft();
+        warplets.transferFrom(minter, to, wid);
+        emit WarpletRescued(to, wid, tokenId, idx);
+    }
+
+    /// @notice Reserved recipient mints the receipt with signed metadata. If the underlying Warplet has
+    ///         not yet been pulled, this also transfers it from the auction in the same transaction.
     /// @param deadline Unix timestamp after which the signature is invalid.
-    function mint(uint256 tokenId, string calldata uri, uint256 deadline, bytes calldata signature) external {
+    function rescueWarplet(uint256 tokenId, string calldata uri, uint256 deadline, bytes calldata signature)
+        external
+    {
         require(block.timestamp <= deadline, "GobbledWarplets: signature expired");
 
         address to = _reservedRecipient[tokenId];
         require(to != address(0), "GobbledWarplets: not reserved");
         require(msg.sender == to, "GobbledWarplets: not recipient");
         require(_ownerOf(tokenId) == address(0), "GobbledWarplets: already minted");
-        require(bytes(_suffixURI(tokenId)).length == 0, "GobbledWarplets: uri already set");
 
         address signer = ECDSA.recoverCalldata(
             _hashTypedDataV4(keccak256(abi.encode(_MINT_TYPEHASH, tokenId, keccak256(bytes(uri)), deadline))),
@@ -111,6 +156,11 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
         _setTokenURI(tokenId, uri);
 
         (uint256 wid, uint256 idx) = _decodeTokenId(tokenId);
+        if (!warpletRescued[tokenId]) {
+            warpletRescued[tokenId] = true;
+            IERC721 warplets = IGobbledWarpletsMinter(minter).nft();
+            warplets.transferFrom(minter, to, wid);
+        }
         emit Minted(to, wid, tokenId, idx);
     }
 
@@ -132,14 +182,14 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
 
     function _encodeTokenId(uint256 warpletId, uint256 gobbleIndex) internal pure returns (uint256) {
         unchecked {
-            return gobbleIndex * TOKEN_ID_DECIMAL_STRIDE + warpletId;
+            return gobbleIndex * WARPLET_ID_PADDING + warpletId;
         }
     }
 
     function _decodeTokenId(uint256 tokenId) internal pure returns (uint256 warpletId, uint256 gobbleIndex) {
         unchecked {
-            warpletId = tokenId % TOKEN_ID_DECIMAL_STRIDE;
-            gobbleIndex = tokenId / TOKEN_ID_DECIMAL_STRIDE;
+            warpletId = tokenId % WARPLET_ID_PADDING;
+            gobbleIndex = tokenId / WARPLET_ID_PADDING;
         }
     }
 

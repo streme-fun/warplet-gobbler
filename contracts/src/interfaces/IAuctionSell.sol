@@ -33,7 +33,7 @@ interface IAuctionSell {
 
     event AuctionStarted(uint256 indexed tokenId, uint256 endTime);
     event BidPlaced(uint256 indexed tokenId, address indexed bidder, uint256 amount);
-    /// @param gobbledTokenId Reserved GobbledWarplets receipt id (winner completes NFT via `GobbledWarplets.mint`).
-    ///                     If reserve failed, equals `type(uint256).max` (not `0` — `0` is a valid encoded id for warplet 0).
+    /// @param gobbledTokenId Reserved GobbledWarplets receipt id. Winner pulls the underlying Warplet
+    ///                     (and optionally mints the receipt with metadata) via `GobbledWarplets.rescueWarplet`.
     event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId);
 }
