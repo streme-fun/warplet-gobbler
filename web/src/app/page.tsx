@@ -3,7 +3,7 @@
 import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
 import { ConnectKitButton } from "connectkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formatUnits } from "viem";
+import { formatUnits, type Address } from "viem";
 import { useMiniApp } from "@/hooks/useMiniApp";
 import { useOwnedWarplets } from "@/hooks/useOwnedWarplets";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
@@ -257,9 +257,15 @@ export default function Home() {
   const [activeView, setActiveView] = useState<"sell" | "buy">("buy");
   const [scrollBlend, setScrollBlend] = useState(0); // 0 = buy (purple), 1 = sell (cyan)
 
-  // Track scroll position to blend background color and update active toggle
+  // Track scroll position to blend background color and update active toggle.
+  // Wrapped in rAF so we coalesce per-pixel scroll events into one update per frame —
+  // each setState below cascades into a 5-shape SVG path lerp, so unthrottled this
+  // was doing real work on every scroll tick.
   useEffect(() => {
-    const onScroll = () => {
+    let rafId = 0;
+    let pending = false;
+    const compute = () => {
+      pending = false;
       const sellEl = document.getElementById("sell-section");
       if (!sellEl) return;
       const sellTop = sellEl.getBoundingClientRect().top;
@@ -269,9 +275,17 @@ export default function Home() {
       setScrollBlend(t);
       setActiveView(t > 0.5 ? "sell" : "buy");
     };
+    const onScroll = () => {
+      if (pending) return;
+      pending = true;
+      rafId = requestAnimationFrame(compute);
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
+    compute();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, []);
 
   const toggleView = useCallback((view: "sell" | "buy") => {
@@ -876,7 +890,7 @@ export default function Home() {
           </div>
         </section>
 
-        <footer className="relative z-10 mt-6 sm:mt-8 pb-4 text-center text-sm text-base-content/30"></footer>
+        <div className="relative z-10 mt-6 sm:mt-8 pb-4" aria-hidden />
       </div>
       {/* end gobble fade wrapper */}
 
@@ -886,16 +900,29 @@ export default function Home() {
   );
 }
 
+// Fall back to the deployed $LARPBOBB address if the env var isn't set (e.g. local dev),
+// so the footer always shows a real address rather than zero.
+const FOOTER_CA: Address =
+  CONTRACTS.warpgobbToken !== ZERO_ADDRESS
+    ? CONTRACTS.warpgobbToken
+    : ("0x3042b035325393F3d72390C7E5d51F26fe1F0e61" as Address);
+
 function CaFooter() {
   const [copied, setCopied] = useState(false);
-  const ca = "0x3042b035325393F3d72390C7E5d51F26fe1F0e61";
+  const ca = FOOTER_CA;
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(ca).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }, [ca]);
+    navigator.clipboard
+      .writeText(ca)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {
+        // clipboard API can reject in non-secure contexts / iframes / when
+        // permission is denied — silently no-op so we don't unhandle-reject.
+      });
+  }, []);
 
   return (
     <div

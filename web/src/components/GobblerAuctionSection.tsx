@@ -873,9 +873,7 @@ export default function GobblerAuctionSection({
         }
       />
 
-      {onQueueEmptyBetweenSales ? (
-        <div className="mt-10 "></div>
-      ) : (
+      {onQueueEmptyBetweenSales ? null : (
         <>
           <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mb-1 px-2">
             Skip the line
