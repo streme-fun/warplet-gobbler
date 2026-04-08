@@ -93,6 +93,13 @@ export function useAuctionSellAuction() {
     },
   });
 
+  const stremeZapQ = useReadContract({
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "stremeZap",
+    query: { enabled: configured, refetchInterval: 60_000 },
+  });
+
   const bidTokenAddr =
     typeof bidTokenQ.data === "string" &&
     !isAddressEqual(bidTokenQ.data as Address, zeroAddress)
@@ -166,6 +173,15 @@ export function useAuctionSellAuction() {
 
   const isPaused = pausedQ.data === true;
 
+  const stremeZapAddr =
+    stremeZapQ.isSuccess &&
+    typeof stremeZapQ.data === "string" &&
+    !isAddressEqual(stremeZapQ.data as Address, zeroAddress)
+      ? (stremeZapQ.data as Address)
+      : undefined;
+
+  const nativeEthBidConfigured = stremeZapAddr != null;
+
   return {
     configured,
     auction: chainLot,
@@ -183,5 +199,7 @@ export function useAuctionSellAuction() {
     minNextBidAmount,
     reservePrice: reserveQ.data,
     refetchAuction,
+    stremeZapAddress: stremeZapAddr,
+    nativeEthBidConfigured,
   };
 }

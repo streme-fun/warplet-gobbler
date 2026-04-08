@@ -52,8 +52,15 @@ export const auctionSellAbi = [
   },
   {
     type: "function",
+    name: "stremeZap",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
     name: "bid",
-    stateMutability: "nonpayable",
+    stateMutability: "payable",
     inputs: [{ name: "amount", type: "uint256" }],
     outputs: [],
   },

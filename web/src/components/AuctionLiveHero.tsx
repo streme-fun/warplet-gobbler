@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isAddressEqual, zeroAddress } from "viem";
 import type { Address } from "viem";
+import type { AuctionBidPaymentMode } from "@/lib/defaultAuctionBidPayment";
 import AuctionWarpletImage from "./AuctionWarpletImage";
 import AuctionLiveHeroSkeleton from "./AuctionLiveHeroSkeleton";
 import BidderAvatarName from "./BidderAvatarName";
@@ -87,13 +88,33 @@ export type AuctionLiveHeroChainBid = {
   minBidHuman: string | null;
   minBidWei: bigint | null;
   parseHumanToWei: (human: string) => bigint;
-  onSubmit: (amountWei: bigint) => Promise<void>;
+  onSubmit: (
+    amountWei: bigint,
+    opts?: { payment: "eth"; txValueWei: bigint } | { payment?: "token" },
+  ) => Promise<void>;
   loading: boolean;
   disabled: boolean;
   error: string | null;
   onClearTxError?: () => void;
   /** USD per 1 bid token (e.g. WARPGOBB spot); omit or null when unknown. */
   bidTokenPriceUsd?: number | null;
+  /**
+   * From wallet balance vs min bid: enough bid token → token; else ETH (when native path exists).
+   */
+  defaultPaymentMethod: AuctionBidPaymentMode;
+  /** Updates ETH zap quote target while the user edits the bid amount (debounced in this component). */
+  onBidWeiDebounced?: (wei: bigint) => void;
+  /** Formatted balance for display (e.g. locale string); null if unknown. */
+  viewerBidTokenBalanceHuman?: string | null;
+  nativeEthBid?: {
+    available: boolean;
+    quoteLoading: boolean;
+    quoteError: string | null;
+    minEthFormatted: string | null;
+    txValueWei: bigint | null;
+    txValueFormatted: string | null;
+    onRefreshQuote: () => void;
+  };
 };
 
 export type AuctionLiveHeroChainSettlement = {
@@ -209,11 +230,21 @@ export default function AuctionLiveHero({
   const [bidValidationError, setBidValidationError] = useState<string | null>(
     null,
   );
+  const [paymentMode, setPaymentMode] =
+    useState<AuctionBidPaymentMode>("token");
   const [showExtendSuccessBanner, setShowExtendSuccessBanner] = useState(false);
   const [startAuctionPressPulse, setStartAuctionPressPulse] = useState(false);
 
   const chainBlocksBid = Boolean(
     contractPaused || auctionExpiredOnChain || idleNoChainAuction,
+  );
+
+  const nativeEthBlocksBid = Boolean(
+    paymentMode === "eth" &&
+      chainBid?.nativeEthBid?.available === true &&
+      (chainBid.nativeEthBid.quoteLoading ||
+        chainBid.nativeEthBid.txValueWei == null ||
+        chainBid.nativeEthBid.quoteError != null),
   );
 
   useEffect(() => {
@@ -238,6 +269,7 @@ export default function AuctionLiveHero({
   }, [displayTokenId, idleNoChainAuction, artworkSkeleton]);
 
   const bidUsdEstimate = useMemo(() => {
+    if (paymentMode === "eth") return null;
     const spot = chainBid?.bidTokenPriceUsd;
     if (spot == null || !Number.isFinite(spot) || spot <= 0) return null;
     const raw = bidAmountRaw.trim().replace(/,/g, "");
@@ -245,13 +277,35 @@ export default function AuctionLiveHero({
     const n = Number.parseFloat(raw);
     if (!Number.isFinite(n) || n < 0) return null;
     return n * spot;
-  }, [bidAmountRaw, chainBid?.bidTokenPriceUsd]);
+  }, [bidAmountRaw, chainBid?.bidTokenPriceUsd, paymentMode]);
 
   useEffect(() => {
     if (chainBid?.minBidHuman == null) return;
     setBidAmountRaw(trimDecimalDisplay(chainBid.minBidHuman));
     setBidValidationError(null);
   }, [chainBid?.minBidHuman, chainBid?.minBidWei]);
+
+  useEffect(() => {
+    if (!chainBid) return;
+    setPaymentMode(chainBid.defaultPaymentMethod);
+  }, [chainBid?.defaultPaymentMethod, chainBid?.minBidWei]);
+
+  useEffect(() => {
+    if (!chainBid?.onBidWeiDebounced) return;
+    const minW = chainBid.minBidWei;
+    if (minW == null) return;
+    const onDebounced = chainBid.onBidWeiDebounced;
+    const parse = chainBid.parseHumanToWei;
+    const t = window.setTimeout(() => {
+      try {
+        const w = parse(bidAmountRaw);
+        onDebounced(w >= minW ? w : minW);
+      } catch {
+        onDebounced(minW);
+      }
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [bidAmountRaw, chainBid]);
 
   const tick = extendSuccessTick ?? 0;
   useEffect(() => {
@@ -350,7 +404,30 @@ export default function AuctionLiveHero({
       return;
     }
 
-    await chainBid.onSubmit(wei);
+    try {
+      if (paymentMode === "eth" && chainBid.nativeEthBid?.available) {
+        const nb = chainBid.nativeEthBid;
+        if (nb.quoteLoading) {
+          setBidValidationError("Estimating required ETH…");
+          return;
+        }
+        if (nb.txValueWei == null || nb.quoteError) {
+          setBidValidationError(
+            nb.quoteError ??
+              `Could not quote ETH for this bid. Try “${bidSymbol}” or refresh the estimate.`,
+          );
+          return;
+        }
+        await chainBid.onSubmit(wei, {
+          payment: "eth",
+          txValueWei: nb.txValueWei,
+        });
+      } else {
+        await chainBid.onSubmit(wei, { payment: "token" });
+      }
+    } catch {
+      return;
+    }
     setBidValidationError(null);
   };
 
@@ -673,6 +750,50 @@ export default function AuctionLiveHero({
               </p>
             ) : chainBid ? (
               <div className="space-y-2 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
+                {chainBid.nativeEthBid?.available ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="join border border-base-content/15 rounded-lg overflow-hidden">
+                      <button
+                        type="button"
+                        className={`btn btn-xs join-item normal-case ${
+                          paymentMode === "token"
+                            ? "btn-secondary"
+                            : "btn-ghost"
+                        }`}
+                        onClick={() => setPaymentMode("token")}
+                      >
+                        {bidSymbol}
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-xs join-item normal-case ${
+                          paymentMode === "eth" ? "btn-secondary" : "btn-ghost"
+                        }`}
+                        onClick={() => setPaymentMode("eth")}
+                      >
+                        ETH
+                      </button>
+                    </div>
+                    {paymentMode === "eth" &&
+                    chainBid.nativeEthBid.quoteLoading ? (
+                      <span className="loading loading-spinner loading-xs text-secondary" />
+                    ) : paymentMode === "eth" &&
+                      chainBid.nativeEthBid.quoteError ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-error normal-case"
+                        onClick={() => chainBid.nativeEthBid?.onRefreshQuote()}
+                      >
+                        Retry estimate
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {chainBid.viewerBidTokenBalanceHuman != null ? (
+                  <p className="text-[10px] text-base-content/45 -mt-0.5">
+                    Wallet: {chainBid.viewerBidTokenBalanceHuman} {bidSymbol}
+                  </p>
+                ) : null}
                 <label className="form-control w-full">
                   <span className="label py-0 min-h-0 pb-1.5 justify-start">
                     <span className="label-text text-[10px] sm:text-xs uppercase tracking-wider text-base-content/50">
@@ -690,10 +811,21 @@ export default function AuctionLiveHero({
                       }`}
                     >
                       <span
-                        className="shrink-0 text-left text-sm font-mono tabular-nums text-base-content/50 select-none"
-                        title="Approximate USD (spot)"
+                        className="shrink-0 text-left text-sm font-mono tabular-nums text-base-content/50 select-none max-w-[42%] sm:max-w-none truncate"
+                        title={
+                          paymentMode === "eth"
+                            ? "Estimated ETH to send (zap + buffer)"
+                            : "Approximate USD (spot)"
+                        }
                       >
-                        {formatUsdTilde(bidUsdEstimate)}
+                        {paymentMode === "eth" &&
+                        chainBid.nativeEthBid?.available
+                          ? chainBid.nativeEthBid.quoteLoading
+                            ? "…"
+                            : chainBid.nativeEthBid.txValueFormatted != null
+                              ? `≈ ${chainBid.nativeEthBid.txValueFormatted} ETH`
+                              : "—"
+                          : formatUsdTilde(bidUsdEstimate)}
                       </span>
                       <input
                         type="text"
@@ -719,6 +851,7 @@ export default function AuctionLiveHero({
                       disabled={
                         bidDisabled ||
                         chainBlocksBid ||
+                        nativeEthBlocksBid ||
                         chainBid.disabled ||
                         chainBid.loading ||
                         chainBid.minBidWei == null

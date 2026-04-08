@@ -1,7 +1,7 @@
 "use client";
 
 import type { Address } from "viem";
-import { isAddressEqual, zeroAddress } from "viem";
+import { formatUnits, isAddressEqual, zeroAddress } from "viem";
 import {
   useCallback,
   useEffect,
@@ -35,12 +35,16 @@ import {
   type AuctionSellLot,
 } from "@/hooks/useAuctionSell";
 import { useAuctionSellBid } from "@/hooks/useAuctionSellBid";
+import { useStremeEthBidQuote } from "@/hooks/useStremeEthBidQuote";
 import { useAuctionSellSettleActions } from "@/hooks/useAuctionSellSettle";
 import { useAuctionSellStartAuction } from "@/hooks/useAuctionSellStartAuction";
 import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
 import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
 import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
-import { CONTRACTS } from "@/lib/contracts";
+import { erc20Abi } from "@/abi/erc20";
+import { useReadContract } from "wagmi";
+import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
+import { defaultAuctionBidPaymentMethod } from "@/lib/defaultAuctionBidPayment";
 import { formatUserFacingTxError } from "@/lib/format-tx-error";
 import {
   DEV_MOCK_EXTRA_QUEUE_TOKEN_IDS,
@@ -182,6 +186,8 @@ export default function GobblerAuctionSection({
     bidTokenAddress,
     auctionPaused,
     refetchAuction,
+    stremeZapAddress,
+    nativeEthBidConfigured,
   } = useAuctionSellAuction();
 
   const { priceUsd: warpgobbSpotUsd } = useWarpgobbUsdPrice();
@@ -223,9 +229,34 @@ export default function GobblerAuctionSection({
     liveAuction && !auctionPaused && !auctionExpired && onChainMode;
 
   const {
+    data: viewerBidTokenBalance,
+    refetch: refetchBidTokenBalance,
+  } = useReadContract({
+    abi: erc20Abi,
+    address: bidTokenAddress ?? ZERO_ADDRESS,
+    functionName: "balanceOf",
+    args:
+      viewerAddress != null && isConnected
+        ? [viewerAddress]
+        : undefined,
+    query: {
+      enabled:
+        chainBidActive &&
+        bidTokenAddress != null &&
+        !isAddressEqual(bidTokenAddress, zeroAddress) &&
+        viewerAddress != null &&
+        isConnected,
+      refetchInterval: 20_000,
+    },
+  });
+
+  const [quoteBidWei, setQuoteBidWei] = useState<bigint | null>(null);
+
+  const {
     minBidWei,
     minBidHuman,
     placeBid,
+    placeBidWithNative,
     parseHumanToWei,
     isBidding,
     rulesLoading,
@@ -235,6 +266,41 @@ export default function GobblerAuctionSection({
     bidTokenAddress,
     bidDecimals,
     refetchAuction,
+    stremeZapAddress,
+  });
+
+  const defaultPaymentMethod = useMemo(
+    () =>
+      defaultAuctionBidPaymentMethod({
+        nativeEthBidConfigured,
+        viewerAddressDefined: Boolean(viewerAddress && isConnected),
+        bidTokenBalance: viewerBidTokenBalance,
+        minBidWei,
+      }),
+    [
+      nativeEthBidConfigured,
+      viewerAddress,
+      isConnected,
+      viewerBidTokenBalance,
+      minBidWei,
+    ],
+  );
+
+  useEffect(() => {
+    if (minBidWei != null)
+      setQuoteBidWei((prev) => (prev == null || prev < minBidWei ? minBidWei : prev));
+  }, [minBidWei]);
+
+  const ethBidQuote = useStremeEthBidQuote({
+    enabled:
+      chainBidActive &&
+      nativeEthBidConfigured &&
+      quoteBidWei != null &&
+      stremeZapAddress != null &&
+      bidTokenAddress != null,
+    zapAddress: stremeZapAddress,
+    bidTokenAddress: bidTokenAddress ?? undefined,
+    bidWei: quoteBidWei,
   });
 
   const queueReadsEnabled = auctionSellConfigured && !auctionReadError;
@@ -607,8 +673,18 @@ export default function GobblerAuctionSection({
     maybeBumpBidLandTick();
   }, [maybeBumpBidLandTick]);
 
+  const viewerBidTokenBalanceHuman = useMemo(() => {
+    if (viewerBidTokenBalance == null) return null;
+    return Number(
+      formatUnits(viewerBidTokenBalance, bidDecimals),
+    ).toLocaleString(undefined, { maximumFractionDigits: 6 });
+  }, [viewerBidTokenBalance, bidDecimals]);
+
   const handleChainBidSubmit = useCallback(
-    async (amountWei: bigint) => {
+    async (
+      amountWei: bigint,
+      opts?: { payment: "eth"; txValueWei: bigint } | { payment?: "token" },
+    ) => {
       setChainBidError(null);
       bidLandGateRef.current = { sequence: false, success: false };
       bidSubmitSnapshotRef.current = {
@@ -616,17 +692,24 @@ export default function GobblerAuctionSection({
         amount: topBidAmountStr,
         bidder: chainTopBidder,
       };
+      const onSubmitted = () => {
+        setBidConfirmingOnChain(true);
+        setBidFeedbackActive(true);
+        window.dispatchEvent(new CustomEvent("gobbler:bid-placed"));
+        const s = bidSubmitSnapshotRef.current;
+        if (s.noBids) setBidHoldNoBidsUi(true);
+        else setBidTopDisplayHold({ amount: s.amount, bidder: s.bidder });
+      };
       try {
-        await placeBid(amountWei, {
-          onTransactionSubmitted: () => {
-            setBidConfirmingOnChain(true);
-            setBidFeedbackActive(true);
-            window.dispatchEvent(new CustomEvent("gobbler:bid-placed"));
-            const s = bidSubmitSnapshotRef.current;
-            if (s.noBids) setBidHoldNoBidsUi(true);
-            else setBidTopDisplayHold({ amount: s.amount, bidder: s.bidder });
-          },
-        });
+        if (opts?.payment === "eth") {
+          await placeBidWithNative(amountWei, opts.txValueWei, {
+            onTransactionSubmitted: onSubmitted,
+          });
+        } else {
+          await placeBid(amountWei, {
+            onTransactionSubmitted: onSubmitted,
+          });
+        }
         bidLandGateRef.current.success = true;
         maybeBumpBidLandTick();
       } catch (e) {
@@ -636,15 +719,18 @@ export default function GobblerAuctionSection({
         setChainBidError(formatUserFacingTxError(e));
       } finally {
         setBidConfirmingOnChain(false);
+        void refetchBidTokenBalance();
       }
     },
     [
       placeBid,
+      placeBidWithNative,
       maybeBumpBidLandTick,
       clearBidTopDisplayHold,
       showNoBids,
       topBidAmountStr,
       chainTopBidder,
+      refetchBidTokenBalance,
     ],
   );
 
@@ -848,6 +934,23 @@ export default function GobblerAuctionSection({
                 error: chainBidError,
                 onClearTxError: () => setChainBidError(null),
                 bidTokenPriceUsd,
+                defaultPaymentMethod,
+                onBidWeiDebounced: setQuoteBidWei,
+                viewerBidTokenBalanceHuman,
+                nativeEthBid: nativeEthBidConfigured
+                  ? {
+                      available: true,
+                      quoteLoading: ethBidQuote.isFetching,
+                      quoteError: ethBidQuote.isError
+                        ? (ethBidQuote.error?.message ?? "Could not estimate ETH.")
+                        : null,
+                      minEthFormatted: ethBidQuote.data?.minEthFormatted ?? null,
+                      txValueWei: ethBidQuote.data?.txValueWei ?? null,
+                      txValueFormatted:
+                        ethBidQuote.data?.txValueFormatted ?? null,
+                      onRefreshQuote: () => void ethBidQuote.refetch(),
+                    }
+                  : undefined,
               }
             : undefined
         }

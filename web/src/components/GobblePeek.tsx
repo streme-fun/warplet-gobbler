@@ -51,6 +51,28 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     let topY = restTop();
     let botY = H - restBot();
 
+    /** Subtle eye follow: toward pointer, max 10px from rest position */
+    const MAX_EYE_FOLLOW_PX = 10;
+    const EYE_FOLLOW_LERP = 0.12;
+    let cursorX = W / 2;
+    let cursorY = H / 2;
+    const eyeFollowSmooth = [
+      { x: 0, y: 0 },
+      { x: 0, y: 0 },
+    ];
+
+    const onPointerMove = (e: MouseEvent | TouchEvent) => {
+      if ("touches" in e && e.touches.length > 0) {
+        cursorX = e.touches[0].clientX;
+        cursorY = e.touches[0].clientY;
+      } else if ("clientX" in e) {
+        cursorX = e.clientX;
+        cursorY = e.clientY;
+      }
+    };
+    window.addEventListener("mousemove", onPointerMove);
+    window.addEventListener("touchmove", onPointerMove, { passive: true });
+
     function sr(s: number) {
       const v = Math.sin(s * 127.1 + 311.7) * 43758.5453;
       return v - Math.floor(v);
@@ -107,21 +129,41 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
           : `rgba(160,120,220,${glowMid})`;
 
       const t = time * 0.01;
-      const ey = topJawY - eyeOffset + Math.sin(t * 0.6) * 2;
-      for (const eyeX of [W * 0.34, W * 0.66]) {
+      const eyBase = topJawY - eyeOffset + Math.sin(t * 0.6) * 2;
+      const eyeXs = [W * 0.34, W * 0.66];
+      for (let i = 0; i < 2; i++) {
+        const eyeX = eyeXs[i]!;
+        const dx = cursorX - eyeX;
+        const dy = cursorY - eyBase;
+        const dist = Math.hypot(dx, dy);
+        let tx = 0;
+        let ty = 0;
+        if (dist > 1e-6) {
+          const s = Math.min(MAX_EYE_FOLLOW_PX, dist) / dist;
+          tx = dx * s;
+          ty = dy * s;
+        }
+        const sm = eyeFollowSmooth[i]!;
+        sm.x += (tx - sm.x) * EYE_FOLLOW_LERP;
+        sm.y += (ty - sm.y) * EYE_FOLLOW_LERP;
+        const ox = sm.x;
+        const oy = sm.y;
+        const drawX = eyeX + ox;
+        const drawY = eyBase + oy;
+
         ex!.save();
         // Ambient glow
-        const g1 = ex!.createRadialGradient(eyeX, ey, 0, eyeX, ey, glowR);
+        const g1 = ex!.createRadialGradient(drawX, drawY, 0, drawX, drawY, glowR);
         g1.addColorStop(0, glowColor);
         g1.addColorStop(0.3, glowMidColor);
         g1.addColorStop(1, "rgba(0,0,0,0)");
         ex!.fillStyle = g1;
         ex!.beginPath();
-        ex!.arc(eyeX, ey, glowR, 0, Math.PI * 2);
+        ex!.arc(drawX, drawY, glowR, 0, Math.PI * 2);
         ex!.fill();
         // Eye orb
         ex!.beginPath();
-        ex!.arc(eyeX, ey, orbR, 0, Math.PI * 2);
+        ex!.arc(drawX, drawY, orbR, 0, Math.PI * 2);
         ex!.fillStyle =
           r > 0.01
             ? `rgba(${Math.round(255 - r * 132)},${Math.round(245 - r * 148)},255,1)`
@@ -219,6 +261,8 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     return () => {
       cancelled = true;
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("mousemove", onPointerMove);
+      window.removeEventListener("touchmove", onPointerMove);
       window.removeEventListener("gobbler:bid-placed", onBidPlaced);
       window.removeEventListener("gobbler:lip-wave", onLipWave);
     };
