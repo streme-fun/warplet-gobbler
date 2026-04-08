@@ -13,14 +13,6 @@ import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 /// @notice ERC721 receipt collection for gobbled Warplets. The authorized minter reserves receipts; the
 ///         designated recipient completes the NFT with {mint} (EIP-712 from `tokenURISetter`) so the
 ///         final mint appears as their transaction (indexers / marketplaces).
-///
-///      **Logical change:** Before, the minter (`AuctionSell` on settle) created the NFT in the same tx as
-///      settlement and URI flows could be updated out-of-band, so the “birth” transfer was attributed to the
-///      auction contract and metadata was decoupled from the winner’s action. Now settlement only calls
-///      {reserve}: it allocates `tokenId` for the winner but does not `_mint`. The winner calls {mint} in their
-///      own transaction with a signed payload; the ERC-721 mint and `tokenURI` write happen there so wallets
-///      and marketplaces naturally associate the asset with the buyer. There is no separate on-chain URI
-///      setter: metadata is set exactly once inside {mint}.
 /// @dev Token id encoding: `tokenId = gobbleIndex * TOKEN_ID_DECIMAL_STRIDE + warpletId`.
 ///      `warpletId` must be strictly less than {TOKEN_ID_DECIMAL_STRIDE} so decoding is unambiguous.
 ///      Stride is 1e8 (extra decimal zero vs 1e7) so sparse Warplet ids stay safely below the modulus; see `web/scripts/scan-warplet-token-ids.mjs`.
