@@ -6,29 +6,41 @@ export default function AuctionQueueCard({
   fid,
   placeInLine,
   isSelected,
+  isNext,
   onSelect,
 }: {
   fid: number;
   placeInLine: number;
   isSelected: boolean;
+  isNext?: boolean;
   onSelect: () => void;
 }) {
   return (
     <button
       type="button"
-      onClick={onSelect}
-      className={`flex-shrink-0 w-[7.5rem] sm:w-[8.5rem] rounded-xl border bg-base-100/25 p-2 flex flex-col items-center gap-2 text-left transition-colors cursor-pointer
+      onClick={isNext ? undefined : onSelect}
+      disabled={isNext}
+      className={`flex-shrink-0 w-20 sm:w-24 rounded-xl border bg-base-100/25 p-1.5 flex flex-col items-center gap-1 transition-colors
         ${
           isSelected
-            ? "border-secondary ring-2 ring-secondary/40 shadow-lg shadow-secondary/15"
-            : "border-base-content/10 hover:border-secondary/35"
+            ? "border-secondary ring-2 ring-secondary/40 shadow-lg shadow-secondary/15 cursor-pointer"
+            : isNext
+              ? "border-primary/30 cursor-default"
+              : "border-base-content/10 hover:border-secondary/35 cursor-pointer"
         }`}
     >
-      <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-base-content/45">
-        #{placeInLine} in line
+      <span
+        className={`text-[8px] sm:text-[9px] uppercase tracking-wider ${
+          isNext ? "text-primary/70 font-semibold" : "text-base-content/45"
+        }`}
+      >
+        {isNext ? "Next up" : `#${placeInLine} in line`}
       </span>
-      <div className="w-full rounded-lg overflow-hidden bg-base-200/30 pointer-events-none">
+      <div className="relative w-full rounded-lg overflow-hidden bg-base-200/30 pointer-events-none">
         <AuctionWarpletImage fid={fid} variant="thumb" />
+        <span className="absolute bottom-0 inset-x-0 text-[8px] sm:text-[9px] py-0.5 text-center bg-black/60 text-base-content/70">
+          #{fid}
+        </span>
       </div>
     </button>
   );

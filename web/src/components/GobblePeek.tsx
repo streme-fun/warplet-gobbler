@@ -2,34 +2,35 @@
 
 import { useEffect, useRef } from "react";
 
-/** Ambient gobbler peek — goo-filter jaws creep in from edges every ~45s, then retreat. */
+/** Always-visible gobbler — jaws + eyes frame the screen, mouth open until gobble. */
 export default function GobblePeek() {
   const gooRef = useRef<HTMLCanvasElement>(null);
+  const eyeRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const gooCv = gooRef.current;
-    if (!gooCv) return;
+    const eyeCv = eyeRef.current;
+    if (!gooCv || !eyeCv) return;
     const gx = gooCv.getContext("2d");
-    if (!gx) return;
+    const ex = eyeCv.getContext("2d");
+    if (!gx || !ex) return;
 
     let W = window.innerWidth;
     let H = window.innerHeight;
     gooCv.width = W;
     gooCv.height = H;
+    eyeCv.width = W;
+    eyeCv.height = H;
 
     let cancelled = false;
     let time = 0;
-    let topY = -40;
-    let botY = H + 40;
-    let topTarget = -40;
-    let botTarget = H + 40;
-    const CYCLE = 45 * 60;
-    const PEEK_IN = 180;
-    let timer = CYCLE - 600;
+    // Responsive: smaller jaws + eyes on mobile
+    const mobile = () => W < 640;
+    const restTop = () => (mobile() ? 120 : 190);
+    const restBot = () => (mobile() ? 110 : 180);
+    let topY = restTop();
+    let botY = H - restBot();
 
-    function lerp(a: number, b: number, t: number) {
-      return a + (b - a) * t;
-    }
     function sr(s: number) {
       const v = Math.sin(s * 127.1 + 311.7) * 43758.5453;
       return v - Math.floor(v);
@@ -58,44 +59,68 @@ export default function GobblePeek() {
       }
     }
 
+    function drawEyes(topJawY: number) {
+      ex!.clearRect(0, 0, W, H);
+
+      const m = mobile();
+      const glowR = m ? 60 : 120;
+      const orbR = m ? 16 : 30;
+      const eyeOffset = m ? 35 : 65;
+
+      const t = time * 0.01;
+      // Top jaw eyes
+      const ey = topJawY - eyeOffset + Math.sin(t * 0.6) * 2;
+      for (const eyeX of [W * 0.34, W * 0.66]) {
+        ex!.save();
+        // Ambient glow
+        const g1 = ex!.createRadialGradient(eyeX, ey, 0, eyeX, ey, glowR);
+        g1.addColorStop(0, "rgba(220,200,255,0.10)");
+        g1.addColorStop(0.3, "rgba(160,120,220,0.04)");
+        g1.addColorStop(1, "rgba(0,0,0,0)");
+        ex!.fillStyle = g1;
+        ex!.beginPath();
+        ex!.arc(eyeX, ey, glowR, 0, Math.PI * 2);
+        ex!.fill();
+        // Eye orb
+        ex!.beginPath();
+        ex!.arc(eyeX, ey, orbR, 0, Math.PI * 2);
+        ex!.fillStyle = "rgba(255,245,255,1)";
+        ex!.fill();
+        ex!.restore();
+      }
+    }
+
     function frame() {
       if (cancelled) return;
       time++;
-      timer++;
 
-      if (timer > CYCLE && timer <= CYCLE + 10) {
-        topTarget = 20;
-        botTarget = H - 20;
-      } else if (timer > CYCLE + PEEK_IN) {
-        topTarget = -40;
-        botTarget = H + 40;
-        if (topY < -35) timer = 0;
-      }
-
-      topY = lerp(topY, topTarget, 0.005);
-      botY = lerp(botY, botTarget, 0.005);
+      // Subtle breathing: jaws shift ±4px slowly
+      const breath = Math.sin(time * 0.008) * 4;
+      topY = restTop() + breath;
+      botY = H - restBot() - breath;
 
       gx!.clearRect(0, 0, W, H);
 
-      if (topY > -38 || botY < H + 38) {
-        const t = time * 0.007;
-        gx!.fillStyle = VC;
+      const t = time * 0.007;
+      gx!.fillStyle = VC;
 
-        // Jaw bodies
-        gx!.fillRect(-30, -500, W + 60, 500 + topY + 4);
-        gx!.fillRect(-30, botY - 4, W + 60, 500 + H);
+      // Jaw bodies
+      gx!.fillRect(-30, -500, W + 60, 500 + topY + 4);
+      gx!.fillRect(-30, botY - 4, W + 60, 500 + H);
 
-        // Edge blobs
-        for (const b of bumps) {
-          const x = b.xf * W;
-          const br = Math.sin(t * 0.5 + b.ph) * 2;
-          const r = b.r + br;
-          const y = b.jaw === 0 ? topY + b.yo + 4 : botY + b.yo - 4;
-          gx!.beginPath();
-          gx!.arc(x, y, Math.max(1, r), 0, 6.28);
-          gx!.fill();
-        }
+      // Edge blobs
+      for (const b of bumps) {
+        const x = b.xf * W;
+        const br = Math.sin(t * 0.5 + b.ph) * 2;
+        const r = b.r + br;
+        const y = b.jaw === 0 ? topY + b.yo + 4 : botY + b.yo - 4;
+        gx!.beginPath();
+        gx!.arc(x, y, Math.max(1, r), 0, 6.28);
+        gx!.fill();
       }
+
+      // Eyes on separate unfiltered canvas
+      drawEyes(topY);
 
       requestAnimationFrame(frame);
     }
@@ -103,13 +128,14 @@ export default function GobblePeek() {
     frame();
 
     const onResize = () => {
-      if (!gooCv) return;
+      if (!gooCv || !eyeCv) return;
       W = window.innerWidth;
       H = window.innerHeight;
       gooCv.width = W;
       gooCv.height = H;
-      botY = H + 40;
-      botTarget = H + 40;
+      eyeCv.width = W;
+      eyeCv.height = H;
+      botY = H - restBot();
     };
     window.addEventListener("resize", onResize);
 
@@ -133,14 +159,25 @@ export default function GobblePeek() {
           </filter>
         </defs>
       </svg>
+      {/* Goo-filtered jaw canvas */}
       <canvas
         ref={gooRef}
         className="fixed inset-0 pointer-events-none"
         style={{
           width: "100vw",
           height: "100vh",
-          zIndex: 1,
+          zIndex: 40,
           filter: "url(#peekGooFilter)",
+        }}
+      />
+      {/* Crisp eye canvas (no goo filter) */}
+      <canvas
+        ref={eyeRef}
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          width: "100vw",
+          height: "100vh",
+          zIndex: 46,
         }}
       />
     </>

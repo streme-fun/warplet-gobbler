@@ -105,25 +105,17 @@ export default function GobblerAuctionSection({
   const onChainMode = auctionSellConfigured;
 
   const hasParsedLot =
-    auctionSellConfigured &&
-    !auctionReadError &&
-    chainLot != null;
+    auctionSellConfigured && !auctionReadError && chainLot != null;
 
   const liveAuction =
-    hasParsedLot &&
-    chainLot.tokenId > 0n &&
-    !chainLot.settled;
+    hasParsedLot && chainLot.tokenId > 0n && !chainLot.settled;
 
   const idleNoChainAuction =
-    hasParsedLot &&
-    chainLot.startTime === 0n &&
-    !chainLot.settled;
+    hasParsedLot && chainLot.startTime === 0n && !chainLot.settled;
 
   /** Must use bigint vs chain time — mock countdown must not be the only signal of expiry. */
   const auctionExpired =
-    liveAuction &&
-    chainLot != null &&
-    BigInt(nowUnix) >= chainLot.endTime;
+    liveAuction && chainLot != null && BigInt(nowUnix) >= chainLot.endTime;
 
   const chainBidActive =
     liveAuction && !auctionPaused && !auctionExpired && onChainMode;
@@ -167,12 +159,11 @@ export default function GobblerAuctionSection({
 
   const { sendBumpTx, isPending: isBumping } = useAuctionQueueBump();
 
-  const displayTokenId =
-    idleNoChainAuction
-      ? 0
-      : hasParsedLot && chainLot.tokenId > 0n
-        ? Number(chainLot.tokenId)
-        : live.fid;
+  const displayTokenId = idleNoChainAuction
+    ? 0
+    : hasParsedLot && chainLot.tokenId > 0n
+      ? Number(chainLot.tokenId)
+      : live.fid;
 
   const hasChainBid =
     liveAuction &&
@@ -199,8 +190,7 @@ export default function GobblerAuctionSection({
       ? chainLot.bidder
       : (MOCK_FALLBACK_TOP_BIDDER as Address);
 
-  const showNoBids =
-    !idleNoChainAuction && liveAuction && !hasChainBid;
+  const showNoBids = !idleNoChainAuction && liveAuction && !hasChainBid;
 
   const hasLastSettledWinner =
     hasParsedLot &&
@@ -211,17 +201,11 @@ export default function GobblerAuctionSection({
 
   const winnerFingerprint =
     hasLastSettledWinner && chainLot
-      ? getWinnerFingerprint(
-          chainLot.tokenId,
-          chainLot.bidder,
-          chainLot.amount,
-        )
+      ? getWinnerFingerprint(chainLot.tokenId, chainLot.bidder, chainLot.amount)
       : null;
 
   const showLastWinnerBanner = Boolean(
-    onChainMode &&
-      winnerFingerprint &&
-      winnerFingerprint !== dismissedWinnerFp,
+    onChainMode && winnerFingerprint && winnerFingerprint !== dismissedWinnerFp,
   );
 
   const onQueueEmptyBetweenSales =
@@ -269,12 +253,11 @@ export default function GobblerAuctionSection({
   const userCompletedLocalBid = auctionBidPlacedFids.has(displayTokenId);
 
   /** After the demo bid animation (mock), show the viewer when connected; on-chain use lot bidder. */
-  const displayTopBidder: Address | null =
-    idleNoChainAuction
-      ? null
-      : !liveAuction && userCompletedLocalBid && viewerAddress != null
-        ? viewerAddress
-        : chainTopBidder;
+  const displayTopBidder: Address | null = idleNoChainAuction
+    ? null
+    : !liveAuction && userCompletedLocalBid && viewerAddress != null
+      ? viewerAddress
+      : chainTopBidder;
 
   const queuedRows = queueReadsEnabled
     ? chainQueuedIds.map((id, i) => ({
@@ -308,9 +291,7 @@ export default function GobblerAuctionSection({
   const alreadyFirst = selectedQueueIdx === 0;
 
   const bumpLiveReady =
-    queueReadsEnabled &&
-    queueBumpReady &&
-    selectedQueueIdx > 0;
+    queueReadsEnabled && queueBumpReady && selectedQueueIdx > 0;
 
   useEffect(() => {
     if (selectedQueueFid == null) return;
@@ -320,9 +301,7 @@ export default function GobblerAuctionSection({
   }, [queuedRows, selectedQueueFid, setSelectedQueueFid]);
 
   const skipFeeHuman = humanSkipFee(
-    auctionSellConfigured && !auctionReadError
-      ? skipQueueFeeAmountStr
-      : null,
+    auctionSellConfigured && !auctionReadError ? skipQueueFeeAmountStr : null,
     MOCK_SKIP_QUEUE_FEE,
   );
 
@@ -362,17 +341,19 @@ export default function GobblerAuctionSection({
     sendBumpTx,
   ]);
 
-  const showBumpPanel =
-    selectedInQueueFid != null && selectedQueueIdx >= 0;
+  const showBumpPanel = selectedInQueueFid != null && selectedQueueIdx >= 0;
 
-  const handleChainBidSubmit = useCallback(async (amountWei: bigint) => {
-    setChainBidError(null);
-    try {
-      await placeBid(amountWei);
-    } catch (e) {
-      setChainBidError(formatUserFacingTxError(e));
-    }
-  }, [placeBid]);
+  const handleChainBidSubmit = useCallback(
+    async (amountWei: bigint) => {
+      setChainBidError(null);
+      try {
+        await placeBid(amountWei);
+      } catch (e) {
+        setChainBidError(formatUserFacingTxError(e));
+      }
+    },
+    [placeBid],
+  );
 
   const handleSettlePaused = useCallback(async () => {
     setSettleError(null);
@@ -486,23 +467,17 @@ export default function GobblerAuctionSection({
 
   return (
     <div className="w-full max-w-4xl">
-      <h2 className="text-xl sm:text-3xl font-bold tracking-widest uppercase mb-1">
-        Gobbled Warplet auctions
-      </h2>
-      <p className="text-sm text-base-content/40 mb-6 sm:mb-8">
-        One auction per day. Everything behind the live lot is waiting in line
-        to leave the Gobbler — not on sale until its day.
-      </p>
-
       {auctionSellConfigured && auctionReadError ? (
         <div
           role="alert"
           className="mb-6 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error/95"
         >
           Could not read the auction contract from this network. Confirm{" "}
-          <code className="text-xs break-all">NEXT_PUBLIC_AUCTION_SELL_ADDRESS</code>{" "}
-          and that your wallet is on Base. Finalize / bid controls stay hidden until
-          the lot loads.
+          <code className="text-xs break-all">
+            NEXT_PUBLIC_AUCTION_SELL_ADDRESS
+          </code>{" "}
+          and that your wallet is on Base. Finalize / bid controls stay hidden
+          until the lot loads.
         </div>
       ) : null}
 
@@ -587,44 +562,80 @@ export default function GobblerAuctionSection({
       />
 
       {onQueueEmptyBetweenSales ? (
-        <div className="mt-10 rounded-xl border border-base-content/10 bg-base-100/10 px-4 py-5 sm:px-6">
+        <div className="mt-4 rounded-xl border border-base-content/10 bg-base-100/10 px-4 py-5 sm:px-6">
           <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/55 mb-2">
-            In line to exit the Gobbler
+            Up next
           </h3>
           <p className="text-sm text-base-content/55 leading-relaxed max-w-prose">
-            The queue is empty. No Warplets are waiting for a future auction, so
-            there is nothing to select, bump, or skip here. New NFTs will appear
-            when they are queued on-chain.
+            The queue is empty. New Warplets will appear here when queued
+            on-chain.
           </p>
         </div>
       ) : (
         <>
-          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mt-10 mb-1">
-            In line to exit the Gobbler
+          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mt-4 mb-1">
+            Up next
           </h3>
-          {queueReadsEnabled && onChainLiveQueueEmpty ? (
-            <p className="text-xs text-base-content/40 mb-4 max-w-xl">
-              No Warplets are queued behind this live lot. When more are lined
-              up, they will show in the row below.
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-base-content/35 max-w-xl">
+              {queueReadsEnabled && onChainLiveQueueEmpty
+                ? "No Warplets queued behind this lot yet."
+                : `Tap a Warplet to pay ${skipFeeHuman} ${bidSymbol} and move it to the front.`}
             </p>
-          ) : (
-            <p className="text-xs text-base-content/35 mb-4 max-w-xl">
-              Tap a Warplet in the row below (not #2 in line — pick one further
-              back), then use{" "}
-              <strong className="font-semibold text-base-content/55">
-                Skip the line
-              </strong>{" "}
-              to pay the bump fee (<code className="text-[10px]">send</code> +
-              userData).
-            </p>
-          )}
-          <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
-            {queuedRows.map((row) => (
+            <div className="flex gap-1 shrink-0 ml-2">
+              <button
+                onClick={() => {
+                  const el = document.getElementById("queue-scroll");
+                  if (el) el.scrollBy({ left: -200, behavior: "smooth" });
+                }}
+                className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+              <button
+                onClick={() => {
+                  const el = document.getElementById("queue-scroll");
+                  if (el) el.scrollBy({ left: 200, behavior: "smooth" });
+                }}
+                className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div
+            id="queue-scroll"
+            className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide"
+          >
+            {queuedRows.map((row, i) => (
               <AuctionQueueCard
                 key={row.fid}
                 fid={row.fid}
                 placeInLine={row.place}
                 isSelected={selectedInQueueFid === row.fid}
+                isNext={i === 0}
                 onSelect={() =>
                   setSelectedQueueFid(
                     selectedQueueFid === row.fid ? null : row.fid,

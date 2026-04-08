@@ -38,7 +38,10 @@ function MiniAppWalletButton() {
 
   if (isConnected) {
     return (
-      <button onClick={() => disconnect()} className="btn btn-outline btn-sm">
+      <button
+        onClick={() => disconnect()}
+        className="btn btn-outline btn-xs text-xs px-2 py-0.5 min-h-0 h-auto leading-snug"
+      >
         {address?.slice(0, 6)}...{address?.slice(-4)}
       </button>
     );
@@ -413,6 +416,60 @@ export default function Home() {
       <GobblePeek />
 
       {/* Everything below fades out during gobble */}
+      {/* Nav — fixed on top of everything */}
+      <nav className="fixed top-0 left-0 right-0 z-[45]">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-2 sm:py-3 bg-black backdrop-blur-md">
+          <img
+            src="/logo.jpeg"
+            alt="WarpletGobbler"
+            className="h-8 sm:h-10 w-auto rounded-md"
+            draggable={false}
+          />
+          <div className="flex items-center gap-2 sm:gap-3">
+            {context?.user && (
+              <span className="text-sm text-base-content/50">
+                {context.user.displayName ?? `FID ${context.user.fid}`}
+              </span>
+            )}
+            <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full border border-success/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <span className="text-xs text-success">Base</span>
+            </div>
+            {isMiniApp ? (
+              <MiniAppWalletButton />
+            ) : (
+              <ConnectKitButton.Custom>
+                {({ isConnected, show, address, ensName }) => (
+                  <button
+                    onClick={show}
+                    className="text-xs px-3 py-1.5 rounded-full border border-base-content/20 text-base-content/70 hover:border-base-content/40 hover:text-base-content transition-colors"
+                  >
+                    {isConnected
+                      ? (ensName ??
+                        `${address?.slice(0, 4)}…${address?.slice(-3)}`)
+                      : "Connect"}
+                  </button>
+                )}
+              </ConnectKitButton.Custom>
+            )}
+          </div>
+        </div>
+        {/* Gobbler lip border */}
+        <svg
+          className="w-full h-4 sm:h-5 block"
+          viewBox="0 0 1200 20"
+          preserveAspectRatio="none"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M0,0 L0,16 Q80,18 160,10 Q240,2 320,6 Q400,14 480,8 Q540,2 600,2 Q660,2 720,8 Q800,14 880,6 Q960,2 1040,10 Q1120,18 1200,16 L1200,0 Z"
+            fill="#000000"
+            fillOpacity="1"
+          />
+        </svg>
+      </nav>
+
       <div
         className="flex-1 flex flex-col transition-opacity duration-700"
         style={{ opacity: gobbling ? 0 : 1 }}
@@ -425,32 +482,6 @@ export default function Home() {
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl" />
           <div className="absolute bottom-1/3 right-1/3 w-80 h-80 bg-secondary/3 rounded-full blur-3xl" />
         </div>
-
-        {/* Nav */}
-        <nav className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-base-content/5">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-              <span className="text-primary text-sm sm:text-base font-bold">
-                W
-              </span>
-            </div>
-            <span className="font-semibold text-base sm:text-xl tracking-wide uppercase">
-              Warplet Gobbler
-            </span>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-4">
-            {context?.user && (
-              <span className="text-sm text-base-content/50">
-                {context.user.displayName ?? `FID ${context.user.fid}`}
-              </span>
-            )}
-            <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <span className="text-sm text-success">Base</span>
-            </div>
-            {isMiniApp ? <MiniAppWalletButton /> : <ConnectKitButton />}
-          </div>
-        </nav>
 
         {/* Single-focus layout: Gobbler + Deposit */}
         <section className="relative z-10 flex-1 flex flex-col items-center px-4 sm:px-6 pt-16 sm:pt-24 pb-8 sm:pb-12">
