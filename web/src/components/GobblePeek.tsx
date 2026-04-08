@@ -72,10 +72,16 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     const VC = "#040404";
 
     // Jaw edge blobs.
-    // Count scales with viewport width so that at narrow widths the blobs
-    // don't pack tightly enough for the goo filter (stdDev=6, alpha threshold)
-    // to merge them into a flat band — which made the bottom teeth visually
-    // disappear on small windows. Target spacing ~16px.
+    // Count is computed from viewport width with a target spacing of ~22px.
+    // The previous version had a min-count of 28 which actually *forced*
+    // tighter spacing on narrow viewports (e.g. W=300 → 28/300 = 10.7px),
+    // making the goo filter (stdDev=6, alpha threshold ~0.41) merge them
+    // into a flat band so the bottom teeth disappeared. Now the count drops
+    // freely on narrow widths so spacing stays roughly constant.
+    //
+    // Also: yo variance is widened from ±2 to ±6 so peaks/valleys read
+    // distinctly through the 6px blur — without enough vertical jitter,
+    // adjacent blobs blur into a uniform band even at the right spacing.
     let bumps: {
       jaw: number;
       xf: number;
@@ -84,8 +90,9 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       ph: number;
     }[] = [];
     let lastBumpsCount = 0;
+    const TARGET_SPACING_PX = 22;
     const computeBumpsCount = () =>
-      Math.max(28, Math.min(120, Math.round(W / 16)));
+      Math.max(8, Math.min(160, Math.round(W / TARGET_SPACING_PX)));
     const regenerateBumps = () => {
       const count = computeBumpsCount();
       if (count === lastBumpsCount) return;
@@ -98,7 +105,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
             jaw,
             xf: (i + 0.3 + sr(s) * 0.4) / count,
             r: 6 + sr(s + 11) * 13,
-            yo: sr(s + 23) * 4 - 2,
+            yo: sr(s + 23) * 12 - 6,
             ph: sr(s + 37) * 6.28,
           });
         }
