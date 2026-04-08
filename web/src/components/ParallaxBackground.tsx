@@ -5,12 +5,6 @@ import { warpletImageSrc } from "@/lib/warplet-image-src";
 
 /* eslint-disable @next/next/no-img-element */
 
-/** FIDs confirmed to exist on the Vercel Blob CDN (≥18 to fill all slots uniquely). */
-const BACKGROUND_FIDS = [
-  2, 3, 5, 9, 13, 20, 42, 48, 59, 69, 83, 99, 114, 139, 194, 239, 280, 680,
-  1725, 2025, 4567, 5062, 5494, 12152, 951257,
-];
-
 const PARALLAX_SLOTS = [
   {
     id: 0,
@@ -212,26 +206,34 @@ const PARALLAX_SLOTS = [
   },
 ] as const;
 
-function shuffled<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
+function assignQueueFidsToSlots(queueFids: number[]) {
+  const hasFids = queueFids.length > 0;
+  const pool = hasFids ? queueFids : [];
+  return PARALLAX_SLOTS.map((s, i) => ({
+    ...s,
+    fid: hasFids ? pool[i % pool.length]! : null,
+  }));
 }
 
-export default function ParallaxBackground() {
+export default function ParallaxBackground({
+  queueFids,
+  /** When true, use neutral skeleton tiles (e.g. wallet confirmed empty — avoids “ghost faces” vs empty picker). */
+  neutralTiles = false,
+}: {
+  /** Same FIDs as the auction queue strip (after the live lot). */
+  queueFids: number[];
+  neutralTiles?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
 
-  const warplets = useMemo(() => {
-    const pool = shuffled(BACKGROUND_FIDS);
-    return PARALLAX_SLOTS.map((s, i) => ({
-      ...s,
-      fid: pool[i % pool.length],
-    }));
-  }, []);
+  const warplets = useMemo(
+    () =>
+      neutralTiles
+        ? PARALLAX_SLOTS.map((s) => ({ ...s, fid: null as number | null }))
+        : assignQueueFidsToSlots(queueFids),
+    [queueFids, neutralTiles],
+  );
 
   useEffect(() => {
     const handleScroll = () => {
@@ -278,19 +280,29 @@ export default function ParallaxBackground() {
             "--drift-delay": `${w.id * -2.5}s`,
           }}
         >
-          <img
-            src={warpletImageSrc(w.fid)}
-            alt=""
-            draggable={false}
-            loading="lazy"
-            decoding="async"
-            style={{
-              width: "100%",
-              height: "100%",
-              borderRadius: 8,
-              filter: `brightness(1.3) saturate(1.2)${w.blur ? ` blur(${w.blur}px)` : ""}`,
-            }}
-          />
+          {w.fid != null ? (
+            <img
+              src={warpletImageSrc(w.fid)}
+              alt=""
+              draggable={false}
+              loading="lazy"
+              decoding="async"
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: 8,
+                filter: `brightness(1.3) saturate(1.2)${w.blur ? ` blur(${w.blur}px)` : ""}`,
+              }}
+            />
+          ) : (
+            <div
+              className="skeleton w-full h-full"
+              style={{
+                borderRadius: 8,
+                filter: w.blur ? `blur(${w.blur}px)` : undefined,
+              }}
+            />
+          )}
         </div>
       ))}
     </div>

@@ -24,7 +24,7 @@ export function useAuctionSell777Bid() {
         throw new Error("Connect a wallet to bid");
       }
       if (CONTRACTS.auctionSell === ZERO_ADDRESS) {
-        throw new Error("Auction contract is not configured");
+        throw new Error("Auctions aren't available on this network right now.");
       }
 
       return writeContractAsync({

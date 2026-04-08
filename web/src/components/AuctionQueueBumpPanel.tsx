@@ -1,9 +1,8 @@
 "use client";
 
 export default function AuctionQueueBumpPanel({
-  selectedTokenId,
-  bumpAmountDisplay,
   bidSymbol,
+  hasQueueSelection,
   alreadyFirst,
   bumpLiveReady,
   bumpDisabled,
@@ -11,9 +10,9 @@ export default function AuctionQueueBumpPanel({
   onBump,
   isBumping,
 }: {
-  selectedTokenId: number;
-  bumpAmountDisplay: string;
   bidSymbol: string;
+  /** Matches sell row: filled secondary only after a queue tile is selected. */
+  hasQueueSelection: boolean;
   alreadyFirst: boolean;
   /** On-chain linked-list AuctionSell + ERC777 bid token reads succeeded — wallet tx will work. */
   bumpLiveReady: boolean;
@@ -22,36 +21,57 @@ export default function AuctionQueueBumpPanel({
   onBump: () => void;
   isBumping: boolean;
 }) {
-  const buttonDisabled = bumpDisabled || isBumping || !bumpLiveReady;
+  const buttonDisabled =
+    !hasQueueSelection ||
+    alreadyFirst ||
+    bumpDisabled ||
+    isBumping ||
+    !bumpLiveReady;
+  const tokenLabel = bidSymbol.startsWith("$") ? bidSymbol : `$${bidSymbol}`;
+  /** Filled CTA only when a real skip is available (not e.g. dev CTA unplugged). */
+  const filledSecondary =
+    hasQueueSelection && !alreadyFirst && bumpLiveReady && !bumpDisabled;
+
+  const buttonLabel = isBumping
+    ? "Confirm…"
+    : alreadyFirst
+      ? "Already #1 in line"
+      : "Skip the line";
 
   return (
-    <div className="mt-4">
-      {alreadyFirst ? (
-        <p className="text-xs text-base-content/45 max-w-xl">
-          This one is already first in the exit queue. Select a Warplet further
-          back in the row to see the{" "}
-          <strong className="font-semibold text-base-content/55">
-            Skip the line
-          </strong>{" "}
-          button there.
+    <div className="w-full flex flex-col items-center gap-2 text-center">
+      {bumpHint ? (
+        <p className="text-xs text-warning/90 max-w-md mx-auto break-words">
+          {bumpHint}
         </p>
-      ) : (
-        <>
-          {bumpHint && (
-            <p className="text-xs text-warning/90 mb-2 max-w-xl">{bumpHint}</p>
-          )}
-          <button
-            type="button"
-            className="btn btn-secondary w-full sm:w-auto"
-            disabled={buttonDisabled}
-            onClick={onBump}
-          >
-            {isBumping
-              ? "Confirm in wallet…"
-              : `Pay ${bumpAmountDisplay} ${bidSymbol} · skip the line`}
-          </button>
-        </>
-      )}
+      ) : null}
+      <div className="flex min-h-[3rem] w-full max-w-sm flex-col items-center justify-center px-1">
+        {alreadyFirst ? (
+          <p className="text-sm leading-snug text-base-content/55">
+            This Warplet is already at the front of the queue. Pick one behind
+            them to skip the line.
+          </p>
+        ) : (
+          <p className="text-sm leading-snug text-base-content/70">
+            Pay 1M{" "}
+            <span className="font-semibold tabular-nums text-secondary/95">
+              {tokenLabel}
+            </span>
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        className={`btn w-full max-w-sm mx-auto mt-1 transition-shadow ${
+          filledSecondary
+            ? "btn-secondary hover:shadow-lg hover:shadow-secondary/25"
+            : "border border-secondary/30 text-secondary/50 hover:border-secondary/50 hover:text-secondary/70"
+        }`}
+        disabled={buttonDisabled}
+        onClick={onBump}
+      >
+        {buttonLabel}
+      </button>
     </div>
   );
 }

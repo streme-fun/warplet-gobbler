@@ -8,9 +8,9 @@ interface IDutchAuction {
     /// @notice Current balance available (i.e. the current "price" of depositing a Warplet)
     function currentPrice() external view returns (uint256);
 
-    /// @notice Deposit a Warplet NFT and receive the full pot balance
+    /// @notice Deposit a Warplet NFT and receive the full pot balance (ERC-721 `safeTransferFrom` into this contract).
     /// @param tokenId The Warplet token ID to deposit
-    /// @param minPrice Minimum acceptable payout to protect from stale mempool price movement
+    /// @param minPrice Minimum acceptable payout; encoded as `data` for `onERC721Received` (`abi.encode(minPrice)`).
     function gobble(uint256 tokenId, uint256 minPrice) external;
 
     /// @notice Emitted when a Warplet is gobbled
