@@ -45,11 +45,13 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     window.addEventListener("gobbler:lip-wave", onLipWave);
 
     // Responsive: smaller jaws + eyes on mobile.
-    // Reduced ~10% from the prior 120/190 (top) and 50/70 (bottom) to free up
-    // more vertical UI space.
+    // Trimmed twice from the original 120/190 (top) and 50/70 (bottom):
+    // first by 10% to free up vertical UI space, then another 10% on the
+    // valley (middle) since the desktop edge bow already adds back ~85px at
+    // the corners and the valley felt too thick.
     const mobile = () => W < 640;
-    const restTop = () => (mobile() ? 108 : 171);
-    const restBot = () => (mobile() ? 45 : 63);
+    const restTop = () => (mobile() ? 97 : 154);
+    const restBot = () => (mobile() ? 41 : 57);
 
     // Desktop only: jaws bow inward as an additive pixel offset, so the
     // hill-to-valley delta is identical on top and bottom (~85px). Smooth
@@ -79,9 +81,14 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     // into a flat band so the bottom teeth disappeared. Now the count drops
     // freely on narrow widths so spacing stays roughly constant.
     //
-    // Also: yo variance is widened from ±2 to ±6 so peaks/valleys read
-    // distinctly through the 6px blur — without enough vertical jitter,
-    // adjacent blobs blur into a uniform band even at the right spacing.
+    // Also: yo variance is widened to a full 12px range (was ±2) so peaks
+    // and valleys read distinctly through the 6px blur. Critically, yo is
+    // *signed per jaw* so every blob pokes OUT of the body — top jaw blobs
+    // get positive yo (drop down into the viewport) and bottom jaw blobs
+    // get negative yo (rise up into the viewport). The original ±2 range
+    // half-buried blobs in the body but got away with it because blob radii
+    // (6–19) dwarfed the offset; widening to ±6 exposed the bug because
+    // small (r=6) blobs with the wrong-signed yo became fully buried.
     let bumps: {
       jaw: number;
       xf: number;
@@ -99,13 +106,16 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       lastBumpsCount = count;
       bumps = [];
       for (let jaw = 0; jaw < 2; jaw++) {
+        // Top jaw teeth point down (+y), bottom jaw teeth point up (-y).
+        const yoSign = jaw === 0 ? 1 : -1;
         for (let i = 0; i < count; i++) {
           const s = jaw * 1000 + i * 31;
           bumps.push({
             jaw,
             xf: (i + 0.3 + sr(s) * 0.4) / count,
             r: 6 + sr(s + 11) * 13,
-            yo: sr(s + 23) * 12 - 6,
+            // 0..12 px outward jitter so every blob pokes out as a tooth.
+            yo: yoSign * (1 + sr(s + 23) * 11),
             ph: sr(s + 37) * 6.28,
           });
         }
