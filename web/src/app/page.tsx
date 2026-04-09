@@ -3,7 +3,7 @@
 import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
 import { ConnectKitButton } from "connectkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formatUnits } from "viem";
+import { formatUnits, type Address } from "viem";
 import { useMiniApp } from "@/hooks/useMiniApp";
 import { useOwnedWarplets } from "@/hooks/useOwnedWarplets";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
@@ -35,6 +35,72 @@ import {
 
 /* eslint-disable @next/next/no-img-element */
 
+/** Lerp between two SVG path strings that share the same command structure. */
+function lerpPath(a: string, b: string, t: number): string {
+  const numsA = a.match(/-?\d+\.?\d*/g) ?? [];
+  const numsB = b.match(/-?\d+\.?\d*/g) ?? [];
+  let i = 0;
+  return a.replace(/-?\d+\.?\d*/g, () => {
+    const va = parseFloat(numsA[i] ?? "0");
+    const vb = parseFloat(numsB[i] ?? "0");
+    i++;
+    return (va + (vb - va) * t).toFixed(1);
+  });
+}
+
+const MORPH_SHAPES = [
+  {
+    // Left tendril — tall & narrow (buy) → wide & curving (sell)
+    buy: "M-50,900 C50,700 120,500 80,350 C40,200 -20,150 30,50 C60,-20 150,0 200,80 C250,160 180,300 200,450 C220,600 350,750 300,900 Z",
+    sell: "M-50,900 C20,750 180,600 150,400 C120,200 50,100 100,0 C180,-30 280,60 320,180 C360,300 280,450 320,580 C360,720 450,820 380,900 Z",
+    opacity: 0.25,
+  },
+  {
+    // Right blob — compact (buy) → spreading tentacles (sell)
+    buy: "M1440,200 C1350,180 1280,250 1250,350 C1220,450 1280,550 1200,620 C1120,690 1050,650 1000,720 C950,790 980,900 1060,900 L1440,900 Z",
+    sell: "M1440,150 C1320,130 1220,200 1180,320 C1140,440 1200,500 1100,580 C1000,660 920,600 860,700 C800,800 850,900 950,900 L1440,900 Z",
+    opacity: 0.2,
+  },
+  {
+    // Central drip — thin flame (buy) → wider organic (sell)
+    buy: "M700,0 C720,80 680,160 710,250 C740,340 800,380 780,480 C760,580 690,550 680,650 C670,750 720,800 700,900 C690,900 660,800 650,700 C640,600 610,580 630,480 C650,380 590,340 620,250 C650,160 610,80 630,0 Z",
+    sell: "M680,0 C740,100 650,200 700,300 C750,400 840,420 800,530 C760,640 660,620 640,720 C620,820 690,860 660,900 C640,900 600,850 610,740 C620,630 550,610 590,510 C630,410 540,380 580,280 C620,180 570,90 620,0 Z",
+    opacity: 0.18,
+  },
+  {
+    // Mid-left drip
+    buy: "M400,0 C420,60 380,120 410,200 C440,280 400,350 420,450 C430,500 410,520 400,550 C390,520 370,500 380,450 C400,350 360,280 390,200 C420,120 380,60 400,0 Z",
+    sell: "M380,0 C440,80 350,160 400,260 C450,360 380,420 410,520 C420,570 390,600 370,630 C350,600 330,570 350,510 C370,420 300,350 360,250 C420,150 340,70 380,0 Z",
+    opacity: 0.15,
+  },
+  {
+    // Bottom wave
+    buy: "M0,900 C100,800 300,820 500,780 C700,740 800,800 1000,760 C1200,720 1350,800 1440,750 L1440,900 Z",
+    sell: "M0,900 C120,830 250,860 450,810 C650,760 750,830 950,790 C1150,750 1300,830 1440,780 L1440,900 Z",
+    opacity: 0.2,
+  },
+];
+
+function MorphingSilhouettes({ scrollBlend }: { scrollBlend: number }) {
+  return (
+    <svg
+      className="fixed inset-0 w-full h-full pointer-events-none"
+      viewBox="0 0 1440 900"
+      preserveAspectRatio="xMidYMid slice"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {MORPH_SHAPES.map((shape, i) => (
+        <path
+          key={i}
+          d={lerpPath(shape.buy, shape.sell, scrollBlend)}
+          fill={`rgba(0,0,0,${shape.opacity})`}
+        />
+      ))}
+    </svg>
+  );
+}
+
 function MiniAppWalletButton() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
@@ -42,7 +108,10 @@ function MiniAppWalletButton() {
 
   if (isConnected) {
     return (
-      <button onClick={() => disconnect()} className="btn btn-outline btn-sm">
+      <button
+        onClick={() => disconnect()}
+        className="btn btn-outline btn-xs text-xs px-2 py-0.5 min-h-0 h-auto leading-snug"
+      >
         {address?.slice(0, 6)}...{address?.slice(-4)}
       </button>
     );
@@ -184,6 +253,46 @@ export default function Home() {
         auctionExpired ||
         auctionSell.minNextBidAmount == null ||
         !auctionSell.bidTokenAddress));
+
+  const [activeView, setActiveView] = useState<"sell" | "buy">("buy");
+  const [scrollBlend, setScrollBlend] = useState(0); // 0 = buy (purple), 1 = sell (cyan)
+
+  // Track scroll position to blend background color and update active toggle.
+  // Wrapped in rAF so we coalesce per-pixel scroll events into one update per frame —
+  // each setState below cascades into a 5-shape SVG path lerp, so unthrottled this
+  // was doing real work on every scroll tick.
+  useEffect(() => {
+    let rafId = 0;
+    let pending = false;
+    const compute = () => {
+      pending = false;
+      const sellEl = document.getElementById("sell-section");
+      if (!sellEl) return;
+      const sellTop = sellEl.getBoundingClientRect().top;
+      const vh = window.innerHeight;
+      // blend: 0 when sell section is below viewport, 1 when sell section is at top
+      const t = Math.max(0, Math.min(1, 1 - sellTop / vh));
+      setScrollBlend(t);
+      setActiveView(t > 0.5 ? "sell" : "buy");
+    };
+    const onScroll = () => {
+      if (pending) return;
+      pending = true;
+      rafId = requestAnimationFrame(compute);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    compute();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  const toggleView = useCallback((view: "sell" | "buy") => {
+    setActiveView(view);
+    const target = view === "buy" ? "auction" : "sell-section";
+    document.getElementById(target)?.scrollIntoView({ behavior: "smooth" });
+  }, []);
 
   const geckoPoolUrl =
     process.env.NEXT_PUBLIC_GECKOTERMINAL_POOL_URL ??
@@ -421,53 +530,140 @@ export default function Home() {
       <AbyssBackground />
 
       {/* Ambient gobbler peek — jaws hint at their presence */}
-      <GobblePeek />
+      <GobblePeek hidden={gobbling} />
 
       {/* Everything below fades out during gobble */}
-      <div
-        className="flex-1 flex flex-col transition-opacity duration-700"
-        style={{ opacity: gobbling ? 0 : 1 }}
-      >
-        {/* Parallax warplet background */}
-        <ParallaxBackground
-          queueFids={auctionQueueStripFids}
-          neutralTiles={walletConfirmedNoWarplets}
-        />
-
-        {/* Background gradient orbs */}
-        <div className="fixed inset-0 pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/3 right-1/3 w-80 h-80 bg-secondary/3 rounded-full blur-3xl" />
-        </div>
-
-        {/* Nav */}
-        <nav className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-base-content/5">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-              <span className="text-primary text-sm sm:text-base font-bold">
-                W
-              </span>
-            </div>
-            <span className="font-semibold text-base sm:text-xl tracking-wide uppercase">
-              Warplet Gobbler
-            </span>
+      {/* Nav — fixed on top of everything */}
+      <nav className="fixed top-0 left-0 right-0 z-[45]">
+        <div
+          className="relative flex items-center justify-between px-4 sm:px-6 py-2 sm:py-3 backdrop-blur-md transition-none"
+          style={{
+            backgroundColor: `rgba(0, 0, 0, 0.85)`,
+          }}
+        >
+          {/* Left — logo */}
+          <img
+            src="/logo.jpeg"
+            alt="WarpletGobbler"
+            className="h-8 sm:h-10 w-auto rounded-md"
+            draggable={false}
+          />
+          {/* Center — Buy / Sell toggle */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex rounded-full border border-base-content/20 overflow-hidden">
+            <button
+              onClick={() => toggleView("buy")}
+              className={`px-5 py-1.5 text-sm font-semibold transition-colors ${
+                activeView === "buy"
+                  ? "bg-secondary text-black"
+                  : "text-base-content/50 hover:text-base-content/80"
+              }`}
+            >
+              Buy
+            </button>
+            <button
+              onClick={() => toggleView("sell")}
+              className={`px-5 py-1.5 text-sm font-semibold transition-colors ${
+                activeView === "sell"
+                  ? "bg-primary text-black"
+                  : "text-base-content/50 hover:text-base-content/80"
+              }`}
+            >
+              Sell
+            </button>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4">
+          {/* Right — status + wallet */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {context?.user && (
               <span className="text-sm text-base-content/50">
                 {context.user.displayName ?? `FID ${context.user.fid}`}
               </span>
             )}
-            <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
+            <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full border border-success/30">
               <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <span className="text-sm text-success">Base</span>
+              <span className="text-xs text-success">Base</span>
             </div>
-            {isMiniApp ? <MiniAppWalletButton /> : <ConnectKitButton />}
+            {isMiniApp ? (
+              <MiniAppWalletButton />
+            ) : (
+              <ConnectKitButton.Custom>
+                {({ isConnected, show, address, ensName }) => (
+                  <button
+                    onClick={show}
+                    className="text-xs px-3 py-1.5 rounded-full border border-base-content/20 text-base-content/70 hover:border-base-content/40 hover:text-base-content transition-colors"
+                  >
+                    {isConnected
+                      ? (ensName ??
+                        `${address?.slice(0, 4)}…${address?.slice(-3)}`)
+                      : "Connect"}
+                  </button>
+                )}
+              </ConnectKitButton.Custom>
+            )}
           </div>
-        </nav>
+        </div>
+        {/* Gobbler lip border */}
+        <svg
+          className="w-full h-4 sm:h-5 block"
+          viewBox="0 0 1200 20"
+          preserveAspectRatio="none"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M0,0 L0,16 Q80,18 160,10 Q240,2 320,6 Q400,14 480,8 Q540,2 600,2 Q660,2 720,8 Q800,14 880,6 Q960,2 1040,10 Q1120,18 1200,16 L1200,0 Z"
+            fill="#000000"
+            fillOpacity="1"
+          />
+        </svg>
+      </nav>
 
-        {/* Single-focus layout: Gobbler + Deposit */}
-        <section className="relative z-10 flex-1 flex flex-col items-center px-4 sm:px-6 pt-16 sm:pt-24 pb-8 sm:pb-12">
+      <div
+        className="flex-1 flex flex-col transition-opacity duration-700"
+        style={{ opacity: gobbling ? 0 : 1 }}
+      >
+        {/* Scroll-blended rich background — purple (buy) → cyan (sell) */}
+        <div
+          className="fixed inset-0 pointer-events-none"
+          style={{
+            zIndex: 0,
+            background: `
+              linear-gradient(
+                180deg,
+                rgba(${Math.round(60 - 50 * scrollBlend)}, ${Math.round(20 + 40 * scrollBlend)}, ${Math.round(100 - 60 * scrollBlend)}, 1) 0%,
+                rgba(${Math.round(80 - 70 * scrollBlend)}, ${Math.round(30 + 60 * scrollBlend)}, ${Math.round(130 - 80 * scrollBlend)}, 1) 40%,
+                rgba(${Math.round(50 - 40 * scrollBlend)}, ${Math.round(15 + 35 * scrollBlend)}, ${Math.round(80 - 50 * scrollBlend)}, 1) 100%
+              )
+            `,
+          }}
+        />
+        {/* Organic morphing cutout shapes — morph between buy ↔ sell states */}
+        <MorphingSilhouettes scrollBlend={scrollBlend} />
+
+        {/* Parallax warplet background — on top of color wash */}
+        <ParallaxBackground />
+
+        {/* === Auction Section (Buy) === */}
+        <section
+          id="auction"
+          className="relative z-10 flex flex-col items-center px-4 sm:px-6 pt-36 sm:pt-56 pb-12 sm:pb-20"
+        >
+          <GobblerAuctionSection
+            auctionBidPlacedFids={boughtFids}
+            onBid={handleBuy}
+            bidDisabled={auctionBidDisabled}
+          />
+          {auctionBidError && (
+            <p className="mt-4 max-w-xl mx-auto text-center text-xs text-error/90 break-words px-2">
+              {auctionBidError}
+            </p>
+          )}
+        </section>
+
+        {/* === Sell Section === */}
+        <section
+          id="sell-section"
+          className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-12 sm:pt-20 pb-24 sm:pb-32"
+        >
           {/* Title */}
           <div className="text-center animate-fade-up-delay-1">
             <h2>Sell your Warplet to</h2>
@@ -495,35 +691,37 @@ export default function Home() {
                   ? payoutSymbol
                   : `$${payoutSymbol}`}
               </span>
-            </div>
-            <p className="text-xs sm:text-sm text-base-content/40 mt-1">
-              {isAmountMissing ? (
-                isDutchAuctionConfigured ? (
+              <p className="text-xs sm:text-sm text-base-content/40 mt-1">
+                {isAmountMissing ? (
+                  isDutchAuctionConfigured ? (
+                    <>
+                      ~$
+                      {FX_EST_MARKET_CAP_USD.toLocaleString(undefined, {
+                        maximumFractionDigits: 0,
+                        minimumFractionDigits: 0,
+                      })}
+                    </>
+                  ) : (
+                    "(~$0.00)"
+                  )
+                ) : payoutAmount > 0 && warpgobbPriceUsd == null ? (
+                  "USD quote unavailable"
+                ) : (
                   <>
                     ~$
-                    {FX_EST_MARKET_CAP_USD.toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                      minimumFractionDigits: 0,
-                    })}
+                    <StreamingNumber
+                      start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
+                      perSecond={
+                        payoutStream.perSecond * (warpgobbPriceUsd ?? 0)
+                      }
+                      decimals={2}
+                      truncateFractionDigits
+                      className="inline font-mono"
+                    />
                   </>
-                ) : (
-                  "~$0.00"
-                )
-              ) : payoutAmount > 0 && warpgobbPriceUsd == null ? (
-                "USD quote unavailable"
-              ) : (
-                <>
-                  ~$
-                  <StreamingNumber
-                    start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
-                    perSecond={payoutStream.perSecond * (warpgobbPriceUsd ?? 0)}
-                    decimals={2}
-                    truncateFractionDigits
-                    className="inline font-mono"
-                  />
-                </>
-              )}
-            </p>
+                )}
+              </p>
+            </div>
             <p className="text-sm sm:text-base text-base-content/50">
               for your warplet
             </p>
@@ -588,7 +786,9 @@ export default function Home() {
                   <p className="text-xs text-error/80 px-1 text-center max-w-md mx-auto">
                     Couldn&apos;t load Warplets from the chain. Make sure your
                     wallet is on Base. Check{" "}
-                    <code className="text-[10px]">NEXT_PUBLIC_WARPLETS_ADDRESS</code>{" "}
+                    <code className="text-[10px]">
+                      NEXT_PUBLIC_WARPLETS_ADDRESS
+                    </code>{" "}
                     and that the contract supports{" "}
                     <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
                     (ERC721Enumerable).
@@ -690,96 +890,70 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Scroll prompt — Buy Warplet
-        <div className="relative z-10 pb-8 flex flex-col items-center">
-          <button
-            onClick={() =>
-              document
-                .getElementById("auction")
-                ?.scrollIntoView({ behavior: "smooth" })
-            }
-            className="group flex flex-col items-center gap-1 text-secondary/60 hover:text-secondary transition-colors"
-          >
-            <span className="text-sm sm:text-base tracking-widest uppercase">
-              Buy Warplet
-            </span>
-            <svg
-              className="w-5 h-5 animate-bounce"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </button>
-        </div> */}
+        <div className="relative z-10 mt-6 sm:mt-8 pb-4" aria-hidden />
       </div>
       {/* end gobble fade wrapper */}
 
-      {/* === Auction Section === */}
-      <section
-        id="auction"
-        className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 py-12 sm:py-20"
-      >
-        <GobblerAuctionSection
-          auctionBidPlacedFids={boughtFids}
-          onBid={handleBuy}
-          bidDisabled={auctionBidDisabled}
-        />
-        {auctionBidError && (
-          <p className="mt-4 max-w-xl mx-auto text-center text-xs text-error/90 break-words px-2">
-            {auctionBidError}
-          </p>
-        )}
-
-        <footer className="mt-12 sm:mt-16 pb-8 text-center text-sm text-base-content/30">
-          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 mb-6">
-            <a
-              href="https://opensea.io/collection/the-warplets-farcaster"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-base-content/60 transition-colors"
-            >
-              The Warplets
-            </a>
-            <a
-              href="https://streme.fun"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-base-content/60 transition-colors"
-            >
-              Streme
-            </a>
-            <a
-              href={geckoPoolUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-base-content/60 transition-colors"
-            >
-              Geckoterminal
-            </a>
-          </div>
-          <p className="max-w-lg mx-auto text-xs text-base-content/20 leading-relaxed">
-            WarpletGobbler has no affiliation with, and is not sponsored,
-            approved, or endorsed by, the official Warplets project or the
-            owners of the Warplets intellectual property. For more information
-            on Warplets, visit their collection at:{" "}
-            <a
-              href="https://opensea.io/collection/the-warplets-farcaster"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-base-content/40 transition-colors"
-            >
-              opensea.io/collection/the-warplets-farcaster
-            </a>
-          </p>
-        </footer>
-      </section>
+      {/* Fixed footer — contract address */}
+      <CaFooter />
     </main>
+  );
+}
+
+// Fall back to the deployed $LARPBOBB address if the env var isn't set (e.g. local dev),
+// so the footer always shows a real address rather than zero.
+const FOOTER_CA: Address =
+  CONTRACTS.warpgobbToken !== ZERO_ADDRESS
+    ? CONTRACTS.warpgobbToken
+    : ("0x3042b035325393F3d72390C7E5d51F26fe1F0e61" as Address);
+
+function CaFooter() {
+  const [copied, setCopied] = useState(false);
+  const ca = FOOTER_CA;
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard
+      .writeText(ca)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {
+        // clipboard API can reject in non-secure contexts / iframes / when
+        // permission is denied — silently no-op so we don't unhandle-reject.
+      });
+  }, []);
+
+  return (
+    <div
+      className="fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm border-t border-base-content/10 py-3 sm:py-4 px-4 text-center cursor-pointer select-all"
+      onClick={handleCopy}
+    >
+      <span className="text-xs sm:text-sm text-base-content/60 font-mono tracking-wide">
+        CA: <span className="text-base-content/80">{ca}</span>
+        {copied ? (
+          <svg
+            className="inline-block ml-1.5 w-3.5 h-3.5 align-middle relative -top-px text-primary/80"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+        ) : (
+          <svg
+            className="inline-block ml-1.5 w-3.5 h-3.5 align-middle relative -top-px text-base-content/40"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+            <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+          </svg>
+        )}
+      </span>
+    </div>
   );
 }

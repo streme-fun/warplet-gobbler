@@ -105,10 +105,7 @@ export function useOwnedWarplets() {
     return ids;
   }, [ownerIndexResults]);
 
-  const warplets = useMemo(
-    () => tokenIdsToWarplets(tokenIds),
-    [tokenIds],
-  );
+  const warplets = useMemo(() => tokenIdsToWarplets(tokenIds), [tokenIds]);
 
   const cacheBalance = cachedPayload ? BigInt(cachedPayload.balance) : 0n;
 
@@ -181,9 +178,7 @@ export function useOwnedWarplets() {
       balanceQuery.isFetching;
     const waitingOnIndex =
       indexContracts.length > 0 &&
-      (!indexQuery.isFetched ||
-        indexQuery.isPending ||
-        indexQuery.isFetching);
+      (!indexQuery.isFetched || indexQuery.isPending || indexQuery.isFetching);
     if (waitingOnBalance || waitingOnIndex) {
       return;
     }
@@ -216,8 +211,7 @@ export function useOwnedWarplets() {
   ]);
 
   const awaitingInitialBalance =
-    Boolean(address) &&
-    (!balanceQuery.isFetched || balanceQuery.isPending);
+    Boolean(address) && (!balanceQuery.isFetched || balanceQuery.isPending);
 
   const awaitingIndexForOwned =
     Boolean(address) &&
@@ -261,20 +255,11 @@ export function useOwnedWarplets() {
     ) {
       return stable.warplets;
     }
-    if (
-      cachedWarplets.length > 0 &&
-      (isLoading || inFlightSameAddress)
-    ) {
+    if (cachedWarplets.length > 0 && (isLoading || inFlightSameAddress)) {
       return cachedWarplets;
     }
     return warplets;
-  }, [
-    address,
-    warplets,
-    isLoading,
-    inFlightSameAddress,
-    cachedWarplets,
-  ]);
+  }, [address, warplets, isLoading, inFlightSameAddress, cachedWarplets]);
 
   const isError = balanceQuery.isError || indexQuery.isError;
 
