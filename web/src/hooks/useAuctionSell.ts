@@ -166,9 +166,13 @@ export function useAuctionSellAuction() {
 
   const isPaused = pausedQ.data === true;
 
+  const isAuctionLoading =
+    configured && (auctionQ.isPending || auctionQ.isLoading);
+
   return {
     configured,
     auction: chainLot,
+    isAuctionLoading,
     bidDecimals: decimals,
     decimals,
     formatBidAmount,

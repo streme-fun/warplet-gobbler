@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http } from "viem";
 import { base } from "viem/chains";
 import { ensureGobbledImage } from "@/lib/generate-gobbled-image";
-import { CONTRACTS } from "@/lib/contracts";
+import { isWarpletInGobblerAuctionCustody } from "@/lib/warplet-gobbled-custody";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -21,37 +21,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify on-chain: tokenId must be owned by nftReserve (i.e., actually gobbled)
-    const owner = await publicClient.readContract({
-      address: CONTRACTS.warplets,
-      abi: [
-        {
-          name: "ownerOf",
-          type: "function",
-          stateMutability: "view",
-          inputs: [{ type: "uint256", name: "tokenId" }],
-          outputs: [{ type: "address" }],
-        },
-      ],
-      functionName: "ownerOf",
-      args: [BigInt(tokenId)],
-    });
-
-    const nftReserve = await publicClient.readContract({
-      address: CONTRACTS.dutchAuction,
-      abi: [
-        {
-          name: "nftReserve",
-          type: "function",
-          stateMutability: "view",
-          inputs: [],
-          outputs: [{ type: "address" }],
-        },
-      ],
-      functionName: "nftReserve",
-    });
-
-    if (owner !== nftReserve) {
+    const ok = await isWarpletInGobblerAuctionCustody(
+      publicClient,
+      BigInt(tokenId),
+    );
+    if (!ok) {
       return NextResponse.json(
         { success: false, error: "Token not gobbled" },
         { status: 403 },

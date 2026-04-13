@@ -6,6 +6,7 @@ import {
   isAddress,
 } from "viem";
 import { mainnet } from "viem/chains";
+import { tryNeynarBidderProfile } from "@/lib/neynar-bidder-profile";
 import { normalizeSuperfluidWhoisPayload } from "@/lib/superfluid-whois";
 
 export const runtime = "nodejs";
@@ -31,7 +32,8 @@ export async function GET(
 
   let displayName: string | null = null;
   let avatarUrl: string | null = null;
-  let source: "whois" | "ens" | "mixed" | "address" = "address";
+  let source: "whois" | "ens" | "farcaster" | "mixed" | "address" =
+    "address";
 
   try {
     const whoisRes = await fetch(`${SUPERFLUID_WHOIS_RESOLVE}/${checksum}`, {
@@ -67,6 +69,25 @@ export async function GET(
     }
   } catch {
     /* ENS optional */
+  }
+
+  try {
+    const fc = await tryNeynarBidderProfile(checksum);
+    if (fc) {
+      const hadName = Boolean(displayName);
+      const hadAvatar = Boolean(avatarUrl);
+      if (!displayName) displayName = fc.displayName;
+      if (!avatarUrl && fc.avatarUrl) avatarUrl = fc.avatarUrl;
+      const usedFc =
+        (!hadName && Boolean(fc.displayName)) ||
+        (!hadAvatar && Boolean(fc.avatarUrl));
+      if (usedFc) {
+        if (source === "address") source = "farcaster";
+        else source = "mixed";
+      }
+    }
+  } catch {
+    /* Neynar optional — set NEYNAR_API_KEY for Farcaster resolution */
   }
 
   return NextResponse.json(

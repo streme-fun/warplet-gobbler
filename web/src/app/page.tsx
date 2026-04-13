@@ -256,14 +256,34 @@ export default function Home() {
 
   const [activeView, setActiveView] = useState<"sell" | "buy">("buy");
   const [scrollBlend, setScrollBlend] = useState(0); // 0 = buy (purple), 1 = sell (cyan)
+  const [claimBlocking, setClaimBlocking] = useState(false);
   /** Hysteresis for jump-link label — avoids flip-flopping when scroll sits near 50% blend. */
   const viewHintScrollRef = useRef<"sell" | "buy">("buy");
 
-  // Track scroll position to blend background color and update active toggle.
-  // Wrapped in rAF so we coalesce per-pixel scroll events into one update per frame —
-  // each setState below cascades into a 5-shape SVG path lerp, so unthrottled this
-  // was doing real work on every scroll tick.
+  const rescueViewerDisplayName =
+    context?.user != null
+      ? (context.user.displayName ?? `FID ${context.user.fid}`)
+      : null;
+
+  const rescueViewerPfpUrl = (() => {
+    const u = context?.user as
+      | { pfpUrl?: string; pfp?: string; profileImageUrl?: string }
+      | undefined;
+    if (!u) return null;
+    const url = u.pfpUrl ?? u.pfp ?? u.profileImageUrl;
+    return typeof url === "string" && url.length > 0 ? url : null;
+  })();
+
+  // Scroll blend + buy/sell hint; rescue gate keeps sell section unmounted (no jump to sell).
   useEffect(() => {
+    if (claimBlocking) {
+      viewHintScrollRef.current = "buy";
+      setActiveView("buy");
+      setScrollBlend(0);
+      window.scrollTo(0, 0);
+      return;
+    }
+
     let rafId = 0;
     let pending = false;
     const compute = () => {
@@ -272,7 +292,6 @@ export default function Home() {
       if (!sellEl) return;
       const sellTop = sellEl.getBoundingClientRect().top;
       const vh = window.innerHeight;
-      // blend: 0 when sell section is below viewport, 1 when sell section is at top
       const t = Math.max(0, Math.min(1, 1 - sellTop / vh));
       setScrollBlend(t);
       const prev = viewHintScrollRef.current;
@@ -295,7 +314,7 @@ export default function Home() {
       window.removeEventListener("scroll", onScroll);
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, []);
+  }, [claimBlocking]);
 
   const toggleView = useCallback((view: "sell" | "buy") => {
     viewHintScrollRef.current = view;
@@ -494,7 +513,11 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen relative overflow-hidden noise-overlay flex flex-col">
+    <main
+      className={`min-h-screen relative noise-overlay flex flex-col ${
+        claimBlocking ? "overflow-x-hidden overflow-y-auto" : "overflow-hidden"
+      }`}
+    >
       {/* Buy overlay — Silksong Void combat sequence */}
       {buyingFid && buyRect && (
         <BuyOverlay
@@ -611,7 +634,7 @@ export default function Home() {
           toggleView(activeView === "buy" ? "sell" : "buy")
         }
         className={`group fixed left-0 bottom-0 z-[55] flex items-center gap-1.5 pl-[max(1rem,env(safe-area-inset-left))] pb-[max(1rem,env(safe-area-inset-bottom))] text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
-          gobbling || buyingFid
+          gobbling || buyingFid || claimBlocking
             ? "pointer-events-none opacity-0 scale-[0.98]"
             : "opacity-100 scale-100"
         }`}
@@ -708,12 +731,19 @@ export default function Home() {
         {/* === Auction Section (Buy) === */}
         <section
           id="auction"
-          className="relative z-10 flex flex-col items-center px-4 sm:px-6 pt-36 sm:pt-56 pb-12 sm:pb-20"
+          className={`relative z-10 flex flex-col items-center px-4 sm:px-6 ${
+            claimBlocking
+              ? "pt-24 sm:pt-32 pb-28 sm:pb-36"
+              : "pt-36 sm:pt-56 pb-12 sm:pb-20"
+          }`}
         >
           <GobblerAuctionSection
             auctionBidPlacedFids={boughtFids}
             onBid={handleBuy}
             bidDisabled={auctionBidDisabled}
+            onClaimBlockingChange={setClaimBlocking}
+            viewerDisplayName={rescueViewerDisplayName}
+            viewerPfpUrl={rescueViewerPfpUrl}
           />
           {auctionBidError && (
             <p className="mt-4 max-w-xl mx-auto text-center text-xs text-error/90 break-words px-2">
@@ -723,6 +753,7 @@ export default function Home() {
         </section>
 
         {/* === Sell Section === */}
+        {!claimBlocking ? (
         <section
           id="sell-section"
           className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-12 sm:pt-20 pb-24 sm:pb-32"
@@ -955,6 +986,7 @@ export default function Home() {
             )}
           </div>
         </section>
+        ) : null}
 
         <div className="relative z-10 mt-6 sm:mt-8 pb-4" aria-hidden />
       </div>

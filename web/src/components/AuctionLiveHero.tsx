@@ -23,12 +23,12 @@ function SettlementProgressStrip({
 
   return (
     <div
-      className="w-full rounded-lg border border-base-content/10 bg-base-100/15 px-4 py-3 flex items-center gap-3"
+      className="w-full rounded-lg border border-base-content/10 bg-base-100/15 px-4 py-3 flex flex-col sm:flex-row items-center justify-center gap-3 text-center"
       role="status"
       aria-live="polite"
     >
       <span className="loading loading-spinner loading-md text-secondary shrink-0" />
-      <div className="min-w-0 text-left">
+      <div className="min-w-0">
         <p className="text-sm font-medium text-secondary/90">Settling auction</p>
         <p className="text-xs text-base-content/55 mt-0.5 leading-snug">
           {statusLine}
@@ -144,7 +144,77 @@ export type AuctionLiveHeroStartNewAuction = {
   error: string | null;
   /** Show unpause guidance instead of generic hint. */
   housePaused: boolean;
+  /** Explains why the button is disabled (empty queue, loading queue, etc.). */
+  queueBlockedReason?: string | null;
 };
+
+function StartNewAuctionPanel({
+  cfg,
+}: {
+  cfg: AuctionLiveHeroStartNewAuction;
+}) {
+  const [pressPulse, setPressPulse] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (cfg.disabled || cfg.loading) return;
+          setPressPulse(true);
+          window.setTimeout(() => setPressPulse(false), 220);
+          cfg.onStart();
+        }}
+        disabled={cfg.disabled || cfg.loading}
+        className={`btn btn-secondary flex mx-auto w-max max-w-full px-6 sm:px-8 text-base font-semibold tracking-wide transition-all duration-200 ease-out hover:shadow-[0_0_22px_-6px_rgba(123,97,255,0.55)] active:scale-[0.97] disabled:opacity-60 ${
+          pressPulse ? "scale-[0.98]" : ""
+        }`}
+      >
+        {cfg.loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <span className="loading loading-spinner loading-sm text-secondary" />
+            <span className="font-normal normal-case tracking-normal">
+              {cfg.loadingStage === "confirming"
+                ? "Confirming…"
+                : "Waiting for wallet…"}
+            </span>
+          </span>
+        ) : (
+          "Restart auction"
+        )}
+      </button>
+      {cfg.queueBlockedReason ? (
+        <p className="text-xs text-base-content/55 text-center leading-relaxed">
+          {cfg.queueBlockedReason}
+        </p>
+      ) : null}
+      {cfg.loading &&
+      !cfg.error &&
+      !cfg.housePaused &&
+      !cfg.queueBlockedReason ? (
+        <p
+          className="text-xs text-secondary/80 font-medium animate-pulse text-center"
+          role="status"
+          aria-live="polite"
+        >
+          {cfg.loadingStage === "confirming"
+            ? "Transaction is confirming on Base — hang tight."
+            : "Check your wallet or browser wallet popup to sign the transaction."}
+        </p>
+      ) : null}
+      {cfg.error ? (
+        <p className="text-xs text-error/90 break-words text-center">{cfg.error}</p>
+      ) : cfg.housePaused ? (
+        <p className="max-w-md mx-auto text-xs text-warning/85 leading-relaxed text-center">
+          Auction house is paused on-chain — unpause (owner) first. You can then
+          start the next lot here; unpause may also open it automatically.
+        </p>
+      ) : null}
+    </>
+  );
+}
 
 export type AuctionLiveHeroSettlementTransition = {
   active: boolean;
@@ -238,7 +308,6 @@ export default function AuctionLiveHero({
     null,
   );
   const [showExtendSuccessBanner, setShowExtendSuccessBanner] = useState(false);
-  const [startAuctionPressPulse, setStartAuctionPressPulse] = useState(false);
 
   const chainBlocksBid = Boolean(
     contractPaused || auctionExpiredOnChain || idleNoChainAuction,
@@ -398,28 +467,28 @@ export default function AuctionLiveHero({
       ref={cardRevealRef}
       className="px-2 py-5 sm:px-4 sm:py-8 transition-shadow duration-300"
     >
-      <div className="text-center sm:text-left mb-4">
+      <div className="text-center mb-4">
         <h2 className="text-2xl sm:text-4xl font-bold tracking-wider uppercase text-secondary m-0">
           DAILY WARPLET AUCTION
         </h2>
-        <p className="text-xs sm:text-lg text-base-content mt-1 mb-0 max-w-md mx-auto lg:mx-0">
+        <p className="text-xs sm:text-lg text-base-content mt-1 mb-0 max-w-md mx-auto">
           A Warplet a day keeps the Gobbler away. Bid to win.
         </p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-[2fr_2fr] gap-4 sm:gap-6 lg:gap-10 items-center">
-        {/* Left column — warplet image */}
-        <div className="flex flex-col items-center">
+      <div className="grid grid-cols-1 sm:grid-cols-[2fr_2fr] gap-4 sm:gap-6 lg:gap-10 items-start sm:items-center">
+        {/* Left column — warplet image (capped so empty / loading states are not viewport-tall) */}
+        <div className="flex flex-col items-center w-full max-w-[240px] sm:max-w-[280px] lg:max-w-[300px] mx-auto shrink-0">
           {idleNoChainAuction ? (
             <div
               ref={artFrameRef}
-              className="w-full aspect-square rounded-xl border border-dashed border-secondary/25 bg-base-100/15 flex flex-col items-center justify-center gap-2 px-4 text-center"
+              className="w-full max-h-[200px] min-h-[120px] aspect-[4/3] rounded-xl border border-dashed border-secondary/25 bg-base-100/15 flex flex-col items-center justify-center gap-1.5 px-3 py-4 text-center"
             >
               <p className="text-sm text-base-content/55 font-medium">
-                No live lot
+                No live listing
               </p>
               <p className="text-[11px] text-base-content/40 leading-snug">
-                Nothing is selling yet — queue empty, house paused, or the next
-                auction has not been started.
+                Start or restart the auction below when the on-chain queue has a
+                Warplet.
               </p>
             </div>
           ) : showSettleSkeleton ? (
@@ -476,8 +545,8 @@ export default function AuctionLiveHero({
               )}
             </div>
 
-            {/* Right column — countdown + top bid (1/3) */}
-            <div className="flex flex-col gap-3 sm:gap-4 min-w-0 text-left">
+            {/* Right column — countdown + top bid (1/3); Top bid block stays left-aligned */}
+            <div className="flex flex-col gap-3 sm:gap-4 min-w-0 text-center">
               {!sold && !idleNoChainAuction ? (
                 <div aria-live="polite" aria-label="Time remaining in lot">
                   <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
@@ -500,7 +569,7 @@ export default function AuctionLiveHero({
                     </span>
                   )}
                   {auctionExpiredOnChain ? (
-                    <p className="text-[11px] text-warning/85 mt-1.5 leading-snug">
+                    <p className="text-[11px] text-warning/85 mt-1.5 leading-snug max-w-sm mx-auto">
                       Window closed — use Settle below to finish this lot.
                     </p>
                   ) : null}
@@ -509,7 +578,7 @@ export default function AuctionLiveHero({
 
               {showExtendSuccessBanner && !idleNoChainAuction && !sold ? (
                 <div
-                  className="w-full rounded-xl border border-primary/35 bg-primary/10 px-4 py-3 text-left shadow-[0_0_24px_-8px_rgba(0,245,255,0.35)] animate-fade-up shrink-0"
+                  className="w-full rounded-xl border border-primary/35 bg-primary/10 px-4 py-3 text-center shadow-[0_0_24px_-8px_rgba(0,245,255,0.35)] animate-fade-up shrink-0"
                   role="status"
                 >
                   <p className="text-sm font-medium text-primary/95">
@@ -532,28 +601,37 @@ export default function AuctionLiveHero({
                   }`}
                 >
                   {showSettleSkeleton ? (
-                    <div className="space-y-3 pt-0.5">
-                      <div>
+                    <div className="space-y-3 pt-0.5 text-center">
+                      <div className="flex flex-col items-center">
                         <div className="skeleton h-3 w-16 rounded-md mb-2" />
                         <div className="skeleton h-8 w-40 sm:w-48 rounded-md max-w-full" />
                       </div>
-                      <div>
+                      <div className="flex flex-col items-center">
                         <div className="skeleton h-3 w-24 rounded-md mb-2" />
                         <div className="skeleton h-10 w-full max-w-sm rounded-lg" />
                       </div>
                     </div>
                   ) : (
                   <>
-                    <div>
+                    <div className="text-left">
                     <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
                       Top bid
                     </p>
                     {idleNoChainAuction ? (
-                      <p className="text-lg sm:text-xl font-mono text-base-content/45">
-                        —
-                      </p>
+                      <div className="space-y-1">
+                        <p className="text-lg sm:text-xl font-mono text-base-content/45">
+                          —
+                        </p>
+                        {startNewAuction ? (
+                          <p className="text-xs text-base-content/50 leading-snug">
+                            Use <span className="text-secondary/90">Restart
+                            auction</span> below to open the next lot from the
+                            queue.
+                          </p>
+                        ) : null}
+                      </div>
                     ) : sold ? (
-                      <div className="space-y-3">
+                      <div className="space-y-2">
                         <p
                           className={`text-xl sm:text-2xl font-mono text-success transition-all duration-300 ${
                             startNewAuction?.loading
@@ -564,72 +642,10 @@ export default function AuctionLiveHero({
                           Settled
                         </p>
                         {startNewAuction ? (
-                          <div className="space-y-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (
-                                  startNewAuction.disabled ||
-                                  startNewAuction.loading
-                                ) {
-                                  return;
-                                }
-                                setStartAuctionPressPulse(true);
-                                window.setTimeout(
-                                  () => setStartAuctionPressPulse(false),
-                                  220,
-                                );
-                                void startNewAuction.onStart();
-                              }}
-                              disabled={
-                                startNewAuction.disabled ||
-                                startNewAuction.loading
-                              }
-                              className={`btn btn-secondary btn-outline btn-sm w-full sm:w-auto min-w-[200px] font-semibold tracking-wide transition-all duration-200 ease-out hover:shadow-[0_0_22px_-6px_rgba(123,97,255,0.55)] active:scale-[0.97] disabled:opacity-60 ${
-                                startAuctionPressPulse ? "scale-[0.96]" : ""
-                              }`}
-                            >
-                              {startNewAuction.loading ? (
-                                <span className="flex items-center gap-2">
-                                  <span className="loading loading-spinner loading-sm text-secondary" />
-                                  <span className="font-normal normal-case tracking-normal">
-                                    {startNewAuction.loadingStage ===
-                                    "confirming"
-                                      ? "Confirming…"
-                                      : "Waiting for wallet…"}
-                                  </span>
-                                </span>
-                              ) : (
-                                "Restart auction"
-                              )}
-                            </button>
-                            {startNewAuction.loading &&
-                            !startNewAuction.error &&
-                            !startNewAuction.housePaused ? (
-                              <p
-                                className="text-xs text-secondary/80 font-medium animate-pulse"
-                                role="status"
-                                aria-live="polite"
-                              >
-                                {startNewAuction.loadingStage === "confirming"
-                                  ? "Transaction is confirming on Base — hang tight."
-                                  : "Check your wallet or browser wallet popup to sign the transaction."}
-                              </p>
-                            ) : null}
-                            {startNewAuction.error ? (
-                              <p className="text-xs text-error/90 break-words">
-                                {startNewAuction.error}
-                              </p>
-                            ) : startNewAuction.housePaused ? (
-                              <p className="text-xs text-warning/85 max-w-md leading-relaxed">
-                                Auction house is paused on-chain — unpause
-                                (owner) first. You can then start the next lot
-                                here; unpause may also open it automatically.
-                              </p>
-                            ) : null}
-                          </div>
+                          <p className="text-xs text-base-content/50 leading-snug">
+                            Continue with <span className="text-secondary/90">
+                            Restart auction</span> below.
+                          </p>
                         ) : null}
                       </div>
                     ) : showNoBids ? (
@@ -656,7 +672,7 @@ export default function AuctionLiveHero({
                     )}
                     </div>
                   {contractPaused && !sold && !idleNoChainAuction && (
-                    <p className="text-xs text-warning/80">
+                    <p className="text-xs text-warning/80 max-w-md mx-auto">
                       Auction house is paused — bidding is disabled on-chain.
                     </p>
                   )}
@@ -664,7 +680,7 @@ export default function AuctionLiveHero({
                     !sold &&
                     !idleNoChainAuction &&
                     expiredLotCaption && (
-                      <p className="text-xs text-base-content/50">
+                      <p className="text-xs text-base-content/50 max-w-md mx-auto">
                         {expiredLotCaption}
                       </p>
                     )}
@@ -673,10 +689,12 @@ export default function AuctionLiveHero({
                       <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1.5">
                         High bidder
                       </p>
-                      <BidderAvatarName
-                        address={topBidder}
-                        viewerAddress={viewerAddress ?? undefined}
-                      />
+                      <div className="flex justify-center">
+                        <BidderAvatarName
+                          address={topBidder}
+                          viewerAddress={viewerAddress ?? undefined}
+                        />
+                      </div>
                     </div>
                   )}
                   </>
@@ -687,21 +705,26 @@ export default function AuctionLiveHero({
           </div>
 
           {/* Bid bar — full width under the warplet card */}
-          <div className="mt-4 sm:mt-6 w-full">
+          <div className="mt-4 sm:mt-6 w-full space-y-3">
             {sold ? (
-              <p
-                className={`text-sm text-center transition-all duration-300 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10 ${
-                  startNewAuction?.loading
-                    ? "text-secondary/75 animate-pulse font-medium"
-                    : "text-base-content/40"
-                }`}
-              >
-                {settledFooterCopy ??
-                  "The last auction has ended. Restart when the queue is ready."}
-              </p>
+              <>
+                <p
+                  className={`text-sm text-center transition-all duration-300 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10 ${
+                    startNewAuction?.loading
+                      ? "text-secondary/75 animate-pulse font-medium"
+                      : "text-base-content/40"
+                  }`}
+                >
+                  {settledFooterCopy ??
+                    "The last auction has ended. Restart when the queue is ready."}
+                </p>
+                {startNewAuction ? (
+                  <StartNewAuctionPanel cfg={startNewAuction} />
+                ) : null}
+              </>
             ) : showSettleSkeleton ? (
               <SettlementProgressStrip stage={settleStage} />
-            ) : idleNoChainAuction ? null : chainSettlement ? (
+            ) : chainSettlement ? (
               <div className="space-y-2 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
                 <button
                   type="button"
@@ -733,7 +756,7 @@ export default function AuctionLiveHero({
             ) : chainBid ? (
               <div className="space-y-2 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
                 <label className="form-control w-full">
-                  <span className="label py-0 min-h-0 pb-1.5 justify-start">
+                  <span className="label py-0 min-h-0 pb-1.5 justify-center">
                     <span className="label-text text-[10px] sm:text-xs uppercase tracking-wider text-base-content/50">
                       Your bid ({bidSymbol})
                     </span>
@@ -793,12 +816,14 @@ export default function AuctionLiveHero({
                   </div>
                 </label>
                 {txOrValidationError ? (
-                  <p className="text-xs text-error/90 text-left break-words pl-0.5">
+                  <p className="text-xs text-error/90 text-center break-words px-0.5">
                     {txOrValidationError}
                   </p>
                 ) : null}
               </div>
-            ) : (
+            ) : startNewAuction ? (
+              <StartNewAuctionPanel cfg={startNewAuction} />
+            ) : idleNoChainAuction ? null : (
               <button
                 ref={btnRef}
                 type="button"

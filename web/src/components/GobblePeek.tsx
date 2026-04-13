@@ -48,10 +48,11 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     // Trimmed twice from the original 120/190 (top) and 50/70 (bottom):
     // first by 10% to free up vertical UI space, then another 10% on the
     // valley (middle) since the desktop edge bow already adds back ~85px at
-    // the corners and the valley felt too thick.
+    // the corners and the valley felt too thick. Bottom trimmed again to
+    // reclaim vertical space for page content (valley only; footer lift unchanged).
     const mobile = () => W < 640;
     const restTop = () => (mobile() ? 97 : 154);
-    const restBot = () => (mobile() ? 41 : 57);
+    const restBot = () => (mobile() ? 30 : 0);
     // CaFooter (fixed bottom-0, bg-black/90, z-[50]) sits ABOVE the gobbler
     // canvas (z-40 / z-46) and visually occludes the bottom teeth — at narrow
     // widths the bot jaw was almost the same height as the footer, so
@@ -59,14 +60,20 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     // footer height so teeth always appear above the footer.
     const footerOverlay = () => (mobile() ? 40 : 52);
 
-    // Desktop only: jaws bow inward as an additive pixel offset, so the
-    // hill-to-valley delta is identical on top and bottom (~85px). Smooth
-    // quadratic falloff: 0 in the middle, peaks at the edges.
-    const EDGE_AMP_PX = 85;
-    const edgeOffset = (x: number) => {
+    // Desktop only: top jaw keeps a deep bow. Bottom uses a much smaller
+    // amplitude so the sides don’t steal vertical space (restBot only shifts
+    // the center valley).
+    const EDGE_AMP_TOP_PX = 85;
+    const EDGE_AMP_BOT_PX = 0;
+    const edgeOffsetTop = (x: number) => {
       if (mobile()) return 0;
-      const u = (x / W - 0.5) * 2; // -1 at left edge, 0 in middle, 1 at right edge
-      return EDGE_AMP_PX * u * u;
+      const u = (x / W - 0.5) * 2;
+      return EDGE_AMP_TOP_PX * u * u;
+    };
+    const edgeOffsetBot = (x: number) => {
+      if (mobile()) return 0;
+      const u = (x / W - 0.5) * 2;
+      return EDGE_AMP_BOT_PX * u * u;
     };
 
     let topY = restTop();
@@ -162,7 +169,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       const eyeXs = [W * 0.34, W * 0.66];
       for (const eyeX of eyeXs) {
         const ey =
-          topJawY + edgeOffset(eyeX) - eyeOffset + Math.sin(t * 0.6) * 2;
+          topJawY + edgeOffsetTop(eyeX) - eyeOffset + Math.sin(t * 0.6) * 2;
         ex!.save();
         // Ambient glow
         const g1 = ex!.createRadialGradient(eyeX, ey, 0, eyeX, ey, glowR);
@@ -215,11 +222,10 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
         const x = b.xf * W;
         const br = Math.sin(t * 0.5 + b.ph) * 2;
         let r = b.r + br;
-        // Apply edge curvature: same additive pixel offset for both jaws so
-        // hill-to-valley delta matches top vs bottom.
-        const off = edgeOffset(x);
-        const topEdgeY = topY + off;
-        const botEdgeY = botY - off;
+        const offTop = edgeOffsetTop(x);
+        const offBot = edgeOffsetBot(x);
+        const topEdgeY = topY + offTop;
+        const botEdgeY = botY - offBot;
         let baseY = b.jaw === 0 ? topEdgeY + b.yo + 4 : botEdgeY + b.yo - 4;
 
         // Lip wave: travelling ripple from center outward
@@ -252,7 +258,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       gx!.moveTo(-30, -500);
       gx!.lineTo(W + 30, -500);
       for (let x = W + 30; x >= -30; x -= SAMPLE) {
-        gx!.lineTo(x, topY + edgeOffset(x) + 4 + topWaveMax);
+        gx!.lineTo(x, topY + edgeOffsetTop(x) + 4 + topWaveMax);
       }
       gx!.closePath();
       gx!.fill();
@@ -261,7 +267,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       gx!.moveTo(-30, H + 500);
       gx!.lineTo(W + 30, H + 500);
       for (let x = W + 30; x >= -30; x -= SAMPLE) {
-        gx!.lineTo(x, botY - edgeOffset(x) - 4 - botWaveMax);
+        gx!.lineTo(x, botY - edgeOffsetBot(x) - 4 - botWaveMax);
       }
       gx!.closePath();
       gx!.fill();

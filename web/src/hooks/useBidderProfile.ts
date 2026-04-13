@@ -1,7 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { isAddress, type Address } from "viem";
+import {
+  getAddress,
+  isAddress,
+  isAddressEqual,
+  zeroAddress,
+  type Address,
+} from "viem";
 
 export type BidderProfile = {
   address: Address;
@@ -9,6 +15,19 @@ export type BidderProfile = {
   avatarUrl: string | null;
   source: string;
 };
+
+function normalizeProfileAddress(
+  address: Address | null | undefined,
+): Address | null {
+  if (!address || !isAddress(address)) return null;
+  try {
+    const checksum = getAddress(address);
+    if (isAddressEqual(checksum, zeroAddress)) return null;
+    return checksum;
+  } catch {
+    return null;
+  }
+}
 
 async function fetchBidderProfile(address: Address): Promise<BidderProfile> {
   const res = await fetch(`/api/bidder-profile/${address}`);
@@ -19,14 +38,12 @@ async function fetchBidderProfile(address: Address): Promise<BidderProfile> {
 }
 
 export function useBidderProfile(address: Address | null | undefined) {
-  const enabled =
-    !!address &&
-    isAddress(address) &&
-    address !== "0x0000000000000000000000000000000000000000";
+  const normalized = normalizeProfileAddress(address ?? null);
+  const enabled = !!normalized;
 
   return useQuery({
-    queryKey: ["bidder-profile", address],
-    queryFn: () => fetchBidderProfile(address as Address),
+    queryKey: ["bidder-profile", normalized],
+    queryFn: () => fetchBidderProfile(normalized as Address),
     enabled,
     staleTime: 5 * 60_000,
   });

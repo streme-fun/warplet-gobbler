@@ -12,14 +12,19 @@ import {
 } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import AuctionLiveHero from "./AuctionLiveHero";
-import LastAuctionWinnerBanner, {
-  clearWinnerHighlight,
+import AuctionWinnerClaimGate from "./AuctionWinnerClaimGate";
+import {
+  addDismissedFp,
+  appendSettlementRecord,
   getWinnerFingerprint,
-  readDismissedWinnerFp,
-  readWinnerHighlight,
-  writeDismissedWinnerFp,
-  writeWinnerHighlight,
+  LastAuctionSettlementStack,
+  pickDisplaySettlementRows,
+  readDismissedFpArray,
+  readSettlementHistory,
+  SETTLEMENT_DISPLAY_LIMIT,
+  sortSettlementsForDisplay,
   type ClaimAction,
+  type SettlementRecord,
   type StoredWinnerHighlight,
 } from "./LastAuctionWinnerBanner";
 import AuctionQueueCard from "./AuctionQueueCard";
@@ -72,18 +77,6 @@ const BUMP_FADE_SOURCE_MS = Math.round(420 * 1.2 * 1.2 * 0.9);
 const BUMP_HEAD_PREVIEW_MS = Math.round(680 * 1.2 * 1.2 * 0.9);
 const BUMP_FINALIZE_MS = Math.round(540 * 1.2 * 1.2 * 0.9);
 
-function readInitialWinnerHighlight(): StoredWinnerHighlight | null {
-  if (typeof window === "undefined") return null;
-  const dismissed = readDismissedWinnerFp();
-  const h = readWinnerHighlight();
-  if (h == null) return null;
-  if (dismissed != null && h.fp === dismissed) {
-    clearWinnerHighlight();
-    return null;
-  }
-  return h;
-}
-
 /** Snapshot before finalize — `settleCurrentAndCreateNewAuction` replaces `auction` with the next lot. */
 function settledLotSnapshot(
   lot: AuctionSellLot | null,
@@ -108,6 +101,9 @@ export default function GobblerAuctionSection({
   auctionBidPlacedFids,
   onBid,
   bidDisabled,
+  onClaimBlockingChange,
+  viewerDisplayName,
+  viewerPfpUrl,
 }: {
   /** FIDs where the user completed the local bid animation (demo / optimistic). */
   auctionBidPlacedFids: Set<number>;
@@ -116,6 +112,12 @@ export default function GobblerAuctionSection({
     rect: { x: number; y: number; w: number; h: number },
   ) => void;
   bidDisabled?: boolean;
+  /** When true, the home page hides buy/sell navigation and the sell section. */
+  onClaimBlockingChange?: (blocking: boolean) => void;
+  /** Mini App display name for the rescue thank-you line. */
+  viewerDisplayName?: string | null;
+  /** Mini App profile image when the viewer is the winner (API may not have Farcaster). */
+  viewerPfpUrl?: string | null;
 }) {
   const { address: viewerAddress, isConnected } = useAccount();
   const publicClient = usePublicClient();
@@ -132,6 +134,9 @@ export default function GobblerAuctionSection({
     fid: number;
   } | null>(null);
   const queueStripScrollRef = useRef<HTMLDivElement | null>(null);
+  const queueStripInnerRef = useRef<HTMLDivElement | null>(null);
+  /** When the strip is wider than the viewport, pack tiles from the left; otherwise space them around. */
+  const [queueStripOverflow, setQueueStripOverflow] = useState(false);
   const [bumpVisualPhase, setBumpVisualPhase] =
     useState<QueueBumpHeadPhase>("idle");
   const [bumpAnimatingFid, setBumpAnimatingFid] = useState<number | null>(null);
@@ -157,11 +162,14 @@ export default function GobblerAuctionSection({
   const [startError, setStartError] = useState<string | null>(null);
   const [auctionRevealTick, setAuctionRevealTick] = useState(0);
   const expectNewLotAfterSettleRef = useRef(false);
-  const [dismissedWinnerFp, setDismissedWinnerFp] = useState<string | null>(
-    () => (typeof window !== "undefined" ? readDismissedWinnerFp() : null),
+  const [dismissedWinnerFps, setDismissedWinnerFps] = useState<string[]>(() =>
+    typeof window !== "undefined" ? readDismissedFpArray() : [],
   );
-  const [winnerHighlight, setWinnerHighlight] =
-    useState<StoredWinnerHighlight | null>(readInitialWinnerHighlight);
+  const [settlementHistory, setSettlementHistory] = useState<
+    SettlementRecord[]
+  >(() =>
+    typeof window !== "undefined" ? readSettlementHistory() : [],
+  );
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
 
   useEffect(() => {
@@ -175,6 +183,7 @@ export default function GobblerAuctionSection({
   const {
     configured: auctionSellConfigured,
     auction: chainLot,
+    isAuctionLoading,
     bidDecimals,
     formatBidAmount,
     bidSymbol,
@@ -411,7 +420,7 @@ export default function GobblerAuctionSection({
     chainLot.amount > 0n &&
     !isAddressEqual(chainLot.bidder, zeroAddress);
 
-  const chainWinnerBanner = useMemo((): StoredWinnerHighlight | null => {
+  const chainSettledWinnerSnap = useMemo((): StoredWinnerHighlight | null => {
     if (!hasLastSettledWinner || !chainLot) return null;
     return {
       fp: getWinnerFingerprint(
@@ -425,19 +434,77 @@ export default function GobblerAuctionSection({
     };
   }, [hasLastSettledWinner, chainLot]);
 
-  /** Prefer on-chain settled lot; else last finalize snapshot (next lot may already be live). */
-  const winnerBannerDisplay = useMemo((): StoredWinnerHighlight | null => {
-    if (!onChainMode) return null;
-    if (chainWinnerBanner && chainWinnerBanner.fp !== dismissedWinnerFp) {
-      return chainWinnerBanner;
-    }
-    if (winnerHighlight && winnerHighlight.fp !== dismissedWinnerFp) {
-      return winnerHighlight;
-    }
-    return null;
-  }, [onChainMode, chainWinnerBanner, winnerHighlight, dismissedWinnerFp]);
+  /** On-chain settled row gets `endTime` for ordering when not yet in local history. */
+  const chainSettlementRecord = useMemo((): SettlementRecord | null => {
+    if (!onChainMode || !chainSettledWinnerSnap || !chainLot) return null;
+    const recordedAt =
+      chainLot.endTime > 0n
+        ? Number(chainLot.endTime) * 1000
+        : Date.now();
+    return { ...chainSettledWinnerSnap, recordedAt };
+  }, [onChainMode, chainSettledWinnerSnap, chainLot]);
 
-  const showLastWinnerBanner = Boolean(winnerBannerDisplay);
+  const mergedSettlementRecords = useMemo((): SettlementRecord[] => {
+    const byFp = new Map<string, SettlementRecord>();
+    for (const r of settlementHistory) {
+      byFp.set(r.fp, r);
+    }
+    if (chainSettlementRecord) {
+      const prev = byFp.get(chainSettlementRecord.fp);
+      byFp.set(chainSettlementRecord.fp, {
+        ...chainSettlementRecord,
+        recordedAt: prev
+          ? Math.max(prev.recordedAt, chainSettlementRecord.recordedAt)
+          : chainSettlementRecord.recordedAt,
+      });
+    }
+    return [...byFp.values()];
+  }, [settlementHistory, chainSettlementRecord]);
+
+  const dismissedFpSet = useMemo(
+    () => new Set(dismissedWinnerFps),
+    [dismissedWinnerFps],
+  );
+
+  const sortedOpenSettlements = useMemo(() => {
+    if (!onChainMode) return [];
+    const open = mergedSettlementRecords.filter((r) => !dismissedFpSet.has(r.fp));
+    return sortSettlementsForDisplay(open);
+  }, [onChainMode, mergedSettlementRecords, dismissedFpSet]);
+
+  /** Which won lot the connected wallet should rescue first (chain-won ties over history). */
+  const claimFocusRecord = useMemo((): SettlementRecord | null => {
+    if (!viewerAddress || sortedOpenSettlements.length === 0) return null;
+    const wins = sortedOpenSettlements.filter((r) =>
+      isAddressEqual(viewerAddress, r.bidder),
+    );
+    if (wins.length === 0) return null;
+    if (
+      chainSettlementRecord &&
+      wins.some((w) => w.fp === chainSettlementRecord.fp)
+    ) {
+      return wins.find((w) => w.fp === chainSettlementRecord.fp)!;
+    }
+    return wins.reduce((best, r) => {
+      const br = BigInt(best.amountWei);
+      const ar = BigInt(r.amountWei);
+      if (ar > br) return r;
+      if (ar < br) return best;
+      return r.recordedAt > best.recordedAt ? r : best;
+    });
+  }, [viewerAddress, sortedOpenSettlements, chainSettlementRecord]);
+
+  const displaySettlementRows = useMemo(
+    () =>
+      pickDisplaySettlementRows(
+        sortedOpenSettlements,
+        claimFocusRecord,
+        SETTLEMENT_DISPLAY_LIMIT,
+      ),
+    [sortedOpenSettlements, claimFocusRecord],
+  );
+
+  const showLastWinnerBanner = displaySettlementRows.length > 0;
 
   const onQueueEmptyBetweenSales =
     queueReadsEnabled &&
@@ -445,73 +512,115 @@ export default function GobblerAuctionSection({
     !liveAuction &&
     onChainMode;
 
-  /** Queue has a next lot but there is no live auction — anyone can call `startAuction` (when unpaused). */
-  const showStartNewAuctionCta =
+  const auctionHydrating =
+    onChainMode && !auctionReadError && chainLot == null && isAuctionLoading;
+
+  /**
+   * No live auction — show start/restart controls for idle slot, after settlement,
+   * or while the auction struct is still syncing (so the buy section is never action-less).
+   * Queue may be empty: button stays visible (disabled) with an explanation.
+   */
+  const showStartAuctionControls =
     onChainMode &&
     !auctionReadError &&
     !liveAuction &&
-    chainQueuedIds.length > 0 &&
-    (auctionSettled || idleNoChainAuction);
+    (auctionSettled || idleNoChainAuction || auctionHydrating);
 
-  const handleDismissWinnerBanner = useCallback(() => {
-    const fp = winnerBannerDisplay?.fp;
-    if (fp == null) return;
-    writeDismissedWinnerFp(fp);
-    setDismissedWinnerFp(fp);
-    clearWinnerHighlight();
-    setWinnerHighlight(null);
-  }, [winnerBannerDisplay?.fp]);
+  const startAuctionQueueEmpty =
+    showStartAuctionControls &&
+    queueReadsEnabled &&
+    !queueIsLoading &&
+    chainQueuedIds.length === 0 &&
+    !auctionHydrating;
+
+  const startAuctionQueueLoading =
+    showStartAuctionControls && queueReadsEnabled && queueIsLoading;
+
+  const startAuctionBlockedByHydration =
+    showStartAuctionControls && auctionHydrating;
+
+  const handleDismissSettlement = useCallback((fp: string) => {
+    setDismissedWinnerFps(addDismissedFp(fp));
+  }, []);
 
   // ---------- Gobbled-warplet rescue (signed mint + NFT pull) ----------
   const rescue = useGobbledRescue();
-
-  const viewerIsWinner = useMemo(() => {
-    if (!winnerBannerDisplay || viewerAddress == null) return false;
-    return isAddressEqual(viewerAddress, winnerBannerDisplay.bidder);
-  }, [winnerBannerDisplay, viewerAddress]);
 
   // Reset the rescue hook whenever we move to a different winner / lot, otherwise stale
   // success/error state from a previous lot would leak into the new banner.
   const lastClaimedFpRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!winnerBannerDisplay) return;
-    if (lastClaimedFpRef.current !== winnerBannerDisplay.fp) {
-      lastClaimedFpRef.current = winnerBannerDisplay.fp;
+    if (!claimFocusRecord) return;
+    if (lastClaimedFpRef.current !== claimFocusRecord.fp) {
+      lastClaimedFpRef.current = claimFocusRecord.fp;
       rescue.reset();
     }
-  }, [winnerBannerDisplay, rescue]);
+  }, [claimFocusRecord, rescue]);
 
-  // After a successful rescue, dismiss the banner so we don't keep showing the CTA.
+  // After a successful rescue, dismiss that row so we don't keep showing the CTA.
   useEffect(() => {
     if (rescue.stage !== "success") return;
-    const fp = winnerBannerDisplay?.fp;
+    const fp = claimFocusRecord?.fp;
     if (fp == null) return;
     const t = setTimeout(() => {
-      writeDismissedWinnerFp(fp);
-      setDismissedWinnerFp(fp);
-      clearWinnerHighlight();
-      setWinnerHighlight(null);
+      setDismissedWinnerFps(addDismissedFp(fp));
     }, 1500);
     return () => clearTimeout(t);
-  }, [rescue.stage, winnerBannerDisplay?.fp]);
+  }, [rescue.stage, claimFocusRecord?.fp]);
 
   const handleClaimWarplet = useCallback(() => {
-    if (!winnerBannerDisplay) return;
-    void rescue.claim(winnerBannerDisplay.tokenId);
-  }, [rescue, winnerBannerDisplay]);
+    if (!claimFocusRecord) return;
+    void rescue.claim(claimFocusRecord.tokenId);
+  }, [rescue, claimFocusRecord]);
 
-  // No explicit gate here: the banner only renders when `winnerBannerDisplay` is set, which
-  // requires either `chainWinnerBanner` (auctionSettled === true on-chain) or `winnerHighlight`
-  // (only ever written *after* an awaited settle tx confirms). Both paths guarantee a
-  // reservation exists, so the button is safe to enable whenever it's visible.
-  const claimAction: ClaimAction | undefined = winnerBannerDisplay
-    ? {
-        visible: viewerIsWinner && rescue.ready,
+  const claimAction: ClaimAction | undefined =
+    claimFocusRecord &&
+    viewerAddress &&
+    isAddressEqual(viewerAddress, claimFocusRecord.bidder) &&
+    rescue.ready
+      ? {
+          visible: true,
+          stage: rescue.stage,
+          error: rescue.error,
+          onClaim: handleClaimWarplet,
+        }
+      : undefined;
+
+  const claimBlocking = Boolean(
+    claimFocusRecord &&
+      viewerAddress &&
+      isAddressEqual(viewerAddress, claimFocusRecord.bidder) &&
+      rescue.ready &&
+      rescue.stage !== "success",
+  );
+
+  const claimForRow = useCallback(
+    (row: SettlementRecord): ClaimAction | undefined => {
+      if (
+        !claimFocusRecord ||
+        row.fp !== claimFocusRecord.fp ||
+        !viewerAddress ||
+        !isAddressEqual(viewerAddress, row.bidder) ||
+        !rescue.ready
+      ) {
+        return undefined;
+      }
+      return {
+        visible: true,
         stage: rescue.stage,
         error: rescue.error,
-        onClaim: handleClaimWarplet,
-      }
-    : undefined;
+        onClaim: () => void rescue.claim(row.tokenId),
+      };
+    },
+    [claimFocusRecord, viewerAddress, rescue],
+  );
+
+  useLayoutEffect(() => {
+    onClaimBlockingChange?.(claimBlocking);
+    return () => {
+      if (claimBlocking) onClaimBlockingChange?.(false);
+    };
+  }, [claimBlocking, onClaimBlockingChange]);
 
   const handleStartNewAuction = useCallback(async () => {
     setStartError(null);
@@ -584,6 +693,21 @@ export default function GobblerAuctionSection({
       setSelectedQueueFid(null);
     }
   }, [queuedRows, selectedQueueFid, setSelectedQueueFid]);
+
+  useLayoutEffect(() => {
+    const root = queueStripScrollRef.current;
+    const inner = queueStripInnerRef.current;
+    if (!root) return;
+    const measure = () => {
+      const cw = root.clientWidth;
+      setQueueStripOverflow(cw > 0 && root.scrollWidth > cw + 1);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(root);
+    if (inner) ro.observe(inner);
+    return () => ro.disconnect();
+  }, [queuedRows.length, showQueueStripSkeleton, queueShuffleVersion]);
 
   const handleQueueBump = useCallback(async () => {
     setBumpError(null);
@@ -715,8 +839,11 @@ export default function GobblerAuctionSection({
     try {
       await settleWhenPaused();
       if (snap) {
-        writeWinnerHighlight(snap);
-        setWinnerHighlight(snap);
+        const next = appendSettlementRecord({
+          ...snap,
+          recordedAt: Date.now(),
+        });
+        setSettlementHistory(next);
       }
     } catch (e) {
       setSettleError(formatUserFacingTxError(e));
@@ -730,8 +857,11 @@ export default function GobblerAuctionSection({
     try {
       await settleAndStartNext();
       if (snap) {
-        writeWinnerHighlight(snap);
-        setWinnerHighlight(snap);
+        const next = appendSettlementRecord({
+          ...snap,
+          recordedAt: Date.now(),
+        });
+        setSettlementHistory(next);
       }
     } catch (e) {
       expectNewLotAfterSettleRef.current = false;
@@ -848,26 +978,31 @@ export default function GobblerAuctionSection({
       ? "The last auction has ended. A new sale will begin when a Warplet joins the queue."
       : "The last auction has ended. Restart auction when the queue is ready.";
 
+  if (claimBlocking && claimFocusRecord && claimAction != null) {
+    return (
+      <div className="w-full max-w-4xl flex flex-col items-center justify-start pb-10 sm:pb-12 pt-[18vh] sm:pt-[22vh] md:pt-[28vh]">
+        <AuctionWinnerClaimGate
+          tokenId={claimFocusRecord.tokenId}
+          winnerAddress={claimFocusRecord.bidder}
+          winAmountLabel={formatBidAmount(
+            BigInt(claimFocusRecord.amountWei),
+          )}
+          bidSymbol={bidSymbol}
+          viewerAddress={viewerAddress}
+          viewerDisplayName={viewerDisplayName}
+          viewerPfpUrl={viewerPfpUrl}
+          claim={claimAction}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-4xl">
       <BidFeedbackOverlay
         active={bidFeedbackActive}
         onSequenceComplete={onBidFeedbackSequenceComplete}
       />
-
-      {showLastWinnerBanner && winnerBannerDisplay ? (
-        <LastAuctionWinnerBanner
-          tokenId={winnerBannerDisplay.tokenId}
-          winnerAddress={winnerBannerDisplay.bidder}
-          winAmountLabel={formatBidAmount(
-            BigInt(winnerBannerDisplay.amountWei),
-          )}
-          bidSymbol={bidSymbol}
-          viewerAddress={viewerAddress}
-          onDismiss={handleDismissWinnerBanner}
-          claim={claimAction}
-        />
-      ) : null}
 
       <AuctionLiveHero
         displayTokenId={displayTokenId}
@@ -886,14 +1021,26 @@ export default function GobblerAuctionSection({
         auctionSettled={auctionSettled}
         settledFooterCopy={settledFooterCopy}
         startNewAuction={
-          showStartNewAuctionCta
+          showStartAuctionControls
             ? {
                 onStart: () => void handleStartNewAuction(),
-                disabled: startNewDisabled || startAuctionPending,
+                disabled:
+                  startNewDisabled ||
+                  startAuctionPending ||
+                  startAuctionQueueEmpty ||
+                  startAuctionQueueLoading ||
+                  startAuctionBlockedByHydration,
                 loading: startAuctionPending,
                 loadingStage: startAuctionLoadingStage,
                 error: startError,
                 housePaused: auctionPaused,
+                queueBlockedReason: startAuctionBlockedByHydration
+                  ? "Syncing auction state from Base…"
+                  : startAuctionQueueLoading
+                    ? "Loading the on-chain queue…"
+                    : startAuctionQueueEmpty
+                      ? "No Warplets in the on-chain queue yet. Sell one to the Gobbler first (or enqueue on-chain), then you can start the auction here."
+                      : null,
               }
             : null
         }
@@ -936,39 +1083,97 @@ export default function GobblerAuctionSection({
         }
       />
 
+      {onQueueEmptyBetweenSales &&
+      showLastWinnerBanner &&
+      !claimBlocking ? (
+        <div className="mt-3 w-full flex justify-center px-1">
+          <LastAuctionSettlementStack
+            rows={displaySettlementRows}
+            bidSymbol={bidSymbol}
+            formatBidAmount={formatBidAmount}
+            viewerAddress={viewerAddress}
+            viewerDisplayName={viewerDisplayName}
+            viewerPfpUrl={viewerPfpUrl}
+            onDismissRow={handleDismissSettlement}
+            claimForRow={claimForRow}
+          />
+        </div>
+      ) : null}
+
       {onQueueEmptyBetweenSales ? null : (
         <>
-          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mb-1 px-2">
+          <h3 className="text-sm sm:text-base font-semibold tracking-wide uppercase text-base-content/50 mb-1 px-2 text-center">
             Skip the line
           </h3>
           {queueReadsEnabled && onChainLiveQueueEmpty ? (
-            <p className="text-xs text-base-content/40 mb-4 max-w-xl mx-auto px-2">
+            <p className="text-xs text-base-content/40 mb-4 max-w-xl mx-auto px-2 text-center">
               No Warplets currently queued. The Gobbler is hungry.
             </p>
           ) : skipLineOptionVisible ? (
-            <p className="text-xs text-base-content/35 mb-4 max-w-xl mx-auto px-2">
+            <p className="text-xs text-base-content/35 mb-4 max-w-xl mx-auto px-2 text-center">
               Tap a Warplet and help them skip the line.
             </p>
           ) : null}
           <div className="w-full flex flex-col items-center">
             <div className="w-full pb-2 pt-1 px-1">
-              <div className="relative flex w-full min-h-[7rem] items-start justify-center gap-0 sm:min-h-[9rem]">
+              {/*
+                One scroll row: [next-slot empty / head][#2][#3]…
+                - Empty slot is always the flex item before the first queued Warplet (place #2).
+                - Short queue: whole row is mx-auto (cluster sits in the middle, gap-2 next to #2).
+                - Long queue: row hugs the left; horizontal scroll keeps the head sticky on the left.
+              */}
+              <div className="relative w-full min-h-[7rem] sm:min-h-[9rem]">
                 <QueueBumpCutStrip
                   active={queueBumpBladeActive}
                   onSequenceComplete={() => bumpAfterBladeRef.current()}
                 />
-                {showQueueStripSkeleton ? (
-                  <>
-                    <QueueStripCellChrome
-                      shuffleVersion={0}
-                      slotIndex={0}
-                      className="relative z-10 mr-2 shrink-0 sm:mr-3"
-                    >
-                      <AuctionQueueCardSkeleton />
-                    </QueueStripCellChrome>
-                    <div className="relative z-10 min-w-0 flex-1 overflow-x-auto overflow-y-visible scrollbar-hide snap-x snap-mandatory">
-                      <div className="flex w-max min-w-full justify-center gap-2 sm:gap-2">
-                        {Array.from(
+                <div
+                  ref={queueStripScrollRef}
+                  className="relative z-10 w-full min-w-0 overflow-x-auto overflow-y-visible scrollbar-hide snap-x snap-mandatory"
+                >
+                  <div
+                    ref={queueStripInnerRef}
+                    className={`flex w-max min-h-[7rem] items-start gap-2 sm:min-h-[9rem] sm:gap-2 ${
+                      queueStripOverflow ? "" : "mx-auto"
+                    }`}
+                  >
+                    <div className="sticky left-0 z-20 shrink-0 self-start isolate">
+                      <div className="rounded-xl bg-base-100/95 shadow-[8px_0_20px_-6px_rgba(19,17,28,0.85)] ring-1 ring-base-content/[0.08] backdrop-blur-sm supports-[backdrop-filter]:bg-base-100/80">
+                        {showQueueStripSkeleton ? (
+                          <QueueStripCellChrome
+                            shuffleVersion={0}
+                            slotIndex={0}
+                            className="shrink-0"
+                          >
+                            <AuctionQueueHeadSlot
+                              bumpPhase="idle"
+                              selectionPreviewFid={null}
+                              bumpPreviewFid={null}
+                            />
+                          </QueueStripCellChrome>
+                        ) : (
+                          <QueueStripCellChrome
+                            shuffleVersion={queueShuffleVersion}
+                            slotIndex={0}
+                            className="shrink-0"
+                          >
+                            <AuctionQueueHeadSlot
+                              bumpPhase={bumpVisualPhase}
+                              selectionPreviewFid={
+                                bumpVisualPhase === "idle" &&
+                                selectedInQueueFid != null &&
+                                selectedQueueIdx > 0
+                                  ? selectedInQueueFid
+                                  : null
+                              }
+                              bumpPreviewFid={bumpAnimatingFid}
+                            />
+                          </QueueStripCellChrome>
+                        )}
+                      </div>
+                    </div>
+                    {showQueueStripSkeleton
+                      ? Array.from(
                           { length: QUEUE_STRIP_SKELETON_COUNT },
                           (_, i) => (
                             <QueueStripCellChrome
@@ -980,35 +1185,8 @@ export default function GobblerAuctionSection({
                               <AuctionQueueCardSkeleton />
                             </QueueStripCellChrome>
                           ),
-                        )}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <QueueStripCellChrome
-                      shuffleVersion={queueShuffleVersion}
-                      slotIndex={0}
-                      className="relative z-10 mr-2 shrink-0 sm:mr-3"
-                    >
-                      <AuctionQueueHeadSlot
-                        bumpPhase={bumpVisualPhase}
-                        selectionPreviewFid={
-                          bumpVisualPhase === "idle" &&
-                          selectedInQueueFid != null &&
-                          selectedQueueIdx > 0
-                            ? selectedInQueueFid
-                            : null
-                        }
-                        bumpPreviewFid={bumpAnimatingFid}
-                      />
-                    </QueueStripCellChrome>
-                    <div
-                      ref={queueStripScrollRef}
-                      className="relative z-10 min-w-0 flex-1 overflow-x-auto overflow-y-visible scrollbar-hide snap-x snap-mandatory"
-                    >
-                      <div className="flex w-max min-w-full justify-center gap-2 sm:gap-2">
-                        {queuedRows.map((row, i) => (
+                        )
+                      : queuedRows.map((row, i) => (
                           <QueueStripCellChrome
                             key={row.fid}
                             shuffleVersion={queueShuffleVersion}
@@ -1043,10 +1221,8 @@ export default function GobblerAuctionSection({
                             />
                           </QueueStripCellChrome>
                         ))}
-                      </div>
-                    </div>
-                  </>
-                )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1068,6 +1244,20 @@ export default function GobblerAuctionSection({
                 />
               </div>
             )}
+            {showLastWinnerBanner && !claimBlocking ? (
+              <div className="mt-4 w-full flex justify-center px-1">
+                <LastAuctionSettlementStack
+                  rows={displaySettlementRows}
+                  bidSymbol={bidSymbol}
+                  formatBidAmount={formatBidAmount}
+                  viewerAddress={viewerAddress}
+                  viewerDisplayName={viewerDisplayName}
+                  viewerPfpUrl={viewerPfpUrl}
+                  onDismissRow={handleDismissSettlement}
+                  claimForRow={claimForRow}
+                />
+              </div>
+            ) : null}
           </div>
         </>
       )}

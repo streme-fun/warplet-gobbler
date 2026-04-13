@@ -2,9 +2,15 @@
 
 import { useCallback, useState } from "react";
 import { type Address, type Hash, type Hex, isAddressEqual, zeroAddress } from "viem";
-import { usePublicClient, useWriteContract } from "wagmi";
+import { base } from "wagmi/chains";
+import {
+  useAccount,
+  usePublicClient,
+  useWriteContract,
+} from "wagmi";
 import { gobbledWarpletsAbi } from "@/abi/gobbledWarplets";
 import { CONTRACTS } from "@/lib/contracts";
+import { formatUserFacingTxError } from "@/lib/format-tx-error";
 
 /**
  * Step the UI can surface while a rescue is in flight. The hook only ever advances forward —
@@ -49,7 +55,8 @@ async function fetchSignedPayload(warpletId: number): Promise<SignedRescuePayloa
  * emergency use and would skip the receipt mint, leaving an orphaned reservation slot.
  */
 export function useGobbledRescue() {
-  const publicClient = usePublicClient();
+  const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient({ chainId: base.id });
   const { writeContractAsync } = useWriteContract();
 
   const [stage, setStage] = useState<RescueStage>("idle");
@@ -72,6 +79,11 @@ export function useGobbledRescue() {
         setStage("error");
         return;
       }
+      if (!isConnected || address == null) {
+        setError("Connect your wallet (the one that won the auction) to claim.");
+        setStage("error");
+        return;
+      }
       setError(null);
       setTxHash(null);
       setStage("preparing");
@@ -80,8 +92,10 @@ export function useGobbledRescue() {
 
         setStage("awaiting-wallet");
         const hash = await writeContractAsync({
-          abi: gobbledWarpletsAbi,
+          chainId: base.id,
+          account: address,
           address: CONTRACTS.gobbledWarplets,
+          abi: gobbledWarpletsAbi,
           functionName: "rescueWarplet",
           args: [
             BigInt(payload.tokenId),
@@ -99,12 +113,17 @@ export function useGobbledRescue() {
 
         setStage("success");
       } catch (e) {
-        const message = e instanceof Error ? e.message : "Rescue failed";
-        setError(message);
+        setError(formatUserFacingTxError(e));
         setStage("error");
       }
     },
-    [ready, publicClient, writeContractAsync],
+    [
+      ready,
+      isConnected,
+      address,
+      publicClient,
+      writeContractAsync,
+    ],
   );
 
   return {

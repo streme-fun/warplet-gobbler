@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ImageResponse } from "next/og";
 import {
   createPublicClient,
   http,
@@ -10,6 +9,7 @@ import {
 import { base } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { ensureGobbledImage } from "@/lib/generate-gobbled-image";
+import { createGobbledCompositeImageResponse } from "@/lib/gobbled-composite-og";
 import { uploadToPinata } from "@/app/utils/pinata";
 import { CONTRACTS } from "@/lib/contracts";
 import { gobbledWarpletsAbi } from "@/abi/gobbledWarplets";
@@ -108,42 +108,10 @@ export async function POST(request: NextRequest) {
     // 1. Generate (or reuse) the gobbled image (Vercel Blob URL).
     const { url: gobbledUrl } = await ensureGobbledImage(warpletIdNum);
 
-    // 2. Render a 1200x1200 branded composite (existing visual).
-    const imageResponse = new ImageResponse(
-      (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "1200px",
-            height: "1200px",
-            backgroundColor: "#13111C",
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={gobbledUrl}
-            width={900}
-            height={900}
-            style={{ borderRadius: "40px" }}
-            alt=""
-          />
-          <div
-            style={{
-              marginTop: "32px",
-              fontSize: "48px",
-              color: "#00F5FF",
-              fontWeight: "bold",
-              letterSpacing: "0.1em",
-            }}
-          >
-            {`GOBBLED WARPLET #${warpletIdNum}`}
-          </div>
-        </div>
-      ),
-      { width: 1200, height: 1200 },
+    // 2. Render a 1200x1200 branded composite (same PNG as Pinata `image` on metadata).
+    const imageResponse = createGobbledCompositeImageResponse(
+      gobbledUrl,
+      warpletIdNum,
     );
 
     // 3. Upload the composite image to Pinata.

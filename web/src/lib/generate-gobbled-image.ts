@@ -14,12 +14,14 @@ export async function ensureGobbledImage(
   tokenId: number,
 ): Promise<{ url: string }> {
   // Check if already exists (include .png to avoid prefix collisions like 1 vs 10)
+  const exactName = `warplet-${tokenId}-gobbled.png`;
   const existing = await list({
-    prefix: `gobbled-warplets/warplet-${tokenId}-gobbled.png`,
+    prefix: `gobbled-warplets/${exactName}`,
     token: BLOB_TOKEN,
   });
-  if (existing.blobs.length > 0) {
-    return { url: existing.blobs[0].url };
+  const hit = existing.blobs.find((b) => b.pathname.endsWith(exactName));
+  if (hit != null) {
+    return { url: hit.url };
   }
 
   // Fetch source image
