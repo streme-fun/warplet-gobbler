@@ -6,9 +6,37 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isAddressEqual, zeroAddress } from "viem";
 import type { Address } from "viem";
 import AuctionWarpletImage from "./AuctionWarpletImage";
-import AuctionLiveHeroSkeleton from "./AuctionLiveHeroSkeleton";
 import BidderAvatarName from "./BidderAvatarName";
 import CountdownTimer from "./CountdownTimer";
+
+function SettlementProgressStrip({
+  stage,
+}: {
+  stage: "signing" | "confirming" | "syncing" | null;
+}) {
+  const statusLine =
+    stage === "confirming"
+      ? "Confirming on Base…"
+      : stage === "syncing"
+        ? "Syncing the live auction…"
+        : "Waiting for wallet…";
+
+  return (
+    <div
+      className="w-full rounded-lg border border-base-content/10 bg-base-100/15 px-4 py-3 flex items-center gap-3"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="loading loading-spinner loading-md text-secondary shrink-0" />
+      <div className="min-w-0 text-left">
+        <p className="text-sm font-medium text-secondary/90">Settling auction</p>
+        <p className="text-xs text-base-content/55 mt-0.5 leading-snug">
+          {statusLine}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function AuctionBundleMini() {
   return (
@@ -361,45 +389,54 @@ export default function AuctionLiveHero({
     topBidder != null && !isAddressEqual(topBidder, zeroAddress);
 
   const showSettleSkeleton = settlementTransition?.active === true;
+  const settleStage = settlementTransition?.active
+    ? settlementTransition.stage
+    : null;
 
   return (
     <div
       ref={cardRevealRef}
       className="px-2 py-5 sm:px-4 sm:py-8 transition-shadow duration-300"
     >
-      {showSettleSkeleton ? (
-        <AuctionLiveHeroSkeleton
-          stage={
-            settlementTransition?.active ? settlementTransition.stage : null
-          }
-        />
-      ) : (
-        <>
-          <div className="text-center sm:text-left mb-4">
-            <h2 className="text-2xl sm:text-4xl font-bold tracking-wider uppercase text-secondary m-0">
-              DAILY WARPLET AUCTION
-            </h2>
-            <p className="text-xs sm:text-lg text-base-content mt-1 mb-0 max-w-md mx-auto lg:mx-0">
-              A Warplet a day keeps the Gobbler away. Bid to win.
-            </p>
-          </div>
-          <div className="grid grid-cols-[2fr_2fr] gap-3 sm:gap-6 lg:gap-10 items-center">
-            {/* Left column — warplet image (2/3) */}
-            <div className="flex flex-col items-center">
-              {idleNoChainAuction ? (
-                <div
-                  ref={artFrameRef}
-                  className="w-full aspect-square rounded-xl border border-dashed border-secondary/25 bg-base-100/15 flex flex-col items-center justify-center gap-2 px-4 text-center"
-                >
-                  <p className="text-sm text-base-content/55 font-medium">
-                    No live lot
-                  </p>
-                  <p className="text-[11px] text-base-content/40 leading-snug">
-                    Nothing is selling yet — queue empty, house paused, or the
-                    next auction has not been started.
-                  </p>
-                </div>
-              ) : artworkSkeleton ? (
+      <div className="text-center sm:text-left mb-4">
+        <h2 className="text-2xl sm:text-4xl font-bold tracking-wider uppercase text-secondary m-0">
+          DAILY WARPLET AUCTION
+        </h2>
+        <p className="text-xs sm:text-lg text-base-content mt-1 mb-0 max-w-md mx-auto lg:mx-0">
+          A Warplet a day keeps the Gobbler away. Bid to win.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-[2fr_2fr] gap-4 sm:gap-6 lg:gap-10 items-center">
+        {/* Left column — warplet image */}
+        <div className="flex flex-col items-center">
+          {idleNoChainAuction ? (
+            <div
+              ref={artFrameRef}
+              className="w-full aspect-square rounded-xl border border-dashed border-secondary/25 bg-base-100/15 flex flex-col items-center justify-center gap-2 px-4 text-center"
+            >
+              <p className="text-sm text-base-content/55 font-medium">
+                No live lot
+              </p>
+              <p className="text-[11px] text-base-content/40 leading-snug">
+                Nothing is selling yet — queue empty, house paused, or the next
+                auction has not been started.
+              </p>
+            </div>
+          ) : showSettleSkeleton ? (
+            <>
+              <div ref={artFrameRef} className="w-full aspect-square">
+                <div className="skeleton h-full w-full min-h-0 rounded-xl" />
+              </div>
+              <div className="mt-2 skeleton h-4 w-28 rounded-md" />
+              <div className="flex items-center justify-center gap-1.5 sm:gap-2 mt-3 w-full">
+                <div className="skeleton w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0" />
+                <div className="skeleton w-3 h-3 rounded-sm opacity-50 shrink-0" />
+                <div className="skeleton w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0" />
+                <div className="skeleton w-3 h-3 rounded-sm opacity-50 shrink-0" />
+                <div className="skeleton w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0" />
+              </div>
+            </>
+          ) : artworkSkeleton ? (
                 <>
                   <div ref={artFrameRef} className="w-full aspect-square">
                     <div className="auction-warplet-aura h-full w-full min-h-0 rounded-xl">
@@ -444,7 +481,7 @@ export default function AuctionLiveHero({
               {!sold && !idleNoChainAuction ? (
                 <div aria-live="polite" aria-label="Time remaining in lot">
                   <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
-                    Time left
+                    {auctionExpiredOnChain ? "Ended" : "Time left"}
                   </p>
                   {countdownEndUnix !== undefined ? (
                     <CountdownTimer
@@ -462,6 +499,11 @@ export default function AuctionLiveHero({
                       —:—:—
                     </span>
                   )}
+                  {auctionExpiredOnChain ? (
+                    <p className="text-[11px] text-warning/85 mt-1.5 leading-snug">
+                      Window closed — use Settle below to finish this lot.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -489,7 +531,20 @@ export default function AuctionLiveHero({
                     startNewAuction?.loading ? "animate-auction-tx-pending" : ""
                   }`}
                 >
-                  <div>
+                  {showSettleSkeleton ? (
+                    <div className="space-y-3 pt-0.5">
+                      <div>
+                        <div className="skeleton h-3 w-16 rounded-md mb-2" />
+                        <div className="skeleton h-8 w-40 sm:w-48 rounded-md max-w-full" />
+                      </div>
+                      <div>
+                        <div className="skeleton h-3 w-24 rounded-md mb-2" />
+                        <div className="skeleton h-10 w-full max-w-sm rounded-lg" />
+                      </div>
+                    </div>
+                  ) : (
+                  <>
+                    <div>
                     <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
                       Top bid
                     </p>
@@ -547,7 +602,7 @@ export default function AuctionLiveHero({
                                   </span>
                                 </span>
                               ) : (
-                                "Start new auction"
+                                "Restart auction"
                               )}
                             </button>
                             {startNewAuction.loading &&
@@ -599,7 +654,7 @@ export default function AuctionLiveHero({
                         </span>
                       </p>
                     )}
-                  </div>
+                    </div>
                   {contractPaused && !sold && !idleNoChainAuction && (
                     <p className="text-xs text-warning/80">
                       Auction house is paused — bidding is disabled on-chain.
@@ -624,6 +679,8 @@ export default function AuctionLiveHero({
                       />
                     </div>
                   )}
+                  </>
+                  )}
                 </div>
               </div>
             </div>
@@ -640,8 +697,10 @@ export default function AuctionLiveHero({
                 }`}
               >
                 {settledFooterCopy ??
-                  "The last auction has ended. Click to start a new auction"}
+                  "The last auction has ended. Restart when the queue is ready."}
               </p>
+            ) : showSettleSkeleton ? (
+              <SettlementProgressStrip stage={settleStage} />
             ) : idleNoChainAuction ? null : chainSettlement ? (
               <div className="space-y-2 bg-base-200/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-base-content/10">
                 <button
@@ -751,8 +810,6 @@ export default function AuctionLiveHero({
               </button>
             )}
           </div>
-        </>
-      )}
     </div>
   );
 }

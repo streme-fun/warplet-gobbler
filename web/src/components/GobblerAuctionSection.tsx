@@ -780,15 +780,15 @@ export default function GobblerAuctionSection({
   const expiredLotCaption = showExpiredPostAuction
     ? hasChainBid && !auctionPaused
       ? viewerIsHighBidderOnExpiredLot
-        ? "You won — finalize to claim."
-        : "Bidding closed. Click to finalize."
+        ? "You won — settle below to claim."
+        : "Bidding closed — settle below (starts next lot if the queue has one)."
       : hasChainBid && auctionPaused
         ? viewerIsHighBidderOnExpiredLot
-          ? "You won — finalize while paused."
-          : "Bidding closed — Click to finalize."
+          ? "You won — settle below while paused."
+          : "Bidding closed — settle below while paused."
         : !hasChainBid && !auctionPaused
-          ? "No bids — extend to reopen."
-          : "No bids — unpause to extend."
+          ? "No bids — restart the bidding window below."
+          : "No bids — unpause, then restart the window below."
     : null;
 
   /** Do not fold in `bidDisabled` — the page uses that to gate *bidding* (e.g. when expired), which would wrongly grey out extend / finalize. */
@@ -800,7 +800,8 @@ export default function GobblerAuctionSection({
   const chainSettlement =
     showExpiredPostAuction && hasChainBid && auctionPaused
       ? {
-          label: "Finalize sale",
+          label: "Settle auction",
+          hint: "Completes this sale on-chain while the house is paused.",
           onSubmit: handleSettlePaused,
           loading: settlePending,
           disabled: settlementDisabled,
@@ -809,7 +810,8 @@ export default function GobblerAuctionSection({
         }
       : showExpiredPostAuction && hasChainBid && !auctionPaused
         ? {
-            label: "Finalize sale",
+            label: "Settle & start next",
+            hint: "Ends this lot and opens the next queued Warplet when available.",
             onSubmit: handleSettleAndNext,
             loading: settlePending,
             disabled: settlementDisabled,
@@ -818,8 +820,8 @@ export default function GobblerAuctionSection({
           }
         : showExpiredPostAuction && !hasChainBid && !auctionPaused
           ? {
-              label: "Extend listing time",
-              hint: "Adds another full bidding window.",
+              label: "Restart bidding window",
+              hint: "Adds another full bidding window (no bids on this round).",
               onSubmit: handleExtendAuction,
               loading: settlePending,
               disabled: settlementDisabled,
@@ -834,7 +836,7 @@ export default function GobblerAuctionSection({
     !auctionExpired &&
     showNoBids &&
     !auctionReadError
-      ? ""
+      ? "Want this Warplet? Place a bid below."
       : null;
 
   const onChainLiveQueueEmpty =
@@ -844,7 +846,7 @@ export default function GobblerAuctionSection({
     ? null
     : onChainMode && queueReadsEnabled && chainQueuedIds.length === 0
       ? "The last auction has ended. A new sale will begin when a Warplet joins the queue."
-      : "The last auction has ended. Click to start a new auction.";
+      : "The last auction has ended. Restart auction when the queue is ready.";
 
   return (
     <div className="w-full max-w-4xl">

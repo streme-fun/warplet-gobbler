@@ -256,6 +256,8 @@ export default function Home() {
 
   const [activeView, setActiveView] = useState<"sell" | "buy">("buy");
   const [scrollBlend, setScrollBlend] = useState(0); // 0 = buy (purple), 1 = sell (cyan)
+  /** Hysteresis for jump-link label — avoids flip-flopping when scroll sits near 50% blend. */
+  const viewHintScrollRef = useRef<"sell" | "buy">("buy");
 
   // Track scroll position to blend background color and update active toggle.
   // Wrapped in rAF so we coalesce per-pixel scroll events into one update per frame —
@@ -273,7 +275,14 @@ export default function Home() {
       // blend: 0 when sell section is below viewport, 1 when sell section is at top
       const t = Math.max(0, Math.min(1, 1 - sellTop / vh));
       setScrollBlend(t);
-      setActiveView(t > 0.5 ? "sell" : "buy");
+      const prev = viewHintScrollRef.current;
+      let next = prev;
+      if (prev === "buy" && t >= 0.56) next = "sell";
+      else if (prev === "sell" && t <= 0.44) next = "buy";
+      if (next !== prev) {
+        viewHintScrollRef.current = next;
+        setActiveView(next);
+      }
     };
     const onScroll = () => {
       if (pending) return;
@@ -289,6 +298,7 @@ export default function Home() {
   }, []);
 
   const toggleView = useCallback((view: "sell" | "buy") => {
+    viewHintScrollRef.current = view;
     setActiveView(view);
     const target = view === "buy" ? "auction" : "sell-section";
     document.getElementById(target)?.scrollIntoView({ behavior: "smooth" });
@@ -548,29 +558,6 @@ export default function Home() {
             className="h-8 sm:h-10 w-auto rounded-md"
             draggable={false}
           />
-          {/* Center — Buy / Sell toggle */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex rounded-full border border-base-content/20 overflow-hidden">
-            <button
-              onClick={() => toggleView("buy")}
-              className={`px-5 py-1.5 text-sm font-semibold transition-colors ${
-                activeView === "buy"
-                  ? "bg-secondary text-black"
-                  : "text-base-content/50 hover:text-base-content/80"
-              }`}
-            >
-              Buy
-            </button>
-            <button
-              onClick={() => toggleView("sell")}
-              className={`px-5 py-1.5 text-sm font-semibold transition-colors ${
-                activeView === "sell"
-                  ? "bg-primary text-black"
-                  : "text-base-content/50 hover:text-base-content/80"
-              }`}
-            >
-              Sell
-            </button>
-          </div>
           {/* Right — status + wallet */}
           <div className="flex items-center gap-2 sm:gap-3">
             {context?.user && (
@@ -616,6 +603,82 @@ export default function Home() {
           />
         </svg>
       </nav>
+
+      {/* Buy ↔ Sell — text jump link, bottom-left (above CaFooter z-[50] and full-width content) */}
+      <button
+        type="button"
+        onClick={() =>
+          toggleView(activeView === "buy" ? "sell" : "buy")
+        }
+        className={`group fixed left-0 bottom-0 z-[55] flex items-center gap-1.5 pl-[max(1rem,env(safe-area-inset-left))] pb-[max(1rem,env(safe-area-inset-bottom))] text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
+          gobbling || buyingFid
+            ? "pointer-events-none opacity-0 scale-[0.98]"
+            : "opacity-100 scale-100"
+        }`}
+        aria-label={
+          activeView === "buy"
+            ? "Scroll to sell section"
+            : "Scroll to buy section"
+        }
+      >
+        <span className="relative inline-grid place-items-start">
+          <span
+            className={`col-start-1 row-start-1 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out ${
+              activeView === "buy"
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-1.5 pointer-events-none"
+            }`}
+            aria-hidden={activeView !== "buy"}
+          >
+            sell
+          </span>
+          <span
+            className={`col-start-1 row-start-1 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out ${
+              activeView === "sell"
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 -translate-y-1.5 pointer-events-none"
+            }`}
+            aria-hidden={activeView !== "sell"}
+          >
+            buy
+          </span>
+        </span>
+        <span
+          className="relative inline-flex h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 items-center justify-center"
+          aria-hidden
+        >
+          <svg
+            className={`absolute transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out ${
+              activeView === "buy"
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-2 scale-90"
+            }`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+          <svg
+            className={`absolute transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out ${
+              activeView === "sell"
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 -translate-y-2 scale-90"
+            }`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m18 15-6-6-6 6" />
+          </svg>
+        </span>
+      </button>
 
       <div
         className="flex-1 flex flex-col transition-opacity duration-700"
@@ -665,7 +728,7 @@ export default function Home() {
           className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-12 sm:pt-20 pb-24 sm:pb-32"
         >
           {/* Title */}
-          <div className="text-center animate-fade-up-delay-1">
+          <div className="text-center animate-fade-up-delay-1 mt-16">
             <h2>Sell your Warplet to</h2>
             <h1 className="text-3xl sm:text-6xl font-bold tracking-widest uppercase">
               THE INSATIABLE
@@ -729,12 +792,7 @@ export default function Home() {
             {/* Warplet picker — horizontal scroll (width matches auction card column) */}
             <div className="w-full mt-4">
               <div className="flex flex-col items-center gap-2 mb-2">
-                <p className="text-xs text-base-content/40 text-center">
-                  Select a Warplet to sell
-                  {warpletsConfigured && isConnected && ownedWarpletsLoading
-                    ? " · Loading your Warplets…"
-                    : ""}
-                </p>
+
                 <div className="flex gap-1 justify-center">
                   <button
                     onClick={() => {
@@ -776,6 +834,12 @@ export default function Home() {
                       <path d="M9 18l6-6-6-6" />
                     </svg>
                   </button>
+
+
+
+
+
+  
                 </div>
               </div>
               <div
@@ -876,11 +940,13 @@ export default function Home() {
             >
               {!isConnected
                 ? "Connect wallet to sell"
-                : isSelling || isWriting
-                  ? "Submitting..."
-                  : selectedFid
-                    ? `Sell Warplet #${selectedFid}`
-                    : "Select a Warplet"}
+                : ownedWarpletsLoading
+                  ? "downloading your warplets... "
+                  : isSelling || isWriting
+                    ? "Submitting..."
+                    : selectedFid
+                      ? `Sell Warplet #${selectedFid}`
+                      : "Select a Warplet"}
             </button>
             {sellError && (
               <p className="mt-2 text-xs text-error/90 text-center max-w-md mx-auto break-words">
