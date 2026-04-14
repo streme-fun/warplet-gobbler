@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  createPublicClient,
-  http,
-  isHex,
-  type Address,
-  type Hex,
-} from "viem";
+import { createPublicClient, isHex, type Address, type Hex } from "viem";
 import { base } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
+import { baseHttp } from "@/lib/base-http";
 import { ensureGobbledImage } from "@/lib/generate-gobbled-image";
 import { createGobbledCompositeImageResponse } from "@/lib/gobbled-composite-og";
 import { uploadToPinata } from "@/app/utils/pinata";
@@ -35,7 +30,7 @@ export const maxDuration = 60;
 
 const SIGNATURE_TTL_SECONDS = 60 * 30; // 30 minutes — well over a typical wallet flow
 
-const publicClient = createPublicClient({ chain: base, transport: http() });
+const publicClient = createPublicClient({ chain: base, transport: baseHttp() });
 
 function getSignerAccount() {
   const raw = process.env.GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY;
@@ -186,14 +181,40 @@ export async function POST(request: NextRequest) {
       signature,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "unknown";
-    console.error("[mint-gobbled-nft] failed:", message);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[mint-gobbled-nft] failed:", err);
+    const error = mintErrorForClient(message);
     return NextResponse.json(
       {
         success: false,
-        error: "Could not prepare rescue payload. Try again later.",
+        error,
+        ...(process.env.NODE_ENV === "development" ? { debug: message } : {}),
       },
       { status: 500 },
     );
   }
+}
+
+/** Map internal failures to actionable copy; keep generic fallback for unknowns. */
+function mintErrorForClient(message: string): string {
+  if (message.includes("No reservation exists"))
+    return "No on-chain reservation for this Warplet yet. Confirm the auction settled and you are claiming the correct token.";
+  if (message.includes("GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY"))
+    return "Server is missing GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY (rescue signatures).";
+  if (message.includes("Source warplet image not found"))
+    return message;
+  if (/pinata|PINATA|JWT/i.test(message))
+    return "Pinata upload failed. Check PINATA_JWT and Pinata status.";
+  if (/GEMINI|genai|GoogleGenerativeAI/i.test(message))
+    return "Image generation failed. Check GEMINI_API_KEY.";
+  if (/blob|BLOB|vercel.*storage/i.test(message) && /token|auth|401|403/i.test(message))
+    return "Vercel Blob failed. Check warpletgobbler_READ_WRITE_TOKEN.";
+  if (
+    /HTTP request failed|fetch failed|Fetch failed|ECONNRESET|ETIMEDOUT|timeout|429|503|502/i.test(
+      message,
+    )
+  )
+    return "Could not reach Base RPC from the server. Set BASE_RPC_URL or NEXT_PUBLIC_BASE_RPC_URL to a reliable Base endpoint (same one you use in the browser is fine).";
+  if (process.env.NODE_ENV === "development") return message;
+  return "Could not prepare rescue payload. Try again later.";
 }

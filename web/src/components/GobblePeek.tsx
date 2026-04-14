@@ -5,20 +5,25 @@ import { useEffect, useRef } from "react";
 /** Always-visible gobbler — jaws + eyes frame the screen, mouth open until gobble. */
 export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
   const gooRef = useRef<HTMLCanvasElement>(null);
+  const jawBackdropRef = useRef<HTMLCanvasElement>(null);
   const eyeRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const gooCv = gooRef.current;
+    const backdropCv = jawBackdropRef.current;
     const eyeCv = eyeRef.current;
-    if (!gooCv || !eyeCv) return;
+    if (!gooCv || !backdropCv || !eyeCv) return;
     const gx = gooCv.getContext("2d");
+    const bx = backdropCv.getContext("2d");
     const ex = eyeCv.getContext("2d");
-    if (!gx || !ex) return;
+    if (!gx || !bx || !ex) return;
 
     let W = window.innerWidth;
     let H = window.innerHeight;
     gooCv.width = W;
     gooCv.height = H;
+    backdropCv.width = W;
+    backdropCv.height = H;
     eyeCv.width = W;
     eyeCv.height = H;
 
@@ -53,28 +58,31 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     const mobile = () => W < 640;
     const restTop = () => (mobile() ? 97 : 154);
     const restBot = () => (mobile() ? 30 : 0);
-    // CaFooter (fixed bottom-0, bg-black/90, z-[50]) sits ABOVE the gobbler
-    // canvas (z-40 / z-46) and visually occludes the bottom teeth — at narrow
-    // widths the bot jaw was almost the same height as the footer, so
-    // basically nothing of the teeth poked above it. Lift the bot jaw by the
-    // footer height so teeth always appear above the footer.
-    const footerOverlay = () => (mobile() ? 40 : 52);
+    // CaFooter (fixed bottom-0, bg-black/90) uses py-3 sm:py-4 and z-50, so it
+    // stacks above the gobbler canvas (z-40 / z-46). If footerOverlay is too
+    // small, the bottom lip and its curve are drawn behind the footer and look
+    // flat. Lift the bot jaw by enough padding to keep the lip visible.
+    const footerOverlay = () => (mobile() ? 52 : 84);
 
-    // Desktop only: top jaw keeps a deep bow. Bottom uses a much smaller
-    // amplitude so the sides don’t steal vertical space (restBot only shifts
-    // the center valley).
-    const EDGE_AMP_TOP_PX = 85;
-    const EDGE_AMP_BOT_PX = 0;
+    // Desktop only: both jaws share the same parabolic bow (u²) so top and
+    // bottom lip curvature matches.
+    const EDGE_AMP_PX = 85;
     const edgeOffsetTop = (x: number) => {
       if (mobile()) return 0;
       const u = (x / W - 0.5) * 2;
-      return EDGE_AMP_TOP_PX * u * u;
+      return EDGE_AMP_PX * u * u;
     };
     const edgeOffsetBot = (x: number) => {
       if (mobile()) return 0;
       const u = (x / W - 0.5) * 2;
-      return EDGE_AMP_BOT_PX * u * u;
+      return EDGE_AMP_PX * u * u;
     };
+
+    // Goo filter: a huge filled area *below* the bottom lip blurs upward and
+    // the alpha threshold reads as a flat line. Keep only a finite band in
+    // the filtered canvas; unfiltered fill continues on `jawBackdrop`.
+    const BOTTOM_JAW_GOOPY_DEPTH = 300;
+    const JAW_BACKDROP_OVERLAP = 4;
 
     let topY = restTop();
     let botY = H - footerOverlay() - restBot();
@@ -250,6 +258,22 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
         blobData.push({ x, y: baseY, r: Math.max(1, r) });
       }
 
+      const bottomLipY = (x: number) =>
+        botY - edgeOffsetBot(x) - 4 - botWaveMax;
+
+      // Solid black below the goo band (no blur) — avoids losing the lip curve.
+      bx!.clearRect(0, 0, W, H);
+      bx!.fillStyle = VC;
+      const bandBottomY = bottomLipY(W * 0.5) + BOTTOM_JAW_GOOPY_DEPTH;
+      if (bandBottomY < H) {
+        bx!.fillRect(
+          0,
+          bandBottomY - JAW_BACKDROP_OVERLAP,
+          W,
+          H - bandBottomY + JAW_BACKDROP_OVERLAP
+        );
+      }
+
       // Jaw bodies — sampled curved paths so the edges bow inward on desktop.
       // Extends by max wave displacement so blobs sit on a continuous fill.
       const SAMPLE = 12;
@@ -262,12 +286,12 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       }
       gx!.closePath();
       gx!.fill();
-      // Bottom jaw: trace the top edge from left to right as a curve.
+      // Bottom jaw: curved lip + parallel lower edge (finite depth — not to H).
       gx!.beginPath();
-      gx!.moveTo(-30, H + 500);
-      gx!.lineTo(W + 30, H + 500);
+      gx!.moveTo(-30, bottomLipY(-30) + BOTTOM_JAW_GOOPY_DEPTH);
+      gx!.lineTo(W + 30, bottomLipY(W + 30) + BOTTOM_JAW_GOOPY_DEPTH);
       for (let x = W + 30; x >= -30; x -= SAMPLE) {
-        gx!.lineTo(x, botY - edgeOffsetBot(x) - 4 - botWaveMax);
+        gx!.lineTo(x, bottomLipY(x));
       }
       gx!.closePath();
       gx!.fill();
@@ -288,11 +312,13 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     frame();
 
     const onResize = () => {
-      if (!gooCv || !eyeCv) return;
+      if (!gooCv || !backdropCv || !eyeCv) return;
       W = window.innerWidth;
       H = window.innerHeight;
       gooCv.width = W;
       gooCv.height = H;
+      backdropCv.width = W;
+      backdropCv.height = H;
       eyeCv.width = W;
       eyeCv.height = H;
       topY = restTop();
@@ -323,6 +349,17 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
           </filter>
         </defs>
       </svg>
+      {/* Unfiltered fill below the bottom goo band (see BOTTOM_JAW_GOOPY_DEPTH) */}
+      <canvas
+        ref={jawBackdropRef}
+        className="fixed inset-0 pointer-events-none transition-opacity duration-500"
+        style={{
+          width: "100vw",
+          height: "100vh",
+          zIndex: 38,
+          opacity: hidden ? 0 : 1,
+        }}
+      />
       {/* Goo-filtered jaw canvas */}
       <canvas
         ref={gooRef}

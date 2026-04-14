@@ -3,11 +3,7 @@
 import { useCallback, useState } from "react";
 import { type Address, type Hash, type Hex, isAddressEqual, zeroAddress } from "viem";
 import { base } from "wagmi/chains";
-import {
-  useAccount,
-  usePublicClient,
-  useWriteContract,
-} from "wagmi";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { gobbledWarpletsAbi } from "@/abi/gobbledWarplets";
 import { CONTRACTS } from "@/lib/contracts";
 import { formatUserFacingTxError } from "@/lib/format-tx-error";

@@ -162,15 +162,16 @@ export default function GobblerAuctionSection({
   const [startError, setStartError] = useState<string | null>(null);
   const [auctionRevealTick, setAuctionRevealTick] = useState(0);
   const expectNewLotAfterSettleRef = useRef(false);
-  const [dismissedWinnerFps, setDismissedWinnerFps] = useState<string[]>(() =>
-    typeof window !== "undefined" ? readDismissedFpArray() : [],
-  );
-  const [settlementHistory, setSettlementHistory] = useState<
-    SettlementRecord[]
-  >(() =>
-    typeof window !== "undefined" ? readSettlementHistory() : [],
+  const [dismissedWinnerFps, setDismissedWinnerFps] = useState<string[]>([]);
+  const [settlementHistory, setSettlementHistory] = useState<SettlementRecord[]>(
+    [],
   );
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    setDismissedWinnerFps(readDismissedFpArray());
+    setSettlementHistory(readSettlementHistory());
+  }, []);
 
   useEffect(() => {
     const id = setInterval(
@@ -980,7 +981,7 @@ export default function GobblerAuctionSection({
 
   if (claimBlocking && claimFocusRecord && claimAction != null) {
     return (
-      <div className="w-full max-w-4xl flex flex-col items-center justify-start pb-10 sm:pb-12 pt-[18vh] sm:pt-[22vh] md:pt-[28vh]">
+      <div className="w-full max-w-4xl flex flex-col items-center justify-start pb-4 sm:pb-6">
         <AuctionWinnerClaimGate
           tokenId={claimFocusRecord.tokenId}
           winnerAddress={claimFocusRecord.bidder}

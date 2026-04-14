@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http } from "viem";
 import { base } from "viem/chains";
-import { ensureGobbledImage } from "@/lib/generate-gobbled-image";
+import {
+  ensureGobbledImage,
+  gobbledBlobExists,
+} from "@/lib/generate-gobbled-image";
 import { createGobbledCompositeImageResponse } from "@/lib/gobbled-composite-og";
 import { isWarpletInGobblerAuctionCustody } from "@/lib/warplet-gobbled-custody";
 
@@ -34,11 +37,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const ok = await isWarpletInGobblerAuctionCustody(
-      publicClient,
-      BigInt(tokenId),
-    );
-    if (!ok) {
+    const [inCustody, hasStoredGobbled] = await Promise.all([
+      isWarpletInGobblerAuctionCustody(publicClient, BigInt(tokenId)),
+      gobbledBlobExists(tokenId),
+    ]);
+    // Allow after the NFT leaves auction escrow (e.g. winner wallet) if we already have the gobbled asset.
+    if (!inCustody && !hasStoredGobbled) {
       return NextResponse.json(
         { success: false, error: "Token not gobbled" },
         { status: 403 },
@@ -73,11 +77,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ok = await isWarpletInGobblerAuctionCustody(
-      publicClient,
-      BigInt(tokenId),
-    );
-    if (!ok) {
+    const [inCustody, hasStoredGobbled] = await Promise.all([
+      isWarpletInGobblerAuctionCustody(publicClient, BigInt(tokenId)),
+      gobbledBlobExists(tokenId),
+    ]);
+    if (!inCustody && !hasStoredGobbled) {
       return NextResponse.json(
         { success: false, error: "Token not gobbled" },
         { status: 403 },

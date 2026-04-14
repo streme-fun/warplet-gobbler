@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
-import {
-  createPublicClient,
-  getAddress,
-  http,
-  isAddress,
-} from "viem";
+import { createPublicClient, getAddress, isAddress } from "viem";
 import { mainnet } from "viem/chains";
+import { ethMainnetHttp } from "@/lib/eth-mainnet-http";
 import { tryNeynarBidderProfile } from "@/lib/neynar-bidder-profile";
 import { normalizeSuperfluidWhoisPayload } from "@/lib/superfluid-whois";
 
@@ -16,7 +12,7 @@ const SUPERFLUID_WHOIS_RESOLVE =
 
 const ethClient = createPublicClient({
   chain: mainnet,
-  transport: http(),
+  transport: ethMainnetHttp(),
 });
 
 export async function GET(

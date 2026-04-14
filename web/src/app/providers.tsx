@@ -1,7 +1,8 @@
 "use client";
 
 import { WagmiProvider, createConfig, http } from "wagmi";
-import { base } from "wagmi/chains";
+import { base, mainnet } from "wagmi/chains";
+import { ethMainnetHttp } from "@/lib/eth-mainnet-http";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   ConnectKitProvider,
@@ -29,8 +30,12 @@ const baseRpcUrl =
 /** One config everywhere: iframe heuristic must not swap connector sets or wagmi/ConnectKit disagree. */
 const config = createConfig(
   getDefaultConfig({
-    chains: [base],
-    transports: { [base.id]: http(baseRpcUrl) },
+    // Mainnet is included so ConnectKit ENS + viem use `NEXT_PUBLIC_ETH_RPC_URL`, not viem’s default.
+    chains: [base, mainnet],
+    transports: {
+      [base.id]: http(baseRpcUrl),
+      [mainnet.id]: ethMainnetHttp(),
+    },
     walletConnectProjectId,
     appName: "WarpletGobbler",
     connectors: [

@@ -10,18 +10,29 @@ const BLOB_TOKEN = process.env.warpletgobbler_READ_WRITE_TOKEN!;
 const SOURCE_BASE =
   "https://qcntgudzysvobg72.public.blob.vercel-storage.com/warplets";
 
-export async function ensureGobbledImage(
+async function existingGobbledBlobUrl(
   tokenId: number,
-): Promise<{ url: string }> {
-  // Check if already exists (include .png to avoid prefix collisions like 1 vs 10)
+): Promise<string | null> {
   const exactName = `warplet-${tokenId}-gobbled.png`;
   const existing = await list({
     prefix: `gobbled-warplets/${exactName}`,
     token: BLOB_TOKEN,
   });
   const hit = existing.blobs.find((b) => b.pathname.endsWith(exactName));
-  if (hit != null) {
-    return { url: hit.url };
+  return hit?.url ?? null;
+}
+
+/** True if we already stored a gobbled PNG for this token (cheap list-only check). */
+export async function gobbledBlobExists(tokenId: number): Promise<boolean> {
+  return (await existingGobbledBlobUrl(tokenId)) != null;
+}
+
+export async function ensureGobbledImage(
+  tokenId: number,
+): Promise<{ url: string }> {
+  const existingUrl = await existingGobbledBlobUrl(tokenId);
+  if (existingUrl != null) {
+    return { url: existingUrl };
   }
 
   // Fetch source image

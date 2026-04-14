@@ -514,8 +514,10 @@ export default function Home() {
 
   return (
     <main
-      className={`min-h-screen relative noise-overlay flex flex-col ${
-        claimBlocking ? "overflow-x-hidden overflow-y-auto" : "overflow-hidden"
+      className={`${
+        claimBlocking ? "min-h-min" : "min-h-screen"
+      } relative noise-overlay flex flex-col overflow-x-hidden ${
+        claimBlocking ? "" : "overflow-hidden"
       }`}
     >
       {/* Buy overlay — Silksong Void combat sequence */}
@@ -704,7 +706,9 @@ export default function Home() {
       </button>
 
       <div
-        className="flex-1 flex flex-col transition-opacity duration-700"
+        className={`${
+          claimBlocking ? "" : "flex-1"
+        } flex flex-col transition-opacity duration-700`}
         style={{ opacity: gobbling ? 0 : 1 }}
       >
         {/* Scroll-blended rich background — purple (buy) → cyan (sell) */}
@@ -729,11 +733,12 @@ export default function Home() {
         <ParallaxBackground />
 
         {/* === Auction Section (Buy) === */}
+        {/* Claim gate: pt ≈ GobblePeek jaw + ~2rem breathing room + safe-area */}
         <section
           id="auction"
           className={`relative z-10 flex flex-col items-center px-4 sm:px-6 ${
             claimBlocking
-              ? "pt-24 sm:pt-32 pb-28 sm:pb-36"
+              ? "pt-[calc(env(safe-area-inset-top)+8.0625rem)] sm:pt-[calc(env(safe-area-inset-top)+11.625rem)] pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-16"
               : "pt-36 sm:pt-56 pb-12 sm:pb-20"
           }`}
         >
@@ -988,12 +993,14 @@ export default function Home() {
         </section>
         ) : null}
 
-        <div className="relative z-10 mt-6 sm:mt-8 pb-4" aria-hidden />
+        {!claimBlocking ? (
+          <div className="relative z-10 mt-6 sm:mt-8 pb-4" aria-hidden />
+        ) : null}
       </div>
       {/* end gobble fade wrapper */}
 
-      {/* Fixed footer — contract address */}
-      <CaFooter />
+      {/* Fixed footer — contract address (z-[50] sits above auction z-10; disable hit-testing during claim so the CTA isn’t covered) */}
+      <CaFooter pointerThrough={claimBlocking} />
     </main>
   );
 }
@@ -1005,7 +1012,7 @@ const FOOTER_CA: Address =
     ? CONTRACTS.warpgobbToken
     : ("0x3042b035325393F3d72390C7E5d51F26fe1F0e61" as Address);
 
-function CaFooter() {
+function CaFooter({ pointerThrough = false }: { pointerThrough?: boolean }) {
   const [copied, setCopied] = useState(false);
   const ca = FOOTER_CA;
 
@@ -1024,8 +1031,12 @@ function CaFooter() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm border-t border-base-content/10 py-3 sm:py-4 px-4 text-center cursor-pointer select-all"
-      onClick={handleCopy}
+      className={`fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm border-t border-base-content/10 py-3 sm:py-4 px-4 text-center select-all ${
+        pointerThrough
+          ? "pointer-events-none cursor-default"
+          : "cursor-pointer"
+      }`}
+      onClick={pointerThrough ? undefined : handleCopy}
     >
       <span className="text-xs sm:text-sm text-base-content/60 font-mono tracking-wide">
         CA: <span className="text-base-content/80">{ca}</span>

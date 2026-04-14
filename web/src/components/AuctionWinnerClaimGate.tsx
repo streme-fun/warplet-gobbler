@@ -62,7 +62,7 @@ export default function AuctionWinnerClaimGate({
     "relative w-full max-w-[11.5rem] sm:max-w-[12.5rem] aspect-square mx-auto rounded-xl border border-base-content/15 bg-base-300/30 overflow-hidden shadow-lg shadow-black/25";
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-1 sm:px-2 -translate-y-[30%]">
+    <div className="w-full max-w-2xl mx-auto px-1 sm:px-2">
       <div className="text-[0.85em] sm:text-[0.9em] animate-fade-up">
       <div className="relative overflow-hidden rounded-2xl border border-success/30 bg-gradient-to-b from-success/[0.08] via-base-100/40 to-base-200/30 px-4 py-7 sm:px-8 sm:py-9 shadow-[0_0_64px_-18px_rgba(34,197,94,0.3)]">
         <div
@@ -92,7 +92,7 @@ export default function AuctionWinnerClaimGate({
             </div>
           </div>
           <p className="mt-4 sm:mt-5 text-lg sm:text-xl md:text-2xl text-base-content/90 font-medium leading-snug">
-            For rescuing Warplet{" "}
+            You rescued Warplet{" "}
             <span className="text-secondary">#{tokenId}</span>
           </p>
           <p className="mt-3 text-sm sm:text-base text-base-content/75 font-mono tabular-nums leading-snug">
