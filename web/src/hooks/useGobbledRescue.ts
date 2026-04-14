@@ -71,12 +71,12 @@ export function useGobbledRescue() {
   const claim = useCallback(
     async (warpletId: number) => {
       if (!ready) {
-        setError("GobbledWarplets address not configured");
+        setError("Claiming isn’t available right now. Please try again later.");
         setStage("error");
         return;
       }
       if (!isConnected || address == null) {
-        setError("Connect your wallet (the one that won the auction) to claim.");
+        setError("Connect the wallet that won the auction to claim this Warplet.");
         setStage("error");
         return;
       }

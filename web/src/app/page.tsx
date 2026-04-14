@@ -875,14 +875,8 @@ export default function Home() {
                 >
                   {warpletsConfigured && isConnected && ownedWarpletsError && (
                     <p className="text-xs text-error/80 px-1 text-center max-w-md mx-auto">
-                      Couldn&apos;t load Warplets from the chain. Make sure your
-                      wallet is on Base. Check{" "}
-                      <code className="text-[10px]">
-                        NEXT_PUBLIC_WARPLETS_ADDRESS
-                      </code>{" "}
-                      and that the contract supports{" "}
-                      <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
-                      (ERC721Enumerable).
+                      Couldn&apos;t load your Warplets right now. Make sure your wallet
+                      is connected to Base, then try reconnecting.
                     </p>
                   )}
                   {warpletsConfigured &&
