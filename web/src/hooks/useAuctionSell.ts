@@ -121,12 +121,23 @@ export function useAuctionSellAuction() {
     query: { enabled: !!bidTokenAddr },
   });
 
+  /**
+   * Shape the raw `auction()` read into our `AuctionSellLot` type.
+   *
+   * viem decodes the tuple as either an array or an object depending on ABI
+   * component naming; we handle both. The deployed contract doesn't return a
+   * `settled` flag — treat every lot as unsettled here and let downstream
+   * callers decide whether it's live/expired/ready-to-restart using `endTime`
+   * and `auctionExpired` from `GobblerAuctionSection`. Any future contract
+   * variant that adds a boolean trailing field is ignored by viem during
+   * decoding, so this stays forward-compatible.
+   */
   const chainLot: AuctionSellLot | null = useMemo(() => {
     const d = auctionQ.data;
     if (d == null) return null;
     if (Array.isArray(d)) {
-      const [tokenId, amount, startTime, endTime, bidder, settled] = d;
-      return { tokenId, amount, startTime, endTime, bidder, settled };
+      const [tokenId, amount, startTime, endTime, bidder] = d;
+      return { tokenId, amount, startTime, endTime, bidder, settled: false };
     }
     return {
       tokenId: d.tokenId,
@@ -134,7 +145,7 @@ export function useAuctionSellAuction() {
       startTime: d.startTime,
       endTime: d.endTime,
       bidder: d.bidder,
-      settled: d.settled,
+      settled: false,
     };
   }, [auctionQ.data]);
 

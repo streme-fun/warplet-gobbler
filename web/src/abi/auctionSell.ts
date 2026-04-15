@@ -1,6 +1,15 @@
 /**
- * AuctionSell (linked-list queue + ERC777 bump) — keep in sync with `feat/auction-linked-list-queue` contract.
- * Stubs on `main` revert on these reads; UI falls back to mocks when queries error.
+ * AuctionSell (linked-list queue + ERC777 bump).
+ *
+ * The deployed production contract returns a 5-field `auction()` struct
+ * (tokenId, amount, startTime, endTime, bidder) without an on-chain
+ * `settled` flag — settlement is derived client-side from `endTime < now`.
+ * An earlier draft ABI here declared a 6-field tuple including `settled`,
+ * which broke viem's decoder on production: 160 bytes came back, 192 were
+ * expected, and the read silently errored, leaving the UI stuck in the
+ * loading skeleton forever. Viem ignores trailing bytes when decoding
+ * fixed tuples, so this shape also decodes cleanly against any future
+ * variant that adds more fields after `bidder`.
  */
 export const auctionSellAbi = [
   {
@@ -17,7 +26,6 @@ export const auctionSellAbi = [
           { name: "startTime", type: "uint256" },
           { name: "endTime", type: "uint256" },
           { name: "bidder", type: "address" },
-          { name: "settled", type: "bool" },
         ],
       },
     ],

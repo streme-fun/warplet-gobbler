@@ -218,11 +218,18 @@ export default function GobblerAuctionSection({
   const hasParsedLot =
     auctionSellConfigured && !auctionReadError && chainLot != null;
 
-  const liveAuction =
-    hasParsedLot && chainLot.tokenId > 0n && !chainLot.settled;
+  /**
+   * The deployed `AuctionSell` contract returns a 5-field `auction()` tuple
+   * with no on-chain `settled` flag — `settle()` and `startAuction()` are
+   * atomic, so there's no observable intermediate "settled but not yet
+   * restarted" state from the client's perspective. `chainLot.settled` is
+   * always `false` here; we drive the "needs settle / restart" UX off
+   * `auctionExpired` (`endTime < now`) instead, via `showExpiredPostAuction`
+   * below.
+   */
+  const liveAuction = hasParsedLot && chainLot.tokenId > 0n;
 
-  const idleNoChainAuction =
-    hasParsedLot && chainLot.startTime === 0n && !chainLot.settled;
+  const idleNoChainAuction = hasParsedLot && chainLot.startTime === 0n;
 
   const showAuctionArtworkSkeleton =
     !idleNoChainAuction && (!onChainMode || !hasParsedLot);
@@ -387,7 +394,15 @@ export default function GobblerAuctionSection({
     chainLot.amount > 0n &&
     !isAddressEqual(chainLot.bidder, zeroAddress);
 
-  const auctionSettled = hasParsedLot && chainLot.settled;
+  /**
+   * There is no on-chain `settled` flag on the deployed `AuctionSell`
+   * contract — `settle()` and the next `startAuction()` are atomic, so the
+   * "settled but not yet restarted" intermediate state is never observable.
+   * Keeping this as `false` keeps every downstream `auctionSettled && ...`
+   * branch inert; the real "auction ended, needs settle" UX is driven by
+   * `auctionExpired` via `showExpiredPostAuction` below.
+   */
+  const auctionSettled = false as const;
 
   const topBidAmountStr = idleNoChainAuction
     ? "—"
@@ -405,7 +420,7 @@ export default function GobblerAuctionSection({
     ? hasChainBid
       ? chainLot.bidder
       : null
-    : auctionSettled && chainLot.amount > 0n
+    : auctionSettled && chainLot != null && chainLot.amount > 0n
       ? chainLot.bidder
       : onChainMode
         ? null
