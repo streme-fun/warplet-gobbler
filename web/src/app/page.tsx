@@ -590,9 +590,9 @@ export default function Home() {
                 {context.user.displayName ?? `FID ${context.user.fid}`}
               </span>
             )}
-            <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full border border-success/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <span className="text-xs text-success">Base</span>
+            <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full border border-[#0052FF]/50">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF] animate-pulse" />
+              <span className="text-xs text-[#4C82FB]">Base</span>
             </div>
             {isMiniApp ? (
               <MiniAppWalletButton />
@@ -632,9 +632,7 @@ export default function Home() {
       {/* Buy ↔ Sell — text jump link, bottom-left (above CaFooter z-[50] and full-width content) */}
       <button
         type="button"
-        onClick={() =>
-          toggleView(activeView === "buy" ? "sell" : "buy")
-        }
+        onClick={() => toggleView(activeView === "buy" ? "sell" : "buy")}
         className={`group fixed left-0 bottom-0 z-[55] flex items-center gap-1.5 pl-[max(1rem,env(safe-area-inset-left))] pb-[max(1rem,env(safe-area-inset-bottom))] text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
           gobbling || buyingFid || claimBlocking
             ? "pointer-events-none opacity-0 scale-[0.98]"
@@ -759,238 +757,233 @@ export default function Home() {
 
         {/* === Sell Section === */}
         {!claimBlocking ? (
-        <section
-          id="sell-section"
-          className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-12 sm:pt-20 pb-24 sm:pb-32"
-        >
-          {/* Title */}
-          <div className="text-center animate-fade-up-delay-1 mt-16">
-            <h2>Sell your Warplet to</h2>
-            <h1 className="text-3xl sm:text-6xl font-bold tracking-widest uppercase">
-              THE INSATIABLE
-              <br />
-              <span className="text-primary">WARPLET GOBBLER</span>
-            </h1>
-          </div>
+          <section
+            id="sell-section"
+            className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-12 sm:pt-20 pb-24 sm:pb-32"
+          >
+            {/* Title */}
+            <div className="text-center animate-fade-up-delay-1 mt-16">
+              <h2>Sell your Warplet to</h2>
+              <h1 className="text-3xl sm:text-6xl font-bold tracking-widest uppercase">
+                THE INSATIABLE
+                <br />
+                <span className="text-primary">WARPLET GOBBLER</span>
+              </h1>
+            </div>
 
-          {/* Price + picker + action — compact layout */}
-          <div className="mt-6 sm:mt-8 w-full max-w-4xl animate-fade-up-delay-2 text-center">
-            <p className="text-sm sm:text-base text-base-content/50">
-              The Gobbler will pay
-            </p>
-            <div className="text-4xl sm:text-6xl font-mono font-semibold text-primary streaming-glow">
-              <StreamingNumber
-                start={payoutStream.start}
-                perSecond={payoutStream.perSecond}
-                smartMinSigFigs={6}
-                smartHideDecimalsIfIntegerDigitsGt={5}
-              />
-              <span className="text-base font-normal text-base-content/40 ml-2">
-                {payoutSymbol?.startsWith("$")
-                  ? payoutSymbol
-                  : `$${payoutSymbol}`}
-              </span>
-              <p className="text-xs sm:text-sm text-base-content/40 mt-1">
-                {isAmountMissing ? (
-                  isDutchAuctionConfigured ? (
+            {/* Price + picker + action — compact layout */}
+            <div className="mt-6 sm:mt-8 w-full max-w-4xl animate-fade-up-delay-2 text-center">
+              <p className="text-sm sm:text-base text-base-content/50">
+                The Gobbler will pay
+              </p>
+              <div className="text-4xl sm:text-6xl font-mono font-semibold text-primary streaming-glow">
+                <StreamingNumber
+                  start={payoutStream.start}
+                  perSecond={payoutStream.perSecond}
+                  smartMinSigFigs={6}
+                  smartHideDecimalsIfIntegerDigitsGt={5}
+                />
+                <span className="text-base font-normal text-base-content/40 ml-2">
+                  {payoutSymbol?.startsWith("$")
+                    ? payoutSymbol
+                    : `$${payoutSymbol}`}
+                </span>
+                <p className="text-xs sm:text-sm text-base-content/40 mt-1">
+                  {isAmountMissing ? (
+                    isDutchAuctionConfigured ? (
+                      <>
+                        ~$
+                        {FX_EST_MARKET_CAP_USD.toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                          minimumFractionDigits: 0,
+                        })}
+                      </>
+                    ) : (
+                      "(~$0.00)"
+                    )
+                  ) : payoutAmount > 0 && warpgobbPriceUsd == null ? (
+                    "USD quote unavailable"
+                  ) : (
                     <>
                       ~$
-                      {FX_EST_MARKET_CAP_USD.toLocaleString(undefined, {
-                        maximumFractionDigits: 0,
-                        minimumFractionDigits: 0,
-                      })}
+                      <StreamingNumber
+                        start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
+                        perSecond={
+                          payoutStream.perSecond * (warpgobbPriceUsd ?? 0)
+                        }
+                        decimals={2}
+                        truncateFractionDigits
+                        className="inline font-mono"
+                      />
                     </>
-                  ) : (
-                    "(~$0.00)"
-                  )
-                ) : payoutAmount > 0 && warpgobbPriceUsd == null ? (
-                  "USD quote unavailable"
-                ) : (
-                  <>
-                    ~$
-                    <StreamingNumber
-                      start={payoutStream.start * (warpgobbPriceUsd ?? 0)}
-                      perSecond={
-                        payoutStream.perSecond * (warpgobbPriceUsd ?? 0)
-                      }
-                      decimals={2}
-                      truncateFractionDigits
-                      className="inline font-mono"
-                    />
-                  </>
-                )}
-              </p>
-            </div>
-            <p className="text-sm sm:text-base text-base-content/50">
-              for your warplet
-            </p>
-
-            {/* Warplet picker — horizontal scroll (width matches auction card column) */}
-            <div className="w-full mt-4">
-              <div className="flex flex-col items-center gap-2 mb-2">
-
-                <div className="flex gap-1 justify-center">
-                  <button
-                    onClick={() => {
-                      const el = document.getElementById("warplet-scroll");
-                      if (el) el.scrollBy({ left: -300, behavior: "smooth" });
-                    }}
-                    className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M15 18l-6-6 6-6" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => {
-                      const el = document.getElementById("warplet-scroll");
-                      if (el) el.scrollBy({ left: 300, behavior: "smooth" });
-                    }}
-                    className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M9 18l6-6-6-6" />
-                    </svg>
-                  </button>
-
-
-
-
-
-  
-                </div>
+                  )}
+                </p>
               </div>
-              <div
-                id="warplet-scroll"
-                className="overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
-              >
-                {warpletsConfigured && isConnected && ownedWarpletsError && (
-                  <p className="text-xs text-error/80 px-1 text-center max-w-md mx-auto">
-                    Couldn&apos;t load Warplets from the chain. Make sure your
-                    wallet is on Base. Check{" "}
-                    <code className="text-[10px]">
-                      NEXT_PUBLIC_WARPLETS_ADDRESS
-                    </code>{" "}
-                    and that the contract supports{" "}
-                    <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
-                    (ERC721Enumerable).
-                  </p>
-                )}
-                {warpletsConfigured &&
-                  isConnected &&
-                  !ownedWarpletsLoading &&
-                  !ownedWarpletsError &&
-                  ownedWarplets.length === 0 && (
-                    <p className="text-xs text-base-content/50 px-1 py-4 text-center">
-                      No Warplets in this wallet on Base.
+              <p className="text-sm sm:text-base text-base-content/50">
+                for your warplet
+              </p>
+
+              {/* Warplet picker — horizontal scroll (width matches auction card column) */}
+              <div className="w-full mt-4">
+                <div className="flex flex-col items-center gap-2 mb-2">
+                  <div className="flex gap-1 justify-center">
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById("warplet-scroll");
+                        if (el) el.scrollBy({ left: -300, behavior: "smooth" });
+                      }}
+                      className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M15 18l-6-6 6-6" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById("warplet-scroll");
+                        if (el) el.scrollBy({ left: 300, behavior: "smooth" });
+                      }}
+                      className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div
+                  id="warplet-scroll"
+                  className="overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-hide"
+                >
+                  {warpletsConfigured && isConnected && ownedWarpletsError && (
+                    <p className="text-xs text-error/80 px-1 text-center max-w-md mx-auto">
+                      Couldn&apos;t load Warplets from the chain. Make sure your
+                      wallet is on Base. Check{" "}
+                      <code className="text-[10px]">
+                        NEXT_PUBLIC_WARPLETS_ADDRESS
+                      </code>{" "}
+                      and that the contract supports{" "}
+                      <code className="text-[10px]">tokenOfOwnerByIndex</code>{" "}
+                      (ERC721Enumerable).
                     </p>
                   )}
-                {showWarpletPickerSkeleton ? (
-                  <div className="flex min-w-full justify-center">
-                    <div className="flex gap-2 w-max">
-                      {Array.from(
-                        { length: WARPLET_PICKER_SKELETON_COUNT },
-                        (_, i) => (
-                          <div
-                            key={`picker-sk-${i}`}
-                            className="relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border-2 border-base-content/10 snap-center pointer-events-none text-center"
-                            aria-hidden
+                  {warpletsConfigured &&
+                    isConnected &&
+                    !ownedWarpletsLoading &&
+                    !ownedWarpletsError &&
+                    ownedWarplets.length === 0 && (
+                      <p className="text-xs text-base-content/50 px-1 py-4 text-center">
+                        No Warplets in this wallet on Base.
+                      </p>
+                    )}
+                  {showWarpletPickerSkeleton ? (
+                    <div className="flex min-w-full justify-center">
+                      <div className="flex gap-2 w-max">
+                        {Array.from(
+                          { length: WARPLET_PICKER_SKELETON_COUNT },
+                          (_, i) => (
+                            <div
+                              key={`picker-sk-${i}`}
+                              className="relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border-2 border-base-content/10 snap-center pointer-events-none text-center"
+                              aria-hidden
+                            >
+                              <div className="absolute inset-0 skeleton rounded-none" />
+                              <span className="absolute bottom-0 inset-x-0 h-[22px] skeleton rounded-none border-t border-base-content/5" />
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  ) : pickerWarplets.length > 0 ? (
+                    <div className="flex min-w-full justify-center">
+                      <div className="flex gap-2 w-max">
+                        {pickerWarplets.map((w) => (
+                          <button
+                            key={w.fid}
+                            ref={(el) => {
+                              if (el) cardRefs.current.set(w.fid, el);
+                              else cardRefs.current.delete(w.fid);
+                            }}
+                            onClick={() =>
+                              setSelectedFid(
+                                selectedFid === w.fid ? null : w.fid,
+                              )
+                            }
+                            className={`relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border-2 snap-center transition-all duration-200 text-center ${
+                              selectedFid === w.fid
+                                ? "border-primary shadow-lg shadow-primary/30"
+                                : "border-base-content/10 hover:border-base-content/25"
+                            } ${flyingFid === w.fid ? "opacity-0" : ""}`}
                           >
-                            <div className="absolute inset-0 skeleton rounded-none" />
-                            <span className="absolute bottom-0 inset-x-0 h-[22px] skeleton rounded-none border-t border-base-content/5" />
-                          </div>
-                        ),
-                      )}
+                            <img
+                              src={w.imageSrc}
+                              alt={w.name}
+                              className="w-full h-full object-cover"
+                              draggable={false}
+                              loading="lazy"
+                              decoding="async"
+                            />
+                            <span className="absolute bottom-0 inset-x-0 text-[10px] py-0.5 bg-black/60 text-base-content/70 text-center">
+                              #{w.fid}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : pickerWarplets.length > 0 ? (
-                  <div className="flex min-w-full justify-center">
-                    <div className="flex gap-2 w-max">
-                      {pickerWarplets.map((w) => (
-                        <button
-                          key={w.fid}
-                          ref={(el) => {
-                            if (el) cardRefs.current.set(w.fid, el);
-                            else cardRefs.current.delete(w.fid);
-                          }}
-                          onClick={() =>
-                            setSelectedFid(selectedFid === w.fid ? null : w.fid)
-                          }
-                          className={`relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border-2 snap-center transition-all duration-200 text-center ${
-                            selectedFid === w.fid
-                              ? "border-primary shadow-lg shadow-primary/30"
-                              : "border-base-content/10 hover:border-base-content/25"
-                          } ${flyingFid === w.fid ? "opacity-0" : ""}`}
-                        >
-                          <img
-                            src={w.imageSrc}
-                            alt={w.name}
-                            className="w-full h-full object-cover"
-                            draggable={false}
-                            loading="lazy"
-                            decoding="async"
-                          />
-                          <span className="absolute bottom-0 inset-x-0 text-[10px] py-0.5 bg-black/60 text-base-content/70 text-center">
-                            #{w.fid}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </div>
-            </div>
 
-            <button
-              className={`btn w-full max-w-sm mx-auto mt-3 transition-shadow ${
-                selectedFid
-                  ? "btn-primary hover:shadow-lg hover:shadow-primary/20"
-                  : "border border-primary/30 text-primary/50 hover:border-primary/50 hover:text-primary/70"
-              }`}
-              disabled={
-                !!flyingFid ||
-                !selectedFid ||
-                !isConnected ||
-                isSelling ||
-                isWriting
-              }
-              onClick={selectedFid ? handleSell : undefined}
-            >
-              {!isConnected
-                ? "Connect wallet to sell"
-                : ownedWarpletsLoading
-                  ? "downloading your warplets... "
-                  : isSelling || isWriting
-                    ? "Submitting..."
-                    : selectedFid
-                      ? `Sell Warplet #${selectedFid}`
-                      : "Select a Warplet"}
-            </button>
-            {sellError && (
-              <p className="mt-2 text-xs text-error/90 text-center max-w-md mx-auto break-words">
-                {sellError}
-              </p>
-            )}
-          </div>
-        </section>
+              <button
+                className={`btn w-full max-w-sm mx-auto mt-3 transition-shadow ${
+                  selectedFid
+                    ? "btn-primary hover:shadow-lg hover:shadow-primary/20"
+                    : "border border-primary/30 text-primary/50 hover:border-primary/50 hover:text-primary/70"
+                }`}
+                disabled={
+                  !!flyingFid ||
+                  !selectedFid ||
+                  !isConnected ||
+                  isSelling ||
+                  isWriting
+                }
+                onClick={selectedFid ? handleSell : undefined}
+              >
+                {!isConnected
+                  ? "Connect wallet to sell"
+                  : ownedWarpletsLoading
+                    ? "downloading your warplets... "
+                    : isSelling || isWriting
+                      ? "Submitting..."
+                      : selectedFid
+                        ? `Sell Warplet #${selectedFid}`
+                        : "Select a Warplet"}
+              </button>
+              {sellError && (
+                <p className="mt-2 text-xs text-error/90 text-center max-w-md mx-auto break-words">
+                  {sellError}
+                </p>
+              )}
+            </div>
+          </section>
         ) : null}
 
         {!claimBlocking ? (
@@ -1032,9 +1025,7 @@ function CaFooter({ pointerThrough = false }: { pointerThrough?: boolean }) {
   return (
     <div
       className={`fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm border-t border-base-content/10 py-3 sm:py-4 px-4 text-center select-all ${
-        pointerThrough
-          ? "pointer-events-none cursor-default"
-          : "cursor-pointer"
+        pointerThrough ? "pointer-events-none cursor-default" : "cursor-pointer"
       }`}
       onClick={pointerThrough ? undefined : handleCopy}
     >

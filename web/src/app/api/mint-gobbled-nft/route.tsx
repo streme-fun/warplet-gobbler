@@ -4,7 +4,6 @@ import { base } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseHttp } from "@/lib/base-http";
 import { ensureGobbledImage } from "@/lib/generate-gobbled-image";
-import { createGobbledCompositeImageResponse } from "@/lib/gobbled-composite-og";
 import { uploadToPinata } from "@/app/utils/pinata";
 import { CONTRACTS } from "@/lib/contracts";
 import { gobbledWarpletsAbi } from "@/abi/gobbledWarplets";
@@ -15,8 +14,8 @@ export const maxDuration = 60;
 /**
  * Produces the full payload a winner needs to call `GobbledWarplets.rescueWarplet`:
  *  1. Generate (or reuse cached) gobbled image via `ensureGobbledImage`
- *  2. Render a 1200x1200 branded composite via `next/og`
- *  3. Upload the composite to Pinata → image URL
+ *  2. Fetch the raw PNG bytes from the Vercel Blob URL
+ *  3. Upload the raw PNG to Pinata → image URL
  *  4. Build ERC-721 metadata JSON, upload that to Pinata → `tokenURI`
  *  5. Read the receipt id encoding from chain (`gobbleCount` × `WARPLET_ID_PADDING`)
  *  6. Sign EIP-712 `Mint(uint256 tokenId,string uri,uint256 deadline)` with the
@@ -57,7 +56,10 @@ async function getDomainName(contract: Address): Promise<string> {
   return name;
 }
 
-async function readReceiptTokenId(contract: Address, warpletId: bigint): Promise<bigint> {
+async function readReceiptTokenId(
+  contract: Address,
+  warpletId: bigint,
+): Promise<bigint> {
   const [gobbleCount, padding] = await Promise.all([
     publicClient.readContract({
       address: contract,
@@ -72,7 +74,9 @@ async function readReceiptTokenId(contract: Address, warpletId: bigint): Promise
     }),
   ]);
   if (gobbleCount === 0n) {
-    throw new Error("No reservation exists for this warplet — has the auction settled?");
+    throw new Error(
+      "No reservation exists for this warplet — has the auction settled?",
+    );
   }
   return (gobbleCount - 1n) * padding + warpletId;
 }
@@ -103,14 +107,16 @@ export async function POST(request: NextRequest) {
     // 1. Generate (or reuse) the gobbled image (Vercel Blob URL).
     const { url: gobbledUrl } = await ensureGobbledImage(warpletIdNum);
 
-    // 2. Render a 1200x1200 branded composite (same PNG as Pinata `image` on metadata).
-    const imageResponse = createGobbledCompositeImageResponse(
-      gobbledUrl,
-      warpletIdNum,
-    );
+    // 2. Fetch the raw PNG bytes from the blob — no compositing, no frame, no label.
+    const gobbledRes = await fetch(gobbledUrl);
+    if (!gobbledRes.ok) {
+      throw new Error(
+        `Could not fetch gobbled blob (${gobbledRes.status}): ${gobbledUrl}`,
+      );
+    }
+    const imageArrayBuffer = await gobbledRes.arrayBuffer();
 
-    // 3. Upload the composite image to Pinata.
-    const imageArrayBuffer = await imageResponse.arrayBuffer();
+    // 3. Upload the raw gobbled image to Pinata.
     const imageFile = new File(
       [imageArrayBuffer],
       `gobbled-warplet-${warpletIdNum}.png`,
@@ -147,7 +153,9 @@ export async function POST(request: NextRequest) {
 
     // 6. Sign EIP-712 `Mint(tokenId, uri, deadline)` with the tokenURISetter key.
     const account = getSignerAccount();
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + SIGNATURE_TTL_SECONDS);
+    const deadline = BigInt(
+      Math.floor(Date.now() / 1000) + SIGNATURE_TTL_SECONDS,
+    );
     const domainName = await getDomainName(gobbledContract);
 
     const signature = await account.signTypedData({
@@ -201,13 +209,15 @@ function mintErrorForClient(message: string): string {
     return "No on-chain reservation for this Warplet yet. Confirm the auction settled and you are claiming the correct token.";
   if (message.includes("GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY"))
     return "Server is missing GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY (rescue signatures).";
-  if (message.includes("Source warplet image not found"))
-    return message;
+  if (message.includes("Source warplet image not found")) return message;
   if (/pinata|PINATA|JWT/i.test(message))
     return "Pinata upload failed. Check PINATA_JWT and Pinata status.";
   if (/GEMINI|genai|GoogleGenerativeAI/i.test(message))
     return "Image generation failed. Check GEMINI_API_KEY.";
-  if (/blob|BLOB|vercel.*storage/i.test(message) && /token|auth|401|403/i.test(message))
+  if (
+    /blob|BLOB|vercel.*storage/i.test(message) &&
+    /token|auth|401|403/i.test(message)
+  )
     return "Vercel Blob failed. Check warpletgobbler_READ_WRITE_TOKEN.";
   if (
     /HTTP request failed|fetch failed|Fetch failed|ECONNRESET|ETIMEDOUT|timeout|429|503|502/i.test(

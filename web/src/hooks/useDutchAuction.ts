@@ -19,7 +19,8 @@ export function useDutchAuctionPrice() {
     address: CONTRACTS.dutchAuction,
     functionName: "currentPrice",
     query: {
-      refetchInterval: 1_000,
+      // Base block time is ~2s; polling faster just reads the same block twice.
+      refetchInterval: 2_000,
     },
   });
 }
@@ -53,12 +54,20 @@ export function useDutchAuctionPayoutStream(
     if (prev && dataUpdatedAt > prev.updatedAt) {
       const dtSec = (dataUpdatedAt - prev.updatedAt) / 1000;
       const delta = priceWei - prev.v;
-      if (delta <= BigInt(0)) {
+      if (delta < BigInt(0)) {
+        // Pot drained (gobble). Reset — next positive sample rebuilds the rate.
         rateRef.current = 0;
-      } else if (dtSec >= 0.12) {
+      } else if (delta > BigInt(0) && dtSec >= 0.12) {
         const deltaHuman = Number(formatUnits(delta, tokenDecimals));
-        rateRef.current = Math.max(0, deltaHuman / dtSec);
+        const instantaneous = Math.max(0, deltaHuman / dtSec);
+        // EMA smoothing: first good sample seeds the rate; later samples blend in.
+        rateRef.current =
+          rateRef.current === 0
+            ? instantaneous
+            : rateRef.current * 0.7 + instantaneous * 0.3;
       }
+      // delta === 0: two polls hit the same block — keep the existing rate so
+      // the UI keeps ticking instead of freezing.
     }
 
     prevRef.current = { v: priceWei, updatedAt: dataUpdatedAt };
@@ -113,14 +122,16 @@ export function useWarpgobbUsdPrice() {
   const wethUsdcPool = CONTRACTS.wethUsdcPool;
   const hasWethUsdcPool = wethUsdcPool.toLowerCase() !== ZERO;
   const warpgobbWethPoolId = UNISWAP_V4_POOL_IDS.warpgobbWeth;
-  const hasWarpgobbWethV4Pool =
-    warpgobbWethPoolId !== ZERO_BYTES32;
+  const hasWarpgobbWethV4Pool = warpgobbWethPoolId !== ZERO_BYTES32;
 
   const warpgobbAddr = CONTRACTS.warpgobbToken;
   const wethAddr = CONTRACTS.wethToken;
   const token0Address =
-    warpgobbAddr.toLowerCase() < wethAddr.toLowerCase() ? warpgobbAddr : wethAddr;
-  const token1Address = token0Address === warpgobbAddr ? wethAddr : warpgobbAddr;
+    warpgobbAddr.toLowerCase() < wethAddr.toLowerCase()
+      ? warpgobbAddr
+      : wethAddr;
+  const token1Address =
+    token0Address === warpgobbAddr ? wethAddr : warpgobbAddr;
 
   const gwSlot0 = useReadContract({
     abi: stateViewAbi,
@@ -215,8 +226,7 @@ export function useWarpgobbUsdPrice() {
       if (v4Token0 === warpgobb && v4Token1 === weth) {
         warpgobbInWeth = v4Token1PerToken0;
       } else if (v4Token0 === weth && v4Token1 === warpgobb) {
-        warpgobbInWeth =
-          v4Token1PerToken0 === 0 ? null : 1 / v4Token1PerToken0;
+        warpgobbInWeth = v4Token1PerToken0 === 0 ? null : 1 / v4Token1PerToken0;
       }
 
       const v3Token0 = wuToken0.data.toLowerCase();

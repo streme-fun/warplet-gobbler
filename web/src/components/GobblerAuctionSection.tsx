@@ -163,9 +163,9 @@ export default function GobblerAuctionSection({
   const [auctionRevealTick, setAuctionRevealTick] = useState(0);
   const expectNewLotAfterSettleRef = useRef(false);
   const [dismissedWinnerFps, setDismissedWinnerFps] = useState<string[]>([]);
-  const [settlementHistory, setSettlementHistory] = useState<SettlementRecord[]>(
-    [],
-  );
+  const [settlementHistory, setSettlementHistory] = useState<
+    SettlementRecord[]
+  >([]);
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
 
   useEffect(() => {
@@ -374,14 +374,13 @@ export default function GobblerAuctionSection({
     return () => clearTimeout(t);
   }, [bumpVisualPhase]);
 
-  const displayTokenId =
-    idleNoChainAuction
-      ? 0
-      : hasParsedLot && chainLot.tokenId > 0n
-        ? Number(chainLot.tokenId)
-        : onChainMode
-          ? 0
-          : live.fid;
+  const displayTokenId = idleNoChainAuction
+    ? 0
+    : hasParsedLot && chainLot.tokenId > 0n
+      ? Number(chainLot.tokenId)
+      : onChainMode
+        ? 0
+        : live.fid;
 
   const hasChainBid =
     liveAuction &&
@@ -439,9 +438,7 @@ export default function GobblerAuctionSection({
   const chainSettlementRecord = useMemo((): SettlementRecord | null => {
     if (!onChainMode || !chainSettledWinnerSnap || !chainLot) return null;
     const recordedAt =
-      chainLot.endTime > 0n
-        ? Number(chainLot.endTime) * 1000
-        : Date.now();
+      chainLot.endTime > 0n ? Number(chainLot.endTime) * 1000 : Date.now();
     return { ...chainSettledWinnerSnap, recordedAt };
   }, [onChainMode, chainSettledWinnerSnap, chainLot]);
 
@@ -469,7 +466,9 @@ export default function GobblerAuctionSection({
 
   const sortedOpenSettlements = useMemo(() => {
     if (!onChainMode) return [];
-    const open = mergedSettlementRecords.filter((r) => !dismissedFpSet.has(r.fp));
+    const open = mergedSettlementRecords.filter(
+      (r) => !dismissedFpSet.has(r.fp),
+    );
     return sortSettlementsForDisplay(open);
   }, [onChainMode, mergedSettlementRecords, dismissedFpSet]);
 
@@ -589,10 +588,10 @@ export default function GobblerAuctionSection({
 
   const claimBlocking = Boolean(
     claimFocusRecord &&
-      viewerAddress &&
-      isAddressEqual(viewerAddress, claimFocusRecord.bidder) &&
-      rescue.ready &&
-      rescue.stage !== "success",
+    viewerAddress &&
+    isAddressEqual(viewerAddress, claimFocusRecord.bidder) &&
+    rescue.ready &&
+    rescue.stage !== "success",
   );
 
   const claimForRow = useCallback(
@@ -951,8 +950,8 @@ export default function GobblerAuctionSection({
           }
         : showExpiredPostAuction && !hasChainBid && !auctionPaused
           ? {
-              label: "Restart bidding window",
-              hint: "Adds another full bidding window (no bids on this round).",
+              label: "Restart Auction",
+              hint: "",
               onSubmit: handleExtendAuction,
               loading: settlePending,
               disabled: settlementDisabled,
@@ -985,9 +984,7 @@ export default function GobblerAuctionSection({
         <AuctionWinnerClaimGate
           tokenId={claimFocusRecord.tokenId}
           winnerAddress={claimFocusRecord.bidder}
-          winAmountLabel={formatBidAmount(
-            BigInt(claimFocusRecord.amountWei),
-          )}
+          winAmountLabel={formatBidAmount(BigInt(claimFocusRecord.amountWei))}
           bidSymbol={bidSymbol}
           viewerAddress={viewerAddress}
           viewerDisplayName={viewerDisplayName}
@@ -1084,9 +1081,7 @@ export default function GobblerAuctionSection({
         }
       />
 
-      {onQueueEmptyBetweenSales &&
-      showLastWinnerBanner &&
-      !claimBlocking ? (
+      {onQueueEmptyBetweenSales && showLastWinnerBanner && !claimBlocking ? (
         <div className="mt-3 w-full flex justify-center px-1">
           <LastAuctionSettlementStack
             rows={displaySettlementRows}
