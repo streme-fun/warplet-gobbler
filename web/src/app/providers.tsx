@@ -1,7 +1,8 @@
 "use client";
 
 import { WagmiProvider, createConfig, http } from "wagmi";
-import { base } from "wagmi/chains";
+import { base, mainnet } from "wagmi/chains";
+import { ethMainnetHttp } from "@/lib/eth-mainnet-http";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   ConnectKitProvider,
@@ -26,12 +27,21 @@ const baseRpcUrl =
   process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() ||
   "https://rpc-endpoints.superfluid.dev/base-mainnet?app=streme-x8fsj6";
 
-/** One config everywhere: iframe heuristic must not swap connector sets or wagmi/ConnectKit disagree. */
+/**
+ * One config everywhere: iframe heuristic must not swap connector sets or wagmi/ConnectKit disagree.
+ *
+ * Mainnet is included ONLY so ConnectKit's `<Avatar>` component finds chain 1 in the app's
+ * config and uses our CORS-friendly transport instead of falling back to its hardcoded
+ * `createConfig({ chains: [mainnet], transports: { [mainnet.id]: http() } })` in
+ * `connectkit/build/index.es.js` — that fallback hits viem's default public endpoint
+ * (`eth.merkle.io`) which does not serve `Access-Control-Allow-Origin`.
+ */
 const config = createConfig(
   getDefaultConfig({
-    chains: [base],
+    chains: [base, mainnet],
     transports: {
       [base.id]: http(baseRpcUrl),
+      [mainnet.id]: ethMainnetHttp(),
     },
     walletConnectProjectId,
     appName: "WarpletGobbler",
