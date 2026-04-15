@@ -1,3 +1,4 @@
+import type { Context as PonderContext } from "ponder:registry";
 import type { NeynarUser } from "./neynar.js";
 import { getNeynarUserByAddress } from "./neynar.js";
 import { sendTelegramNotification } from "./telegram.js";
@@ -24,16 +25,13 @@ type BaseActivityRecord = {
   metadata?: Record<string, unknown>;
 };
 
-type Context = {
-  db: {
-    find: <T>(table: T, key: Record<string, unknown>) => Promise<any>;
-    insert: <T>(table: T) => { values: (values: Record<string, unknown>) => any };
-    update: <T>(table: T, key: Record<string, unknown>) => { set: (values: Record<string, unknown>) => any };
-  };
-};
+type IndexerContext =
+  | PonderContext<"AuctionSell:BidPlaced">
+  | PonderContext<"DutchAuction:Gobbled">
+  | PonderContext<"AuctionSell:AuctionSettled">;
 
 export async function processActivity(
-  context: Context,
+  context: IndexerContext,
   record: BaseActivityRecord,
 ): Promise<void> {
   await context.db
@@ -80,7 +78,7 @@ export async function processActivity(
     }
   }
 
-  if (newUserEventId && shouldNotify(record.blockNumber)) {
+  if (newUserEventId && record.actorAddress && shouldNotify(record.blockNumber)) {
     const newUser = await context.db.find(user, { address: record.actorAddress });
     const newUserMessage = renderNewUserTelegramMessage(newUser, record.transactionHash);
     const telegramMessage = await sendTelegramNotification("NEW_USER_INTERACTION", newUserMessage);
@@ -93,7 +91,7 @@ export async function processActivity(
 }
 
 async function upsertUser(
-  context: Context,
+  context: IndexerContext,
   address: `0x${string}`,
   record: BaseActivityRecord,
 ): Promise<{ profile: NeynarUser | null; isNewUser: boolean; newUserEventId: string }> {

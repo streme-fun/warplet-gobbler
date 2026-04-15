@@ -23,5 +23,10 @@ export async function sendTelegramNotification(
     notifiers.set(cacheKey, notifier);
   }
 
-  return notifier.sendMessage({ html, disableLinkPreview: true });
+  try {
+    return await notifier.sendMessage({ html, disableLinkPreview: true });
+  } catch (error) {
+    console.error(`[warplet-activity-indexer] Telegram notify failed for ${type}`, error);
+    return null;
+  }
 }

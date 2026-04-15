@@ -6,7 +6,7 @@ function baseEventId(txHash: `0x${string}`, logIndex: number): string {
 }
 
 ponder.on("AuctionSell:BidPlaced", async ({ event, context }) => {
-  await processActivity(context as any, {
+  await processActivity(context, {
     id: baseEventId(event.transaction.hash, event.log.logIndex),
     type: "BID_PLACED",
     chainId: context.chain.id,
@@ -28,7 +28,7 @@ ponder.on("AuctionSell:BidPlaced", async ({ event, context }) => {
 });
 
 ponder.on("DutchAuction:Gobbled", async ({ event, context }) => {
-  await processActivity(context as any, {
+  await processActivity(context, {
     id: baseEventId(event.transaction.hash, event.log.logIndex),
     type: "WARPLET_GOBBLED",
     chainId: context.chain.id,
@@ -50,7 +50,7 @@ ponder.on("DutchAuction:Gobbled", async ({ event, context }) => {
 });
 
 ponder.on("AuctionSell:AuctionSettled", async ({ event, context }) => {
-  await processActivity(context as any, {
+  await processActivity(context, {
     id: baseEventId(event.transaction.hash, event.log.logIndex),
     type: "AUCTION_SETTLED",
     chainId: context.chain.id,

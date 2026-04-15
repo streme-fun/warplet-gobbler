@@ -209,7 +209,7 @@ function resolveOptionalHtmlContent(input: { text?: string; html?: string }): st
 }
 
 function plainTextToTelegramHtml(input: string): string {
-  return escapeTelegramHtml(input).replace(/\r?\n/g, "<br>");
+  return escapeTelegramHtml(input);
 }
 
 type BinaryPhotoPart = {

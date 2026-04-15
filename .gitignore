@@ -28,6 +28,8 @@ Thumbs.db
 
 # Misc
 *.log
+dist/
+.ponder/
 .next/
 *.tsbuildinfo
 .vercel

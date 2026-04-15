@@ -1,3 +1,4 @@
+import { escapeTelegramHtml } from "telegram-notifier";
 import type { NeynarUser } from "./neynar.js";
 
 export const zeroAddress = "0x0000000000000000000000000000000000000000";
@@ -25,10 +26,4 @@ export function formatActor(address: string | null | undefined, profile?: Neynar
   return bits.join(" · ");
 }
 
-export function escapeHtml(input: string): string {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;");
-}
+export const escapeHtml = escapeTelegramHtml;
