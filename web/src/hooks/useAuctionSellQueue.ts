@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { isAddressEqual, zeroAddress } from "viem";
 import { useReadContract } from "wagmi";
+import { base } from "wagmi/chains";
 import { CONTRACTS } from "@/lib/contracts";
 import { auctionSellAbi } from "@/abi/auctionSell";
 
@@ -13,6 +14,7 @@ export function useAuctionSellQueue(opts: {
   const configured = !isAddressEqual(CONTRACTS.auctionSell, zeroAddress);
 
   const q = useReadContract({
+    chainId: base.id,
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "getQueuedTokenIds",

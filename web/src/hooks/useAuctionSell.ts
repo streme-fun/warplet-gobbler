@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { formatUnits, type Address, isAddressEqual, zeroAddress } from "viem";
 import { useReadContract } from "wagmi";
+import { base } from "wagmi/chains";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import { auctionSellAbi } from "@/abi/auctionSell";
 import { erc20Abi } from "@/abi/erc20";
@@ -25,8 +26,7 @@ export function minBidForAuction(
 ): bigint {
   if (currentHighBid === 0n) return reservePrice;
   return (
-    currentHighBid +
-    (currentHighBid * BigInt(minBidIncrementPercentage)) / 100n
+    currentHighBid + (currentHighBid * BigInt(minBidIncrementPercentage)) / 100n
   );
 }
 
@@ -38,6 +38,7 @@ export function useAuctionSellAuction() {
   const configured = !isAddressEqual(CONTRACTS.auctionSell, zeroAddress);
 
   const auctionQ = useReadContract({
+    chainId: base.id,
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "auction",
@@ -50,6 +51,7 @@ export function useAuctionSellAuction() {
   const refetchAuction = auctionQ.refetch;
 
   const bumpFeeQ = useReadContract({
+    chainId: base.id,
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "queueBumpFee",
@@ -60,6 +62,7 @@ export function useAuctionSellAuction() {
   });
 
   const bidTokenQ = useReadContract({
+    chainId: base.id,
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "bidToken",
@@ -70,6 +73,7 @@ export function useAuctionSellAuction() {
   });
 
   const reserveQ = useReadContract({
+    chainId: base.id,
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "reservePrice",
@@ -77,6 +81,7 @@ export function useAuctionSellAuction() {
   });
 
   const incrementPctQ = useReadContract({
+    chainId: base.id,
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "minBidIncrementPercentage",
@@ -84,6 +89,7 @@ export function useAuctionSellAuction() {
   });
 
   const pausedQ = useReadContract({
+    chainId: base.id,
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "paused",
@@ -100,6 +106,7 @@ export function useAuctionSellAuction() {
       : undefined;
 
   const decimalsQ = useReadContract({
+    chainId: base.id,
     abi: erc20Abi,
     address: bidTokenAddr ?? ZERO_ADDRESS,
     functionName: "decimals",
@@ -107,6 +114,7 @@ export function useAuctionSellAuction() {
   });
 
   const symbolQ = useReadContract({
+    chainId: base.id,
     abi: erc20Abi,
     address: bidTokenAddr ?? ZERO_ADDRESS,
     functionName: "symbol",

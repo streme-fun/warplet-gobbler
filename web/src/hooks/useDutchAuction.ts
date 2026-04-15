@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Address, encodeAbiParameters, formatUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import { base } from "wagmi/chains";
 import { CONTRACTS, UNISWAP_V4_POOL_IDS } from "@/lib/contracts";
 import { dutchAuctionAbi } from "@/abi/dutchAuction";
 import { erc721Abi } from "@/abi/erc721";
@@ -15,6 +16,7 @@ const ZERO_BYTES32 =
 
 export function useDutchAuctionPrice() {
   return useReadContract({
+    chainId: base.id,
     abi: dutchAuctionAbi,
     address: CONTRACTS.dutchAuction,
     functionName: "currentPrice",
@@ -80,6 +82,7 @@ export function useDutchAuctionPayoutStream(
 export function useDutchAuctionPayoutToken() {
   const isAuctionSet = CONTRACTS.dutchAuction.toLowerCase() !== ZERO;
   const paymentToken = useReadContract({
+    chainId: base.id,
     abi: dutchAuctionAbi,
     address: CONTRACTS.dutchAuction,
     functionName: "paymentToken",
@@ -93,6 +96,7 @@ export function useDutchAuctionPayoutToken() {
   const isResolvedTokenSet = resolvedTokenAddress.toLowerCase() !== ZERO;
 
   const symbol = useReadContract({
+    chainId: base.id,
     abi: erc20Abi,
     address: resolvedTokenAddress,
     functionName: "symbol",
@@ -102,6 +106,7 @@ export function useDutchAuctionPayoutToken() {
   });
 
   const decimals = useReadContract({
+    chainId: base.id,
     abi: erc20Abi,
     address: resolvedTokenAddress,
     functionName: "decimals",
@@ -134,6 +139,7 @@ export function useWarpgobbUsdPrice() {
     token0Address === warpgobbAddr ? wethAddr : warpgobbAddr;
 
   const gwSlot0 = useReadContract({
+    chainId: base.id,
     abi: stateViewAbi,
     address: CONTRACTS.uniswapV4StateView,
     functionName: "getSlot0",
@@ -142,18 +148,21 @@ export function useWarpgobbUsdPrice() {
   });
 
   const wuToken0 = useReadContract({
+    chainId: base.id,
     abi: uniswapV3PoolAbi,
     address: wethUsdcPool,
     functionName: "token0",
     query: { enabled: hasWethUsdcPool },
   });
   const wuToken1 = useReadContract({
+    chainId: base.id,
     abi: uniswapV3PoolAbi,
     address: wethUsdcPool,
     functionName: "token1",
     query: { enabled: hasWethUsdcPool },
   });
   const wuSlot0 = useReadContract({
+    chainId: base.id,
     abi: uniswapV3PoolAbi,
     address: wethUsdcPool,
     functionName: "slot0",
@@ -161,24 +170,28 @@ export function useWarpgobbUsdPrice() {
   });
 
   const token0Decimals = useReadContract({
+    chainId: base.id,
     abi: erc20Abi,
     address: token0Address,
     functionName: "decimals",
     query: { enabled: hasWarpgobbWethV4Pool },
   });
   const token1Decimals = useReadContract({
+    chainId: base.id,
     abi: erc20Abi,
     address: token1Address,
     functionName: "decimals",
     query: { enabled: hasWarpgobbWethV4Pool },
   });
   const wuToken0Decimals = useReadContract({
+    chainId: base.id,
     abi: erc20Abi,
     address: wuToken0.data ?? CONTRACTS.wethToken,
     functionName: "decimals",
     query: { enabled: !!wuToken0.data },
   });
   const wuToken1Decimals = useReadContract({
+    chainId: base.id,
     abi: erc20Abi,
     address: wuToken1.data ?? CONTRACTS.usdcToken,
     functionName: "decimals",

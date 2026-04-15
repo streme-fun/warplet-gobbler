@@ -15,6 +15,7 @@ import {
   useReadContract,
   useWriteContract,
 } from "wagmi";
+import { base } from "wagmi/chains";
 import { auctionSellAbi } from "@/abi/auctionSell";
 import { erc777Abi } from "@/abi/erc777";
 import { CONTRACTS } from "@/lib/contracts";
@@ -58,6 +59,7 @@ export function useAuctionSellBid(opts: {
   const configured = bidFlowEnabled && tokenReady;
 
   const reserveQ = useReadContract({
+    chainId: base.id,
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "reservePrice",
@@ -65,6 +67,7 @@ export function useAuctionSellBid(opts: {
   });
 
   const minPctQ = useReadContract({
+    chainId: base.id,
     abi: auctionSellAbi,
     address: CONTRACTS.auctionSell,
     functionName: "minBidIncrementPercentage",
@@ -104,7 +107,14 @@ export function useAuctionSellBid(opts: {
       }
       await refetchAuction();
     },
-    [address, bidTokenAddress, minBidWei, publicClient, refetchAuction, writeContractAsync],
+    [
+      address,
+      bidTokenAddress,
+      minBidWei,
+      publicClient,
+      refetchAuction,
+      writeContractAsync,
+    ],
   );
 
   const parseHumanToWei = useCallback(
