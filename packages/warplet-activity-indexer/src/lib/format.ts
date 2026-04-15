@@ -1,8 +1,6 @@
 import { escapeTelegramHtml } from "telegram-notifier";
 import type { NeynarUser } from "./neynar.js";
 
-export const zeroAddress = "0x0000000000000000000000000000000000000000";
-
 export function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }

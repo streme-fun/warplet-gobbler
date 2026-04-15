@@ -80,6 +80,8 @@ export async function processActivity(
 
   if (newUserEventId && record.actorAddress && shouldNotify(record.blockNumber)) {
     const newUser = await context.db.find(user, { address: record.actorAddress });
+    if (!newUser) return;
+
     const newUserMessage = renderNewUserTelegramMessage(newUser, record.transactionHash);
     const telegramMessage = await sendTelegramNotification("NEW_USER_INTERACTION", newUserMessage);
     if (telegramMessage) {
