@@ -155,8 +155,8 @@ export default function AuctionWinnerClaimGate({
           </div>
         ) : (
           <p className="text-center text-xs text-warning/90">
-            Rescue contract isn&apos;t configured — you can&apos;t complete this
-            step here yet. ({shortAddr(winnerAddress)})
+            Claiming isn&apos;t available here yet. If you&apos;re the winner, hang tight —
+            this step will unlock soon. ({shortAddr(winnerAddress)})
           </p>
         )}
       </div>

@@ -1048,11 +1048,11 @@ export default function GobblerAuctionSection({
                 error: startError,
                 housePaused: auctionPaused,
                 queueBlockedReason: startAuctionBlockedByHydration
-                  ? "Syncing auction state from Base…"
+                  ? "Syncing the latest auction state…"
                   : startAuctionQueueLoading
-                    ? "Loading the on-chain queue…"
+                    ? "Loading the queue…"
                     : startAuctionQueueEmpty
-                      ? "No Warplets in the on-chain queue yet. Sell one to the Gobbler first (or enqueue on-chain), then you can start the auction here."
+                      ? "No Warplets are queued yet. Sell one to the Gobbler first, then start the auction here."
                       : null,
               }
             : null

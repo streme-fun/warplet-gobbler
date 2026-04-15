@@ -310,10 +310,10 @@ export function useDutchAuctionActions() {
       throw new Error("Connect wallet to sell");
     }
     if (CONTRACTS.warplets.toLowerCase() === ZERO) {
-      throw new Error("NEXT_PUBLIC_WARPLETS_ADDRESS is not configured");
+      throw new Error("Selling isn’t available right now.");
     }
     if (CONTRACTS.dutchAuction.toLowerCase() === ZERO) {
-      throw new Error("NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS is not configured");
+      throw new Error("The Gobbler isn’t ready to buy right now.");
     }
     const data = encodeDutchAuctionGobbleData(minPrice);
 

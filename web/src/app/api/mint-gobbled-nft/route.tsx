@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     const gobbledContract = CONTRACTS.gobbledWarplets;
     if (gobbledContract === "0x0000000000000000000000000000000000000000") {
       return NextResponse.json(
-        { success: false, error: "GobbledWarplets address not configured" },
+        { success: false, error: "Claiming isn’t available right now." },
         { status: 500 },
       );
     }
@@ -196,7 +196,6 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error,
-        ...(process.env.NODE_ENV === "development" ? { debug: message } : {}),
       },
       { status: 500 },
     );
@@ -206,25 +205,20 @@ export async function POST(request: NextRequest) {
 /** Map internal failures to actionable copy; keep generic fallback for unknowns. */
 function mintErrorForClient(message: string): string {
   if (message.includes("No reservation exists"))
-    return "No on-chain reservation for this Warplet yet. Confirm the auction settled and you are claiming the correct token.";
-  if (message.includes("GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY"))
-    return "Server is missing GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY (rescue signatures).";
-  if (message.includes("Source warplet image not found")) return message;
+    return "This Warplet isn’t ready to claim yet. Give it a moment and try again.";
+  if (message.includes("Source warplet image not found"))
+    return "We couldn’t generate the claim artwork for this Warplet yet. Please try again shortly.";
   if (/pinata|PINATA|JWT/i.test(message))
-    return "Pinata upload failed. Check PINATA_JWT and Pinata status.";
+    return "We couldn’t prepare the claim assets right now. Please try again shortly.";
   if (/GEMINI|genai|GoogleGenerativeAI/i.test(message))
-    return "Image generation failed. Check GEMINI_API_KEY.";
-  if (
-    /blob|BLOB|vercel.*storage/i.test(message) &&
-    /token|auth|401|403/i.test(message)
-  )
-    return "Vercel Blob failed. Check warpletgobbler_READ_WRITE_TOKEN.";
+    return "We couldn’t prepare the claim artwork right now. Please try again shortly.";
+  if (/blob|BLOB|vercel.*storage/i.test(message) && /token|auth|401|403/i.test(message))
+    return "We couldn’t save the claim assets right now. Please try again shortly.";
   if (
     /HTTP request failed|fetch failed|Fetch failed|ECONNRESET|ETIMEDOUT|timeout|429|503|502/i.test(
       message,
     )
   )
-    return "Could not reach Base RPC from the server. Set BASE_RPC_URL or NEXT_PUBLIC_BASE_RPC_URL to a reliable Base endpoint (same one you use in the browser is fine).";
-  if (process.env.NODE_ENV === "development") return message;
-  return "Could not prepare rescue payload. Try again later.";
+    return "The claim service is having trouble reaching Base right now. Please try again shortly.";
+  return "Could not prepare your claim right now. Please try again later.";
 }
