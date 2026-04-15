@@ -9,6 +9,9 @@ const FALLBACK_PROMPT = "Apply a dark, gloomy transformation to this creature";
 const BLOB_TOKEN = process.env.warpletgobbler_READ_WRITE_TOKEN!;
 const SOURCE_BASE =
   "https://qcntgudzysvobg72.public.blob.vercel-storage.com/warplets";
+const inFlightByToken = new Map<number, Promise<{ url: string }>>();
+const GEMINI_SKIP_IMAGE_GENERATION =
+  process.env.GEMINI_SKIP_IMAGE_GENERATION?.trim().toLowerCase() === "true";
 
 async function existingGobbledBlobUrl(
   tokenId: number,
@@ -30,6 +33,21 @@ export async function gobbledBlobExists(tokenId: number): Promise<boolean> {
 export async function ensureGobbledImage(
   tokenId: number,
 ): Promise<{ url: string }> {
+  const inFlight = inFlightByToken.get(tokenId);
+  if (inFlight) return inFlight;
+
+  const run = ensureGobbledImageUnlocked(tokenId);
+  inFlightByToken.set(tokenId, run);
+  try {
+    return await run;
+  } finally {
+    inFlightByToken.delete(tokenId);
+  }
+}
+
+async function ensureGobbledImageUnlocked(
+  tokenId: number,
+): Promise<{ url: string }> {
   const existingUrl = await existingGobbledBlobUrl(tokenId);
   if (existingUrl != null) {
     return { url: existingUrl };
@@ -42,10 +60,20 @@ export async function ensureGobbledImage(
     throw new Error(`Source warplet image not found: ${sourceResponse.status}`);
   }
   const sourceBuffer = await sourceResponse.arrayBuffer();
-  const sourceBase64 = Buffer.from(sourceBuffer).toString("base64");
+  const sourceBytes = Buffer.from(sourceBuffer);
+  let imageBuffer: Buffer;
 
-  // Generate via Gemini (with fallback prompt)
-  const imageBuffer = await generateWithFallback(sourceBase64);
+  if (GEMINI_SKIP_IMAGE_GENERATION) {
+    console.info(
+      "[gobbled-image] GEMINI_SKIP_IMAGE_GENERATION=true, using source image",
+      { tokenId },
+    );
+    imageBuffer = sourceBytes;
+  } else {
+    const sourceBase64 = sourceBytes.toString("base64");
+    // Generate via Gemini (with fallback prompt)
+    imageBuffer = await generateWithFallback(sourceBase64);
+  }
 
   // Store in Vercel Blob
   const blob = await put(
@@ -62,7 +90,9 @@ export async function ensureGobbledImage(
 }
 
 async function generateWithFallback(sourceBase64: string): Promise<Buffer> {
-  for (const prompt of [PRIMARY_PROMPT, FALLBACK_PROMPT]) {
+  const attempts = [PRIMARY_PROMPT, FALLBACK_PROMPT];
+  for (const [index, prompt] of attempts.entries()) {
+    const promptLabel = index === 0 ? "primary" : "fallback";
     try {
       const response = await genAI.models.generateContent({
         model: "gemini-3.1-flash-image-preview",
@@ -85,11 +115,30 @@ async function generateWithFallback(sourceBase64: string): Promise<Buffer> {
       );
 
       if (!imagePart?.inlineData?.data) {
+        const candidateCount = response.candidates?.length ?? 0;
+        const promptFeedback = JSON.stringify(
+          (response as { promptFeedback?: unknown }).promptFeedback ?? null,
+        );
+        const firstFinishReason = (
+          response.candidates?.[0] as { finishReason?: unknown } | undefined
+        )?.finishReason;
+        console.warn(
+          `[gobbled-image] gemini ${promptLabel} attempt returned no image part`,
+          {
+            candidateCount,
+            firstFinishReason: firstFinishReason ?? null,
+            promptFeedback,
+          },
+        );
         continue; // try fallback prompt
       }
 
       return Buffer.from(imagePart.inlineData.data as string, "base64");
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[gobbled-image] gemini ${promptLabel} attempt failed`, {
+        error: message,
+      });
       continue; // try fallback prompt
     }
   }

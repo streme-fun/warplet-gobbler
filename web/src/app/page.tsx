@@ -16,7 +16,6 @@ import {
 } from "@/hooks/useDutchAuction";
 import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
 import { useAuctionSell777Bid } from "@/hooks/useAuctionSell777Bid";
-import { useAuctionQueueStripFids } from "@/hooks/useAuctionQueueStripFids";
 import AbyssBackground from "@/components/AbyssBackground";
 import ParallaxBackground from "@/components/ParallaxBackground";
 import Particles from "@/components/Particles";
@@ -81,6 +80,9 @@ const MORPH_SHAPES = [
   },
 ];
 
+const FIRST_SELL_VISIT_KEY = "warpletgobbler:first-sell-visit-complete";
+
+
 function MorphingSilhouettes({ scrollBlend }: { scrollBlend: number }) {
   return (
     <svg
@@ -129,6 +131,408 @@ function MiniAppWalletButton() {
   );
 }
 
+function GobblerBootOverlay({
+  opening,
+  onDone,
+}: {
+  opening: boolean;
+  onDone: () => void;
+}) {
+  const bgRef = useRef<HTMLCanvasElement>(null);
+  const gooRef = useRef<HTMLCanvasElement>(null);
+  const topRef = useRef<HTMLCanvasElement>(null);
+  const openingRef = useRef(opening);
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    openingRef.current = opening;
+  }, [opening]);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
+  useEffect(() => {
+    const bgCv = bgRef.current;
+    const gooCv = gooRef.current;
+    const topCv = topRef.current;
+    if (!bgCv || !gooCv || !topCv) return;
+    const bgCx = bgCv.getContext("2d");
+    const gx = gooCv.getContext("2d");
+    const tx = topCv.getContext("2d");
+    if (!bgCx || !gx || !tx) return;
+
+    let W = window.innerWidth;
+    let H = window.innerHeight;
+    let MID = H / 2;
+
+    for (const cv of [bgCv, gooCv, topCv]) {
+      if (!cv) continue;
+      cv.width = W;
+      cv.height = H;
+    }
+
+    let time = 0;
+    let phase = 1;
+    let pt = 0;
+    let topY = MID - 3,
+      botY = MID + 3,
+      topT = MID - 3,
+      botT = MID + 3;
+    let pTopY = MID - 3,
+      pBotY = MID + 3;
+    let dark = 1,
+      darkT = 1,
+      eyeA = 0,
+      eyeAT = 0;
+    let cancelled = false;
+
+    function lerp(a: number, b: number, t: number) {
+      return a + (b - a) * t;
+    }
+    function sr(s: number) {
+      const v = Math.sin(s * 127.1 + 311.7) * 43758.5453;
+      return v - Math.floor(v);
+    }
+    function clamp(v: number, a: number, b: number) {
+      return v < a ? a : v > b ? b : v;
+    }
+
+    const VC = "#040404";
+    const mobile = () => W < 640;
+
+    const TARGET_SPACING_PX = 22;
+    const bumps: {
+      jaw: number;
+      xf: number;
+      r: number;
+      yo: number;
+      ph: number;
+    }[] = [];
+    function regenerateBumps() {
+      bumps.length = 0;
+      const count = Math.max(8, Math.min(160, Math.round(W / TARGET_SPACING_PX)));
+      for (let jaw = 0; jaw < 2; jaw++) {
+        const yoSign = jaw === 0 ? 1 : -1;
+        for (let i = 0; i < count; i++) {
+          const s = jaw * 1000 + i * 31;
+          bumps.push({
+            jaw,
+            xf: (i + 0.3 + sr(s) * 0.4) / count,
+            r: 6 + sr(s + 11) * 13,
+            yo: yoSign * (1 + sr(s + 23) * 11),
+            ph: sr(s + 37) * 6.28,
+          });
+        }
+      }
+    }
+    regenerateBumps();
+
+    function resize() {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      MID = H / 2;
+      for (const cv of [bgCv, gooCv, topCv]) {
+        if (!cv) continue;
+        cv.width = W;
+        cv.height = H;
+      }
+      regenerateBumps();
+    }
+    window.addEventListener("resize", resize);
+
+    const SN = 16;
+    const CPS = 30;
+    const strands: {
+      xf: number;
+      br: number;
+      wf: number;
+      wa: number;
+      ph: number;
+      bd: number;
+      was: boolean;
+    }[] = [];
+    for (let i = 0; i < SN; i++) {
+      const s = i * 137 + 42;
+      strands.push({
+        xf: 0.05 + sr(s) * 0.9,
+        br: 6 + sr(s + 11) * 9,
+        wf: 0.25 + sr(s + 33) * 0.7,
+        wa: 5 + sr(s + 55) * 16,
+        ph: sr(s + 77) * 6.28,
+        bd: 300 + sr(s + 99) * 350,
+        was: false,
+      });
+    }
+
+    const drops: {
+      on: boolean;
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      r: number;
+      a: number;
+    }[] = [];
+    for (let i = 0; i < 40; i++)
+      drops.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, r: 0, a: 1 });
+
+    function spawnDrop(x: number, y: number, r: number) {
+      for (const d of drops) {
+        if (!d.on) {
+          d.on = true;
+          d.x = x + (Math.random() - 0.5) * 8;
+          d.y = y;
+          d.vx = (Math.random() - 0.5) * 1.5;
+          d.vy = 0.3 + Math.random() * 2;
+          d.r = Math.max(1.5, r * 0.3 + Math.random() * r * 0.5);
+          d.a = 1;
+          return;
+        }
+      }
+    }
+
+    function drawBg() {
+      bgCx!.fillStyle = "rgba(0,0,0,0)";
+      bgCx!.clearRect(0, 0, W, H);
+      if (dark > 0.001) {
+        bgCx!.fillStyle = `rgba(4,4,4,${dark})`;
+        bgCx!.fillRect(0, 0, W, H);
+      }
+    }
+
+    function drawGoo() {
+      const t = time * 0.007;
+      gx!.clearRect(0, 0, W, H);
+      gx!.fillStyle = VC;
+
+      gx!.fillRect(-30, -500, W + 60, 500 + topY + 4);
+      gx!.fillRect(-30, botY - 4, W + 60, 500 + H);
+
+      for (const b of bumps) {
+        const x = b.xf * W;
+        const br = Math.sin(t * 0.5 + b.ph) * 2;
+        const r = b.r + br;
+        const y = b.jaw === 0 ? topY + b.yo + 4 : botY + b.yo - 4;
+        gx!.beginPath();
+        gx!.arc(x, y, Math.max(1, r), 0, 6.28);
+        gx!.fill();
+      }
+
+      const gap = botY - topY;
+      const te = topY + 12;
+      const be = botY - 12;
+      const jv = Math.abs(topY - pTopY) + Math.abs(botY - pBotY);
+
+      if (gap < 900 && gap > -30) {
+        for (const s of strands) {
+          const conn = gap < s.bd;
+          const sx = s.xf * W;
+          if (s.was && !conn) {
+            const my = (te + be) / 2;
+            for (let k = 0; k < 5; k++)
+              spawnDrop(
+                sx + (Math.random() - 0.5) * 10,
+                my + (k - 2) * 10,
+                s.br * 0.5,
+              );
+          }
+          s.was = conn;
+          if (!conn) continue;
+
+          const dist = Math.max(0, be - te);
+          const stretch = clamp(gap / s.bd, 0, 1);
+          const wobble = Math.sin(t * s.wf + s.ph) * s.wa;
+          const jolt = Math.sin(t * 3.5 + s.ph) * clamp(jv * 1.2, 0, 14);
+
+          for (let j = 0; j < CPS; j++) {
+            const f = j / (CPS - 1);
+            const mid = 1 - Math.abs(f - 0.5) * 2;
+            const mid2 = mid * mid;
+            const sag =
+              mid2 * gap * 0.22 +
+              Math.sin(t * 0.6 + s.ph + j * 0.4) * 3 * mid;
+            const cy = te + dist * f + sag;
+            const cx_ = sx + (wobble + jolt) * mid * 0.6;
+            const endBoost = j === 0 || j === CPS - 1 ? 1.5 : 1;
+            const rMul = (1 - mid * (0.35 + stretch * 0.45)) * endBoost;
+            const r = s.br * rMul * (1 - stretch * 0.25);
+            if (r < 0.4) continue;
+            gx!.beginPath();
+            gx!.arc(cx_, cy, r, 0, 6.28);
+            gx!.fill();
+          }
+        }
+      }
+
+      if (topY > -300 && Math.random() < 0.15) {
+        const dx = Math.random() * W;
+        spawnDrop(dx, topY + 10 + Math.random() * 8, 2 + Math.random() * 4);
+      }
+
+      for (const d of drops) {
+        if (!d.on) continue;
+        d.vy += 0.3;
+        d.y += d.vy;
+        d.x += d.vx;
+        d.vx *= 0.98;
+        d.a -= 0.008;
+        d.r *= 0.998;
+        if (d.a <= 0 || d.y > H + 30) {
+          d.on = false;
+          continue;
+        }
+        gx!.save();
+        gx!.globalAlpha = clamp(d.a, 0, 1);
+        gx!.beginPath();
+        gx!.arc(d.x, d.y, Math.max(0.5, d.r), 0, 6.28);
+        gx!.fill();
+        gx!.restore();
+      }
+    }
+
+    function drawTop() {
+      tx!.clearRect(0, 0, W, H);
+      if (eyeA > 0.005) {
+        const m = mobile();
+        const glowR = m ? 60 : 120;
+        const orbR = m ? 16 : 30;
+        const eyeOffset = m ? 35 : 65;
+        const t = time * 0.01;
+        const ey = topY - eyeOffset + Math.sin(t * 0.6) * 2;
+        for (const ex of [W * 0.34, W * 0.66]) {
+          tx!.save();
+          tx!.globalAlpha = eyeA;
+          const g1 = tx!.createRadialGradient(ex, ey, 0, ex, ey, glowR);
+          g1.addColorStop(0, `rgba(220,200,255,${0.15 * eyeA})`);
+          g1.addColorStop(0.3, `rgba(160,120,220,${0.06 * eyeA})`);
+          g1.addColorStop(1, "rgba(0,0,0,0)");
+          tx!.fillStyle = g1;
+          tx!.beginPath();
+          tx!.arc(ex, ey, glowR, 0, Math.PI * 2);
+          tx!.fill();
+          tx!.beginPath();
+          tx!.arc(ex, ey, orbR, 0, Math.PI * 2);
+          tx!.fillStyle = "rgba(255,245,255,1)";
+          tx!.fill();
+          tx!.restore();
+        }
+      }
+    }
+
+    // Boot phases — same lerp system as GobbleOverlay, reversed sequence:
+    //   1: pure black → eyes fade in, jaws nearly closed
+    //   2: eyes visible, jaws breathe — waiting for page ready
+    //   3: jaws open wide (= GobbleOverlay phase 6)
+    //   4: jaws off screen, dark fades (= GobbleOverlay phase 9) → onDone
+    function update() {
+      time++;
+      pTopY = topY;
+      pBotY = botY;
+
+      const jSpd =
+        phase <= 2 ? 0.008 : phase === 3 ? 0.02 : phase === 4 ? 0.03 : 0.02;
+      topY = lerp(topY, topT, jSpd);
+      botY = lerp(botY, botT, jSpd);
+      dark = lerp(dark, darkT, 0.018);
+      eyeA = lerp(eyeA, eyeAT, 0.012);
+      pt++;
+
+      if (phase === 1) {
+        darkT = 0.97;
+        eyeAT = 1;
+        topT = MID - 4;
+        botT = MID + 4;
+        if (pt > 80) {
+          phase = 2;
+          pt = 0;
+        }
+      }
+      if (phase === 2) {
+        topT = MID - 4 + Math.sin(time * 0.02) * 2;
+        botT = MID + 4 - Math.sin(time * 0.02) * 2;
+        darkT = 0.97;
+        eyeAT = 1;
+        if (openingRef.current) {
+          phase = 3;
+          pt = 0;
+        }
+      }
+      if (phase === 3) {
+        const openHalf = mobile() ? Math.min(H * 0.35, 140) : 180;
+        topT = MID - openHalf;
+        botT = MID + openHalf;
+        darkT = 0.92;
+        eyeAT = 0;
+        if (pt > 160) {
+          phase = 4;
+          pt = 0;
+        }
+      }
+      if (phase === 4) {
+        topT = -350;
+        botT = H + 350;
+        darkT = 0;
+        if (topY < -100) eyeAT = 0;
+        if (topY < -280 && dark < 0.03) {
+          cancelled = true;
+          onDoneRef.current();
+        }
+      }
+    }
+
+    function frame() {
+      if (cancelled) return;
+      drawBg();
+      drawGoo();
+      drawTop();
+      update();
+      requestAnimationFrame(frame);
+    }
+
+    frame();
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", resize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[120]"
+      style={{ width: "100vw", height: "100vh" }}
+      aria-hidden
+    >
+      <svg width="0" height="0" style={{ position: "absolute" }}>
+        <defs>
+          <filter id="bootGooFilter" colorInterpolationFilters="sRGB">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b" />
+            <feColorMatrix
+              in="b"
+              type="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9"
+            />
+          </filter>
+        </defs>
+      </svg>
+      <canvas
+        ref={bgRef}
+        className="absolute inset-0"
+        style={{ width: "100%", height: "100%" }}
+      />
+      <canvas
+        ref={gooRef}
+        className="absolute inset-0"
+        style={{ width: "100%", height: "100%", filter: "url(#bootGooFilter)" }}
+      />
+      <canvas
+        ref={topRef}
+        className="absolute inset-0"
+        style={{ width: "100%", height: "100%" }}
+      />
+    </div>
+  );
+}
+
 export default function Home() {
   const { isLoaded, context, isMiniApp } = useMiniApp();
   const { isConnected } = useAccount();
@@ -155,7 +559,6 @@ export default function Home() {
   const [bidding, setBidding] = useState(false);
   const [auctionBidError, setAuctionBidError] = useState<string | null>(null);
   const auctionSell = useAuctionSellAuction();
-  const auctionQueueStripFids = useAuctionQueueStripFids();
   const { approveAndBid, isPending: bidTxPending } = useAuctionSell777Bid();
   const dutchAuctionPriceQuery = useDutchAuctionPrice();
   const currentPrice = dutchAuctionPriceQuery.data;
@@ -174,13 +577,6 @@ export default function Home() {
     isError: ownedWarpletsError,
     warpletsConfigured,
   } = useOwnedWarplets();
-
-  const walletConfirmedNoWarplets =
-    isConnected &&
-    warpletsConfigured &&
-    !ownedWarpletsLoading &&
-    !ownedWarpletsError &&
-    ownedWarplets.length === 0;
 
   const pickerWarplets = useMemo(() => {
     if (!warpletsConfigured || !isConnected) {
@@ -221,8 +617,6 @@ export default function Home() {
       ownedWarpletsLoading &&
       ownedWarplets.length === 0);
 
-  const WARPLET_PICKER_SKELETON_COUNT = 8;
-
   useEffect(() => {
     if (
       selectedFid != null &&
@@ -256,9 +650,100 @@ export default function Home() {
 
   const [activeView, setActiveView] = useState<"sell" | "buy">("buy");
   const [scrollBlend, setScrollBlend] = useState(0); // 0 = buy (purple), 1 = sell (cyan)
-  const [claimBlocking, setClaimBlocking] = useState(false);
+  const [claimBlocking, setClaimBlocking] = useState<boolean | null>(null);
+  const [hideAuctionSection, setHideAuctionSection] = useState(false);
+  const claimBlockingResolved = claimBlocking !== null;
+  const claimBlockingActive = claimBlocking ?? false;
+  const [initialViewResolved, setInitialViewResolved] = useState(false);
+  const [bootDone, setBootDone] = useState(false);
   /** Hysteresis for jump-link label — avoids flip-flopping when scroll sits near 50% blend. */
   const viewHintScrollRef = useRef<"sell" | "buy">("buy");
+  const settledEmptyAutoscrollDoneRef = useRef(false);
+
+  // Resolve startup target only after claim blocking status is known.
+  useEffect(() => {
+    if (!claimBlockingResolved) return;
+    if (typeof window === "undefined") return;
+
+    if (claimBlockingActive) {
+      setInitialViewResolved(true);
+      return;
+    }
+
+    const isFirstSellVisit =
+      window.localStorage.getItem(FIRST_SELL_VISIT_KEY) == null;
+    if (!isFirstSellVisit) {
+      setInitialViewResolved(true);
+      return;
+    }
+
+    viewHintScrollRef.current = "sell";
+    setActiveView("sell");
+    setScrollBlend(1);
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 6;
+
+    const settleAtSell = () => {
+      if (cancelled) return;
+      const sellSection = document.getElementById("sell-section");
+      if (sellSection) {
+        sellSection.scrollIntoView({ behavior: "auto" });
+        window.localStorage.setItem(FIRST_SELL_VISIT_KEY, "1");
+        setInitialViewResolved(true);
+        return;
+      }
+      attempts += 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        window.localStorage.setItem(FIRST_SELL_VISIT_KEY, "1");
+        setInitialViewResolved(true);
+        return;
+      }
+      requestAnimationFrame(settleAtSell);
+    };
+
+    requestAnimationFrame(settleAtSell);
+    return () => {
+      cancelled = true;
+    };
+  }, [claimBlockingResolved, claimBlockingActive]);
+
+  useEffect(() => {
+    if (!initialViewResolved || claimBlockingActive) return;
+    if (!hideAuctionSection) {
+      settledEmptyAutoscrollDoneRef.current = false;
+      return;
+    }
+    if (settledEmptyAutoscrollDoneRef.current) return;
+
+    settledEmptyAutoscrollDoneRef.current = true;
+    viewHintScrollRef.current = "sell";
+    setActiveView("sell");
+    setScrollBlend(1);
+
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 6;
+
+    const settleAtSell = () => {
+      if (cancelled) return;
+      const sellSection = document.getElementById("sell-section");
+      if (sellSection) {
+        sellSection.scrollIntoView({ behavior: "auto" });
+        return;
+      }
+      attempts += 1;
+      if (attempts >= MAX_ATTEMPTS) return;
+      requestAnimationFrame(settleAtSell);
+    };
+
+    requestAnimationFrame(settleAtSell);
+    return () => {
+      cancelled = true;
+    };
+  }, [initialViewResolved, claimBlockingActive, hideAuctionSection]);
+
+  const handleBootDone = useCallback(() => setBootDone(true), []);
 
   const rescueViewerDisplayName =
     context?.user != null
@@ -276,7 +761,9 @@ export default function Home() {
 
   // Scroll blend + buy/sell hint; rescue gate keeps sell section unmounted (no jump to sell).
   useEffect(() => {
-    if (claimBlocking) {
+    if (!claimBlockingResolved) return;
+
+    if (claimBlockingActive) {
       viewHintScrollRef.current = "buy";
       setActiveView("buy");
       setScrollBlend(0);
@@ -314,7 +801,7 @@ export default function Home() {
       window.removeEventListener("scroll", onScroll);
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [claimBlocking]);
+  }, [claimBlockingResolved, claimBlockingActive]);
 
   const toggleView = useCallback((view: "sell" | "buy") => {
     viewHintScrollRef.current = view;
@@ -322,10 +809,6 @@ export default function Home() {
     const target = view === "buy" ? "auction" : "sell-section";
     document.getElementById(target)?.scrollIntoView({ behavior: "smooth" });
   }, []);
-
-  const geckoPoolUrl =
-    process.env.NEXT_PUBLIC_GECKOTERMINAL_POOL_URL ??
-    "https://www.geckoterminal.com/base/pools/0x0000000000000000000000000000000000000000";
 
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [isSelling, setIsSelling] = useState(false);
@@ -515,11 +998,17 @@ export default function Home() {
   return (
     <main
       className={`${
-        claimBlocking ? "min-h-min" : "min-h-screen"
+        claimBlockingActive ? "min-h-min" : "min-h-screen"
       } relative noise-overlay flex flex-col overflow-x-hidden ${
-        claimBlocking ? "" : "overflow-hidden"
+        claimBlockingActive ? "" : "overflow-hidden"
       }`}
     >
+      {!bootDone && (
+        <GobblerBootOverlay
+          opening={initialViewResolved}
+          onDone={handleBootDone}
+        />
+      )}
       {/* Buy overlay — Silksong Void combat sequence */}
       {buyingFid && buyRect && (
         <BuyOverlay
@@ -634,7 +1123,7 @@ export default function Home() {
         type="button"
         onClick={() => toggleView(activeView === "buy" ? "sell" : "buy")}
         className={`group fixed left-0 bottom-0 z-[55] flex items-center gap-1.5 pl-[max(1rem,env(safe-area-inset-left))] pb-[max(1rem,env(safe-area-inset-bottom))] text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
-          gobbling || buyingFid || claimBlocking
+          gobbling || buyingFid || claimBlockingActive || !bootDone
             ? "pointer-events-none opacity-0 scale-[0.98]"
             : "opacity-100 scale-100"
         }`}
@@ -705,9 +1194,9 @@ export default function Home() {
 
       <div
         className={`${
-          claimBlocking ? "" : "flex-1"
+          claimBlockingActive ? "" : "flex-1"
         } flex flex-col transition-opacity duration-700`}
-        style={{ opacity: gobbling ? 0 : 1 }}
+        style={{ opacity: gobbling || !initialViewResolved ? 0 : 1 }}
       >
         {/* Scroll-blended rich background — purple (buy) → cyan (sell) */}
         <div
@@ -730,12 +1219,34 @@ export default function Home() {
         {/* Parallax warplet background — on top of color wash */}
         <ParallaxBackground />
 
+        {/* Mobile readability veil — darkens viewport middle without boxing cards */}
+        <div
+          className="pointer-events-none fixed inset-0 z-[5] sm:hidden"
+          style={{
+            background: `
+              linear-gradient(
+                180deg,
+                rgba(0, 0, 0, 0.08) 0%,
+                rgba(0, 0, 0, 0.10) 20%,
+                rgba(0, 0, 0, 0.39) 38%,
+                rgba(0, 0, 0, 0.55) 52%,
+                rgba(0, 0, 0, 0.39) 66%,
+                rgba(0, 0, 0, 0.10) 80%,
+                rgba(0, 0, 0, 0.08) 100%
+              )
+            `,
+          }}
+          aria-hidden
+        />
+
         {/* === Auction Section (Buy) === */}
         {/* Claim gate: pt ≈ GobblePeek jaw + ~2rem breathing room + safe-area */}
         <section
           id="auction"
           className={`relative z-10 flex flex-col items-center px-4 sm:px-6 ${
-            claimBlocking
+            hideAuctionSection && !claimBlockingActive ? "hidden " : ""
+          }${
+            claimBlockingActive
               ? "pt-[calc(env(safe-area-inset-top)+8.0625rem)] sm:pt-[calc(env(safe-area-inset-top)+11.625rem)] pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-16"
               : "pt-36 sm:pt-56 pb-12 sm:pb-20"
           }`}
@@ -745,6 +1256,7 @@ export default function Home() {
             onBid={handleBuy}
             bidDisabled={auctionBidDisabled}
             onClaimBlockingChange={setClaimBlocking}
+            onSettledQueueEmptyChange={setHideAuctionSection}
             viewerDisplayName={rescueViewerDisplayName}
             viewerPfpUrl={rescueViewerPfpUrl}
           />
@@ -757,7 +1269,8 @@ export default function Home() {
 
         {/* === Sell Section === */}
         <SellSection
-          claimBlocking={claimBlocking}
+          claimBlocking={claimBlockingActive}
+          topInsetRoom={hideAuctionSection}
           payoutStream={payoutStream}
           payoutSymbol={payoutSymbol}
           isAmountMissing={isAmountMissing}
@@ -785,14 +1298,14 @@ export default function Home() {
           }}
         />
 
-        {!claimBlocking ? (
+        {!claimBlockingActive ? (
           <div className="relative z-10 mt-6 sm:mt-8 pb-4" aria-hidden />
         ) : null}
       </div>
       {/* end gobble fade wrapper */}
 
       {/* Fixed footer — contract address (z-[50] sits above auction z-10; disable hit-testing during claim so the CTA isn’t covered) */}
-      <CaFooter pointerThrough={claimBlocking} />
+      <CaFooter pointerThrough={claimBlockingActive} />
     </main>
   );
 }

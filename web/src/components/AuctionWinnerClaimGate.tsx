@@ -59,18 +59,18 @@ export default function AuctionWinnerClaimGate({
   const claimDone = claim.stage === "success";
 
   const frameClass =
-    "relative w-full max-w-[11.5rem] sm:max-w-[12.5rem] aspect-square mx-auto rounded-xl border border-base-content/15 bg-base-300/30 overflow-hidden shadow-lg shadow-black/25";
+    "relative mx-auto aspect-square w-full max-w-[11.5rem] overflow-hidden rounded-lg border-0 bg-transparent shadow-none sm:max-w-[12.5rem] sm:rounded-xl sm:border sm:border-base-content/15 sm:bg-base-300/30 sm:shadow-lg sm:shadow-black/25";
 
   return (
     <div className="w-full max-w-2xl mx-auto px-1 sm:px-2">
       <div className="text-[0.85em] sm:text-[0.9em] animate-fade-up">
-      <div className="relative overflow-hidden rounded-2xl border border-success/30 bg-gradient-to-b from-success/[0.08] via-base-100/40 to-base-200/30 px-4 py-7 sm:px-8 sm:py-9 shadow-[0_0_64px_-18px_rgba(34,197,94,0.3)]">
+      <div className="relative overflow-hidden rounded-none border-0 bg-transparent px-2 py-4 shadow-none sm:rounded-2xl sm:border sm:border-success/30 sm:bg-gradient-to-b sm:from-success/[0.08] sm:via-base-100/40 sm:to-base-200/30 sm:px-8 sm:py-9 sm:shadow-[0_0_64px_-18px_rgba(34,197,94,0.3)]">
         <div
-          className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-secondary/20 blur-3xl"
+          className="pointer-events-none absolute -right-20 -top-20 hidden h-52 w-52 rounded-full bg-secondary/20 blur-3xl sm:block"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute -bottom-16 -left-12 h-44 w-44 rounded-full bg-success/15 blur-3xl"
+          className="pointer-events-none absolute -bottom-16 -left-12 hidden h-44 w-44 rounded-full bg-success/15 blur-3xl sm:block"
           aria-hidden
         />
 
@@ -140,7 +140,7 @@ export default function AuctionWinnerClaimGate({
               type="button"
               onClick={claim.onClaim}
               disabled={claimBusy || claimDone}
-              className="btn btn-success min-w-[min(100%,240px)] uppercase tracking-wider text-sm shadow-md shadow-success/15"
+              className="btn btn-success mb-8 sm:mb-4 min-w-[min(100%,240px)] uppercase tracking-wider text-sm shadow-md shadow-success/15"
             >
               {claimBusy ? (
                 <span className="loading loading-spinner loading-sm mr-2" />

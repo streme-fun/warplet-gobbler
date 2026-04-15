@@ -32,6 +32,18 @@ export const auctionSellAbi = [
   },
   {
     type: "function",
+    name: "currentAuction",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "tokenId", type: "uint256" },
+      { name: "highBidder", type: "address" },
+      { name: "highBid", type: "uint256" },
+      { name: "endTime", type: "uint256" },
+    ],
+  },
+  {
+    type: "function",
     name: "getQueuedTokenIds",
     stateMutability: "view",
     inputs: [],
@@ -60,8 +72,15 @@ export const auctionSellAbi = [
   },
   {
     type: "function",
+    name: "stremeZap",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
     name: "bid",
-    stateMutability: "nonpayable",
+    stateMutability: "payable",
     inputs: [{ name: "amount", type: "uint256" }],
     outputs: [],
   },

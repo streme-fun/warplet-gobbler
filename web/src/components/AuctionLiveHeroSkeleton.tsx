@@ -19,55 +19,55 @@ export default function AuctionLiveHeroSkeleton({
         : "Waiting for wallet…";
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-start gap-6 lg:gap-10">
-      <div className="flex-shrink-0 mx-auto lg:mx-0 w-full max-w-[220px] sm:max-w-[260px] flex flex-col items-center gap-3">
-        <div className="skeleton w-full aspect-square rounded-xl shrink-0" />
-        <div className="skeleton h-4 w-28 rounded-md" />
-        <div className="flex items-center justify-center gap-2 mt-1 w-full">
-          <div className="skeleton w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0" />
-          <div className="skeleton w-3 h-3 rounded-sm opacity-50" />
-          <div className="skeleton w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0" />
-          <div className="skeleton w-3 h-3 rounded-sm opacity-50" />
-          <div className="skeleton w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0" />
-        </div>
-      </div>
-
-      <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left gap-4 min-w-0 w-full">
-        <div className="w-full flex items-end justify-between gap-4">
-          <div className="min-w-0 flex-1 space-y-3 text-left">
-            <div className="skeleton h-3 w-44 rounded-md" />
-            <div className="skeleton h-3 w-full max-w-md rounded-md" />
-            <div className="skeleton h-3 w-full max-w-sm rounded-md opacity-90" />
-          </div>
-          <div className="shrink-0 space-y-1">
-            <div className="skeleton h-8 w-24 sm:w-28 rounded-md ml-auto" />
+    <div className="auction-warplet-aura rounded-xl">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(272px,2.4fr)_minmax(17rem,2fr)] sm:items-stretch gap-0 overflow-hidden rounded-[0.82rem] border border-secondary/25 bg-base-100/25 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
+        <div className="relative flex w-full flex-col bg-gradient-to-br from-base-200/45 to-base-300/25 sm:min-h-0 sm:h-full">
+          <div className="relative aspect-square w-full min-h-0 overflow-hidden rounded-none sm:aspect-auto sm:flex-1 sm:rounded-l-[0.78rem]">
+            <div className="skeleton absolute inset-0 min-h-0 w-full" />
           </div>
         </div>
 
-        <div className="w-full rounded-xl border border-secondary/25 bg-base-100/20 px-4 py-4 sm:py-5 space-y-4">
-          <div className="space-y-2">
-            <div className="skeleton h-3 w-20 rounded-md" />
-            <div className="skeleton h-9 w-48 sm:w-56 rounded-md max-w-full" />
+        <div className="flex min-h-0 min-w-0 max-w-[min(100%,26rem)] flex-col gap-3 border-t border-base-content/10 bg-base-100/20 px-3 py-3 text-center sm:h-full sm:border-l sm:border-t-0 sm:px-3.5 sm:py-3.5 lg:max-w-[28rem]">
+          <div className="shrink-0 space-y-2 border-b border-base-content/10 pb-2">
+            <div className="skeleton mx-auto h-7 w-[min(100%,19rem)] rounded-md sm:h-8" />
+            <div className="skeleton mx-auto h-3 w-full max-w-md rounded-md" />
+            <div className="skeleton mx-auto h-3 w-full max-w-sm rounded-md opacity-90" />
           </div>
-          <div className="space-y-2 pt-1">
-            <div className="skeleton h-3 w-24 rounded-md" />
-            <div className="skeleton h-11 w-full max-w-md rounded-lg" />
-          </div>
-        </div>
 
-        <div
-          className="w-full rounded-lg border border-base-content/10 bg-base-100/15 px-4 py-3 flex items-center gap-3"
-          role="status"
-          aria-live="polite"
-        >
-          <span className="loading loading-spinner loading-md text-secondary shrink-0" />
-          <div className="min-w-0 text-left">
-            <p className="text-sm font-medium text-secondary/90">
-              Finalizing sale
-            </p>
-            <p className="text-xs text-base-content/55 mt-0.5 leading-snug">
-              {statusLine}
-            </p>
+          <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto">
+            <div className="flex min-h-0 flex-1 flex-col items-center">
+              <div className="flex w-full shrink-0 flex-col items-center justify-center gap-2 py-2 sm:py-3 mb-6 sm:mb-10">
+                <div className="skeleton mx-auto h-3 w-24 rounded-md" />
+                <div className="skeleton mx-auto h-11 w-44 max-w-full rounded-md sm:h-12" />
+              </div>
+              <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-start gap-1 py-2 sm:py-3">
+                <div className="flex w-full flex-col items-center gap-2">
+                  <div className="skeleton mx-auto h-3 w-16 rounded-md" />
+                  <div className="skeleton mx-auto h-10 w-48 max-w-full rounded-md sm:h-11" />
+                  <div className="skeleton mx-auto h-2.5 w-[4.5rem] rounded-md opacity-80" />
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <div className="skeleton h-2.5 w-5 shrink-0 rounded" />
+                  <div className="skeleton h-10 w-44 max-w-full rounded-md" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="mt-auto w-full shrink-0 rounded-lg border border-base-content/10 bg-base-100/15 px-4 py-3 text-left flex items-center gap-3"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="loading loading-spinner loading-md text-secondary shrink-0" />
+            <div className="min-w-0 text-left">
+              <p className="text-sm font-medium text-secondary/90">
+                Finalizing sale
+              </p>
+              <p className="text-xs text-base-content/55 mt-0.5 leading-snug">
+                {statusLine}
+              </p>
+            </div>
           </div>
         </div>
       </div>

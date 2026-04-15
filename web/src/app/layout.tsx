@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Caveat, Inter } from "next/font/google";
+import { Caveat, Inter, Rubik_Wet_Paint } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -12,6 +12,12 @@ const handwritten = Caveat({
   subsets: ["latin"],
   variable: "--font-handwritten",
   weight: ["600", "700"],
+});
+
+const display = Rubik_Wet_Paint({
+  subsets: ["latin"],
+  variable: "--font-display",
+  weight: "400",
 });
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://warpletgobbler.xyz";
@@ -46,7 +52,7 @@ export default function RootLayout({
     <html
       lang="en"
       data-theme="warplet"
-      className={`${inter.variable} ${handwritten.variable}`}
+      className={`${inter.variable} ${handwritten.variable} ${display.variable}`}
     >
       <body className="min-h-screen bg-base-100 text-base-content">
         <Providers>{children}</Providers>

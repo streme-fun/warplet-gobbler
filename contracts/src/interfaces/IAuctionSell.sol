@@ -5,6 +5,9 @@ pragma solidity ^0.8.26;
 /// @notice Simple highest-bidder auction for Warplet NFTs. Bids denominated in the bid token.
 ///         Based on Mark's DegenDogs auction contract.
 interface IAuctionSell {
+    /// @notice Optional zap used for native ETH bids.
+    function stremeZap() external view returns (address);
+
     /// @notice Place a bid on the current Warplet auction
     /// @param amount The bid token amount
     /// @dev Payable: with `msg.value > 0`, swaps via `StremeZapUniversal` to this auction's `bidToken` then bids;

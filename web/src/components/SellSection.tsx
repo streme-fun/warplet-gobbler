@@ -14,6 +14,7 @@ const WARPLET_PICKER_SKELETON_COUNT = 8;
 
 type SellSectionProps = {
   claimBlocking: boolean;
+  topInsetRoom?: boolean;
   payoutStream: {
     start: number;
     perSecond: number;
@@ -43,6 +44,7 @@ type SellSectionProps = {
 
 export default function SellSection({
   claimBlocking,
+  topInsetRoom = false,
   payoutStream,
   payoutSymbol,
   isAmountMissing,
@@ -83,11 +85,13 @@ export default function SellSection({
   return (
     <section
       id="sell-section"
-      className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-12 sm:pt-20 pb-24 sm:pb-32"
+      className={`relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pb-24 sm:pb-32 ${
+        topInsetRoom ? "pt-24 sm:pt-28" : "pt-8 sm:pt-20"
+      }`}
     >
-      <div className="text-center animate-fade-up-delay-1 mt-16">
-        <h2>Sell your Warplet to</h2>
-        <h1 className="text-3xl sm:text-6xl font-bold tracking-widest uppercase">
+      <div className="text-center animate-fade-up-delay-1 mt-8 sm:mt-16">
+        <h2 className="text-lg sm:text-2xl tracking-wide">Sell your Warplet to</h2>
+        <h1 className="font-display text-5xl leading-[0.9] sm:text-6xl sm:leading-none font-bold tracking-wide sm:tracking-widest uppercase">
           THE INSATIABLE
           <br />
           <span className="text-primary">WARPLET GOBBLER</span>
@@ -137,11 +141,9 @@ export default function SellSection({
             )}
           </p>
         </div>
-        <p className="text-sm sm:text-base text-base-content/50">for your warplet</p>
-
         <div className="w-full mt-4">
           <div className="flex flex-col items-center gap-2 mb-2">
-            <div className="flex gap-1 justify-center">
+            <div className="flex gap-1 justify-center items-center align-middle">
               <button
                 onClick={() => scrollPickerBy(-300)}
                 className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
@@ -159,6 +161,7 @@ export default function SellSection({
                   <path d="M15 18l-6-6 6-6" />
                 </svg>
               </button>
+              <span className="text-sm sm:text-base text-base-content/50 mx-2">for your warplet</span>
               <button
                 onClick={() => scrollPickerBy(300)}
                 className="w-7 h-7 rounded-full border border-base-content/15 flex items-center justify-center text-base-content/40 hover:text-base-content/70 hover:border-base-content/30 transition-colors"
