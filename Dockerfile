@@ -8,9 +8,11 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY web/package.json ./web/package.json
-COPY packages/warplet-activity-indexer ./packages/warplet-activity-indexer
+COPY packages/warplet-activity-indexer/package.json ./packages/warplet-activity-indexer/package.json
 
 RUN pnpm install --frozen-lockfile
+
+COPY packages/warplet-activity-indexer ./packages/warplet-activity-indexer
 
 ENV NODE_ENV=production
 

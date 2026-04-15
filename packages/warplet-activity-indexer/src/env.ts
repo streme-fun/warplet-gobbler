@@ -90,5 +90,4 @@ export const telegramRoutes: Partial<Record<ActivityType, TelegramRoute>> = {
   NEW_USER_INTERACTION: parseRoute("TELEGRAM_NEW_USER_INTERACTION", defaultTelegramRoute),
 };
 
-export const telegramEnabled = Object.values(telegramRoutes).some(Boolean);
 export const neynarEnabled = Boolean(env.neynarApiKey);

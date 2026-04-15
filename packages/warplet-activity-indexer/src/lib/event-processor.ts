@@ -164,7 +164,9 @@ async function upsertUser(
   return { profile, isNewUser: false, newUserEventId: `${record.id}:new-user` };
 }
 
-async function resolveProfile(address: `0x${string}`, existing: any): Promise<NeynarUser | null> {
+type UserRow = typeof user.$inferSelect | null;
+
+async function resolveProfile(address: `0x${string}`, existing: UserRow): Promise<NeynarUser | null> {
   if (existing?.neynarUsername || existing?.neynarFid) {
     return {
       fid: existing.neynarFid != null ? Number(existing.neynarFid) : undefined,

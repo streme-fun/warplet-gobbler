@@ -1,6 +1,8 @@
 import type { NeynarUser } from "./neynar.js";
 import { escapeTelegramHtml } from "./telegram-notifier.js";
 
+export const escapeHtml = escapeTelegramHtml;
+
 export function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
@@ -23,5 +25,3 @@ export function formatActor(address: string | null | undefined, profile?: Neynar
   bits.push(`<code>${shortAddress(address)}</code>`);
   return bits.join(" · ");
 }
-
-export const escapeHtml = escapeTelegramHtml;
