@@ -42,6 +42,8 @@ async function simulateZapAmountOut(
         ethWei: p.ethWei.toString(),
         error: error instanceof Error ? error.message : String(error),
       });
+    } else {
+      console.warn("[streme-zap-quote] simulateContract failed");
     }
     return null;
   }

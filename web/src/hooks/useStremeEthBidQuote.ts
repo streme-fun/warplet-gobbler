@@ -8,7 +8,7 @@ import {
   quoteMinEthForZapBid,
 } from "@/lib/stremeZapEthQuote";
 
-const DEFAULT_BUFFER_BPS = 75n;
+const DEFAULT_BUFFER_BPS = 150n;
 
 export function useStremeEthBidQuote(opts: {
   enabled: boolean;

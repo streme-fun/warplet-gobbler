@@ -3,7 +3,29 @@ import { ensureGobbledImage } from "@/lib/generate-gobbled-image";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-const PREWARM_SECRET_HEADER = "x-prewarm-secret";
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 20;
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function getClientIp(request: NextRequest): string {
+  const fwd = request.headers.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0]?.trim() || "unknown";
+  const realIp = request.headers.get("x-real-ip");
+  return realIp?.trim() || "unknown";
+}
+
+function checkPrewarmRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const existing = rateLimitBuckets.get(ip);
+  if (!existing || existing.resetAt <= now) {
+    rateLimitBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (existing.count >= RATE_LIMIT_MAX_REQUESTS) return false;
+  existing.count += 1;
+  rateLimitBuckets.set(ip, existing);
+  return true;
+}
 
 /**
  * Best-effort prewarm endpoint for claim image generation.
@@ -11,19 +33,11 @@ const PREWARM_SECRET_HEADER = "x-prewarm-secret";
  */
 export async function POST(request: NextRequest) {
   try {
-    const configuredSecret = process.env.GOBBLED_PREWARM_SECRET;
-    if (!configuredSecret) {
-      console.warn("[gobbled-prewarm] missing GOBBLED_PREWARM_SECRET");
+    const clientIp = getClientIp(request);
+    if (!checkPrewarmRateLimit(clientIp)) {
       return NextResponse.json(
-        { success: false, error: "Prewarm endpoint is unavailable." },
-        { status: 503 },
-      );
-    }
-    const providedSecret = request.headers.get(PREWARM_SECRET_HEADER);
-    if (!providedSecret || providedSecret !== configuredSecret) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized prewarm request." },
-        { status: 401 },
+        { success: false, error: "Rate limit exceeded. Try again shortly." },
+        { status: 429 },
       );
     }
 

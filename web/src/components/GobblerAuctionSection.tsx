@@ -184,7 +184,6 @@ export default function GobblerAuctionSection({
   >([]);
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
   const prewarmSentKeysRef = useRef<Set<string>>(new Set());
-  const prewarmSecret = process.env.NEXT_PUBLIC_GOBBLED_PREWARM_SECRET;
 
   useEffect(() => {
     setDismissedWinnerFps(readDismissedFpArray());
@@ -494,7 +493,7 @@ export default function GobblerAuctionSection({
     chainLot && chainLot.amount > 0n ? "new-bid" : "auction-start";
 
   useEffect(() => {
-    if (!onChainMode || !liveAuction || !chainLot || !prewarmSecret) return;
+    if (!onChainMode || !liveAuction || !chainLot) return;
     const tokenId = prewarmTokenId;
     if (!Number.isInteger(tokenId) || tokenId <= 0) return;
 
@@ -507,10 +506,7 @@ export default function GobblerAuctionSection({
     const trigger = prewarmTrigger;
     void fetch("/api/gobbled-prewarm-image", {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-prewarm-secret": prewarmSecret,
-      },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ tokenId, trigger, bidWei }),
     })
       .then(async (res) => {
@@ -537,7 +533,6 @@ export default function GobblerAuctionSection({
     prewarmTokenId,
     prewarmBidWei,
     prewarmTrigger,
-    prewarmSecret,
   ]);
 
   const auctionSettled = hasParsedLot && chainLot.settled;
