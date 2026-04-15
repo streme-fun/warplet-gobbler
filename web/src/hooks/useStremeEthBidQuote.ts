@@ -8,8 +8,6 @@ import {
   quoteMinEthForZapBid,
 } from "@/lib/stremeZapEthQuote";
 
-const QUOTE_FALLBACK_FROM =
-  "0x0000000000000000000000000000000000000001" as Address;
 const DEFAULT_BUFFER_BPS = 75n;
 
 export function useStremeEthBidQuote(opts: {
@@ -34,9 +32,10 @@ export function useStremeEthBidQuote(opts: {
   const tokenOk =
     bidTokenAddress != null && !isAddressEqual(bidTokenAddress, zeroAddress);
   const bidOk = bidWei != null && bidWei > 0n;
-  const quoteAccount = address ?? QUOTE_FALLBACK_FROM;
+  const hasConnectedAddress = address != null;
 
-  const enabled = rawEnabled && !!publicClient && zapOk && tokenOk && bidOk;
+  const enabled =
+    rawEnabled && !!publicClient && zapOk && tokenOk && bidOk && hasConnectedAddress;
 
   return useQuery({
     queryKey: [
@@ -46,13 +45,13 @@ export function useStremeEthBidQuote(opts: {
       bidTokenAddress,
       bidWei?.toString(),
       bufferBps.toString(),
-      quoteAccount,
+      address,
     ],
     enabled,
     queryFn: async () => {
       const r = await quoteMinEthForZapBid(
         publicClient!,
-        quoteAccount,
+        address as Address,
         zapAddress!,
         bidTokenAddress!,
         bidWei!,

@@ -8,6 +8,7 @@ const MIN_SEED_WEI = 10n ** 11n; // 0.0000001 ETH
 const MAX_SEED_WEI = parseEther("2");
 const MAX_EXPAND_STEPS = 18;
 const MAX_REFINE_STEPS = 8;
+const MAX_RATIO_HINT_ENTRIES = 50;
 const quoteRatioHints = new Map<string, bigint>();
 
 type ZapSimParams = {
@@ -32,7 +33,16 @@ async function simulateZapAmountOut(
       account: p.account,
     });
     return result as bigint;
-  } catch {
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[streme-zap-quote] simulateContract failed", {
+        zap: p.zap,
+        bidToken: p.bidToken,
+        bidWei: p.bidWei.toString(),
+        ethWei: p.ethWei.toString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     return null;
   }
 }
@@ -119,6 +129,9 @@ export async function quoteMinEthForZapBid(
   if (expectedOutWei == null) return null;
 
   if (bidWei > 0n) {
+    if (quoteRatioHints.size >= MAX_RATIO_HINT_ENTRIES) {
+      quoteRatioHints.clear();
+    }
     quoteRatioHints.set(hintKey, (hi * QUOTE_SCALE) / bidWei);
   }
   return { minEthWei: hi, expectedOutWei };

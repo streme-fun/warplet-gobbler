@@ -184,6 +184,7 @@ export default function GobblerAuctionSection({
   >([]);
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
   const prewarmSentKeysRef = useRef<Set<string>>(new Set());
+  const prewarmSecret = process.env.NEXT_PUBLIC_GOBBLED_PREWARM_SECRET;
 
   useEffect(() => {
     setDismissedWinnerFps(readDismissedFpArray());
@@ -487,21 +488,29 @@ export default function GobblerAuctionSection({
     chainLot.amount > 0n &&
     !isAddressEqual(chainLot.bidder, zeroAddress);
 
+  const prewarmTokenId = chainLot ? Number(chainLot.tokenId) : 0;
+  const prewarmBidWei = chainLot ? chainLot.amount.toString() : "0";
+  const prewarmTrigger =
+    chainLot && chainLot.amount > 0n ? "new-bid" : "auction-start";
+
   useEffect(() => {
-    if (!onChainMode || !liveAuction || !chainLot) return;
-    const tokenId = Number(chainLot.tokenId);
+    if (!onChainMode || !liveAuction || !chainLot || !prewarmSecret) return;
+    const tokenId = prewarmTokenId;
     if (!Number.isInteger(tokenId) || tokenId <= 0) return;
 
     // Trigger once on auction start, then once per new top bid amount.
-    const bidWei = chainLot.amount.toString();
+    const bidWei = prewarmBidWei;
     const key = `${tokenId}:${bidWei}`;
     if (prewarmSentKeysRef.current.has(key)) return;
     prewarmSentKeysRef.current.add(key);
 
-    const trigger = chainLot.amount > 0n ? "new-bid" : "auction-start";
+    const trigger = prewarmTrigger;
     void fetch("/api/gobbled-prewarm-image", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "x-prewarm-secret": prewarmSecret,
+      },
       body: JSON.stringify({ tokenId, trigger, bidWei }),
     })
       .then(async (res) => {
@@ -521,7 +530,15 @@ export default function GobblerAuctionSection({
           error: error instanceof Error ? error.message : String(error),
         });
       });
-  }, [onChainMode, liveAuction, chainLot]);
+  }, [
+    onChainMode,
+    liveAuction,
+    chainLot,
+    prewarmTokenId,
+    prewarmBidWei,
+    prewarmTrigger,
+    prewarmSecret,
+  ]);
 
   const auctionSettled = hasParsedLot && chainLot.settled;
 
@@ -939,6 +956,14 @@ export default function GobblerAuctionSection({
         amount: topBidAmountStr,
         bidder: chainTopBidder,
       };
+      const onTxSubmitted = () => {
+        setBidConfirmingOnChain(true);
+        setBidFeedbackActive(true);
+        window.dispatchEvent(new CustomEvent("gobbler:bid-placed"));
+        const s = bidSubmitSnapshotRef.current;
+        if (s.noBids) setBidHoldNoBidsUi(true);
+        else setBidTopDisplayHold({ amount: s.amount, bidder: s.bidder });
+      };
       try {
         const payWithEth = opts?.payment === "eth";
         if (payWithEth) {
@@ -946,25 +971,11 @@ export default function GobblerAuctionSection({
             throw new Error("ETH quote unavailable.");
           }
           await placeBidWithNative(amountWei, opts.txValueWei, {
-            onTransactionSubmitted: () => {
-              setBidConfirmingOnChain(true);
-              setBidFeedbackActive(true);
-              window.dispatchEvent(new CustomEvent("gobbler:bid-placed"));
-              const s = bidSubmitSnapshotRef.current;
-              if (s.noBids) setBidHoldNoBidsUi(true);
-              else setBidTopDisplayHold({ amount: s.amount, bidder: s.bidder });
-            },
+            onTransactionSubmitted: onTxSubmitted,
           });
         } else {
           await placeBid(amountWei, {
-            onTransactionSubmitted: () => {
-              setBidConfirmingOnChain(true);
-              setBidFeedbackActive(true);
-              window.dispatchEvent(new CustomEvent("gobbler:bid-placed"));
-              const s = bidSubmitSnapshotRef.current;
-              if (s.noBids) setBidHoldNoBidsUi(true);
-              else setBidTopDisplayHold({ amount: s.amount, bidder: s.bidder });
-            },
+            onTransactionSubmitted: onTxSubmitted,
           });
         }
         bidLandGateRef.current.success = true;

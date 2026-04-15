@@ -136,6 +136,7 @@ export function useAuctionSellBid(opts: {
       if (!stremeZapAddress || isAddressEqual(stremeZapAddress, zeroAddress)) {
         throw new Error("ETH bidding is not available for this auction.");
       }
+      // Native path still calls `AuctionSell.bid`; contract reads configured zap internally.
       const hash = await writeContractAsync({
         abi: auctionSellAbi,
         address: CONTRACTS.auctionSell,
