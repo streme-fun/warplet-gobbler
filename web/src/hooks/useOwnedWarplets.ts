@@ -2,6 +2,7 @@
 
 import { isAddressEqual, zeroAddress } from "viem";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
+import { base } from "wagmi/chains";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import { CONTRACTS } from "@/lib/contracts";
@@ -65,7 +66,11 @@ export function useOwnedWarplets() {
 
   const mismatchRefetchRef = useRef(false);
 
+  // Pin every Warplets read to Base regardless of the wallet's current chain —
+  // the NFT contract only lives on Base, so targeting the wallet's chain throws
+  // whenever the user is connected to mainnet, Optimism, etc.
   const { data: balance, ...balanceQuery } = useReadContract({
+    chainId: base.id,
     address: warpletsAddress,
     abi: warpletsErc721EnumerableAbi,
     functionName: "balanceOf",
@@ -80,6 +85,7 @@ export function useOwnedWarplets() {
     const n = Number(balance);
     if (!Number.isSafeInteger(n) || n <= 0) return [];
     return Array.from({ length: n }, (_, i) => ({
+      chainId: base.id,
       address: warpletsAddress,
       abi: warpletsErc721EnumerableAbi,
       functionName: "tokenOfOwnerByIndex" as const,
