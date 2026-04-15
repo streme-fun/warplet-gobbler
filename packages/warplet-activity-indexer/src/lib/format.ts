@@ -1,5 +1,5 @@
-import { escapeTelegramHtml } from "telegram-notifier";
 import type { NeynarUser } from "./neynar.js";
+import { escapeTelegramHtml } from "./telegram-notifier.js";
 
 export function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;

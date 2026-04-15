@@ -10,7 +10,8 @@
     "clean": "pnpm -r clean",
     "indexer:codegen": "pnpm --filter warplet-activity-indexer codegen",
     "indexer:dev": "pnpm --filter warplet-activity-indexer dev",
-    "indexer:start": "pnpm --filter warplet-activity-indexer start"
+    "indexer:start": "pnpm --filter warplet-activity-indexer start",
+    "indexer:typecheck": "pnpm --filter warplet-activity-indexer typecheck"
   },
   "engines": {
     "node": ">=18",

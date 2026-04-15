@@ -5,20 +5,21 @@
   "type": "module",
   "description": "Ponder indexer for Warplet Gobbler activity with Telegram notifications and optional Neynar enrichment.",
   "scripts": {
-    "dev": "pnpm --filter telegram-notifier build && ponder dev",
-    "start": "pnpm --filter telegram-notifier build && ponder start",
+    "dev": "ponder dev",
+    "start": "ponder start",
     "codegen": "ponder codegen",
-    "typecheck": "pnpm --filter telegram-notifier build && tsc -p tsconfig.json --noEmit",
-    "build": "pnpm --filter telegram-notifier build && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts",
     "clean": "rm -rf dist .ponder"
   },
   "dependencies": {
     "ponder": "^0.12.0",
-    "telegram-notifier": "workspace:*",
     "viem": "^2.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "tsx": "^4.21.0"
   }
 }

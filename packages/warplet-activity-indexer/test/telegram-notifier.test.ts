@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTelegramNotifier, escapeTelegramHtml } from "../src/index.js";
+import {
+  createTelegramNotifier,
+  escapeTelegramHtml,
+} from "../src/lib/telegram-notifier.js";
 
 test("escapeTelegramHtml escapes Telegram HTML-sensitive characters", () => {
   assert.equal(

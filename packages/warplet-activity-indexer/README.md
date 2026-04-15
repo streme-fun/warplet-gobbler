@@ -18,7 +18,7 @@ For each relevant event it:
 
 - **Indexer:** Ponder
 - **DB:** Postgres in production (`DATABASE_URL`), falls back to local PGlite if omitted
-- **Notifications:** workspace package `telegram-notifier`
+- **Notifications:** built into this package
 - **Enrichment:** Neynar API (optional)
 
 ## Environment
@@ -49,16 +49,23 @@ pnpm --filter warplet-activity-indexer codegen
 pnpm --filter warplet-activity-indexer dev
 ```
 
-`dev`, `start`, `build`, and `typecheck` automatically build the sibling `telegram-notifier` package first.
+This is now a single-package service: one codebase, one process, one deploy target.
 
 ## Production / Coolify
 
-Use a dedicated service for this package:
+Use a single Docker-based Coolify service.
 
-- **Build command:** `pnpm install && pnpm --filter telegram-notifier build && pnpm --filter warplet-activity-indexer codegen`
-- **Start command:** `pnpm --filter warplet-activity-indexer start`
+Recommended setup:
+- **Dockerfile:** repo root `Dockerfile`
+- **Service type:** Dockerfile / custom Docker image build
 - attach a Postgres database and set `DATABASE_URL`
-- set Base RPC and Telegram routing env vars
+- set Base RPC, contract addresses, and Telegram routing env vars
+
+The container entrypoint runs:
+- `pnpm --filter warplet-activity-indexer codegen`
+- `pnpm --filter warplet-activity-indexer start`
+
+So you only need one runtime service in Coolify.
 
 ## Telegram routing
 

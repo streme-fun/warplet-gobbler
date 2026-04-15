@@ -1,5 +1,5 @@
-import { createTelegramNotifier, type TelegramMessage } from "telegram-notifier";
 import { telegramRoutes, type ActivityType } from "../env.js";
+import { createTelegramNotifier, type TelegramMessage } from "./telegram-notifier.js";
 
 const notifiers = new Map<string, ReturnType<typeof createTelegramNotifier>>();
 

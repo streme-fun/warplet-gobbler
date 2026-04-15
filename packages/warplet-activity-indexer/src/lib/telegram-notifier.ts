@@ -1,13 +1,24 @@
 import { basename } from "node:path";
 import { readFile } from "node:fs/promises";
 
-export type FetchLike = typeof fetch;
-
 export type ChatId = string | number;
 
-export type MessageInput = string | SendMessageOptions;
+export type TelegramMessage = {
+  message_id: number;
+  chat?: { id: number | string; type?: string; title?: string };
+  text?: string;
+  caption?: string;
+};
 
-export type SendMessageOptions = {
+export type TelegramNotifierConfig = {
+  botToken: string;
+  chatId: ChatId;
+  defaultMessageThreadId?: number;
+  defaultSilent?: boolean;
+  fetch?: typeof fetch;
+};
+
+type SendMessageOptions = {
   text?: string;
   html?: string;
   silent?: boolean;
@@ -16,7 +27,7 @@ export type SendMessageOptions = {
   disableLinkPreview?: boolean;
 };
 
-export type PhotoInput =
+type PhotoInput =
   | string
   | URL
   | Uint8Array
@@ -24,7 +35,7 @@ export type PhotoInput =
   | Blob
   | { path: string; fileName?: string; mimeType?: string };
 
-export type SendPhotoOptions = {
+type SendPhotoOptions = {
   photo: PhotoInput;
   captionText?: string;
   captionHtml?: string;
@@ -35,27 +46,12 @@ export type SendPhotoOptions = {
   replyToMessageId?: number;
 };
 
-export type TelegramNotifierConfig = {
-  botToken: string;
-  chatId: ChatId;
-  defaultMessageThreadId?: number;
-  defaultSilent?: boolean;
-  fetch?: FetchLike;
-};
-
-export type TelegramMessage = {
-  message_id: number;
-  chat?: { id: number | string; type?: string; title?: string };
-  text?: string;
-  caption?: string;
-};
-
-export type TelegramApiSuccess<T> = {
+type TelegramApiSuccess<T> = {
   ok: true;
   result: T;
 };
 
-export type TelegramApiFailure = {
+type TelegramApiFailure = {
   ok: false;
   error_code?: number;
   description?: string;
@@ -75,16 +71,24 @@ export class TelegramNotifierError extends Error {
   }
 }
 
+export function escapeTelegramHtml(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;");
+}
+
 export function createTelegramNotifier(config: TelegramNotifierConfig) {
   return new TelegramNotifier(config);
 }
 
-export class TelegramNotifier {
+class TelegramNotifier {
   private readonly botToken: string;
   private readonly chatId: ChatId;
   private readonly defaultMessageThreadId?: number;
   private readonly defaultSilent: boolean;
-  private readonly fetchImpl: FetchLike;
+  private readonly fetchImpl: typeof fetch;
 
   constructor(config: TelegramNotifierConfig) {
     if (!config.botToken) throw new Error("botToken is required");
@@ -99,8 +103,8 @@ export class TelegramNotifier {
     this.fetchImpl = config.fetch ?? fetch;
   }
 
-  async sendMessage(input: MessageInput): Promise<TelegramMessage> {
-    const options = normalizeMessageInput(input);
+  async sendMessage(input: string | SendMessageOptions): Promise<TelegramMessage> {
+    const options = typeof input === "string" ? { text: input } : input;
     const text = resolveHtmlContent({ text: options.text, html: options.html });
 
     const body = new URLSearchParams();
@@ -110,11 +114,15 @@ export class TelegramNotifier {
 
     const silent = options.silent ?? this.defaultSilent;
     if (silent) body.set("disable_notification", "true");
-    if (options.disableLinkPreview) body.set("link_preview_options", JSON.stringify({ is_disabled: true }));
+    if (options.disableLinkPreview) {
+      body.set("link_preview_options", JSON.stringify({ is_disabled: true }));
+    }
 
     const messageThreadId = options.messageThreadId ?? this.defaultMessageThreadId;
     if (messageThreadId != null) body.set("message_thread_id", String(messageThreadId));
-    if (options.replyToMessageId != null) body.set("reply_parameters", JSON.stringify({ message_id: options.replyToMessageId }));
+    if (options.replyToMessageId != null) {
+      body.set("reply_parameters", JSON.stringify({ message_id: options.replyToMessageId }));
+    }
 
     return this.request<TelegramMessage>("sendMessage", {
       method: "POST",
@@ -133,7 +141,9 @@ export class TelegramNotifier {
 
     const messageThreadId = options.messageThreadId ?? this.defaultMessageThreadId;
     if (messageThreadId != null) body.set("message_thread_id", String(messageThreadId));
-    if (options.replyToMessageId != null) body.set("reply_parameters", JSON.stringify({ message_id: options.replyToMessageId }));
+    if (options.replyToMessageId != null) {
+      body.set("reply_parameters", JSON.stringify({ message_id: options.replyToMessageId }));
+    }
 
     const caption = resolveOptionalHtmlContent({ text: options.captionText, html: options.captionHtml });
     if (caption) body.set("caption", caption);
@@ -143,20 +153,14 @@ export class TelegramNotifier {
       mimeType: options.mimeType,
     });
 
-    if (typeof photoPart === "string") {
-      body.set("photo", photoPart);
-    } else {
-      body.set("photo", photoPart.blob, photoPart.fileName);
-    }
+    if (typeof photoPart === "string") body.set("photo", photoPart);
+    else body.set("photo", photoPart.blob, photoPart.fileName);
 
-    return this.request<TelegramMessage>("sendPhoto", {
-      method: "POST",
-      body,
-    });
+    return this.request<TelegramMessage>("sendPhoto", { method: "POST", body });
   }
 
   private async request<T>(method: string, init: RequestInit): Promise<T> {
-    const response = await this.fetchImpl(apiUrl(this.botToken, method), init);
+    const response = await this.fetchImpl(`https://api.telegram.org/bot${this.botToken}/${method}`, init);
     const data = (await response.json()) as TelegramApiSuccess<T> | TelegramApiFailure;
 
     if (!response.ok || !data.ok) {
@@ -175,23 +179,9 @@ export class TelegramNotifier {
   }
 }
 
-export function escapeTelegramHtml(input: string): string {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;");
-}
-
-function normalizeMessageInput(input: MessageInput): SendMessageOptions {
-  return typeof input === "string" ? { text: input } : input;
-}
-
 function resolveHtmlContent(input: { text?: string; html?: string }): string {
   const value = resolveOptionalHtmlContent(input);
-  if (!value) {
-    throw new Error("Provide exactly one of text or html");
-  }
+  if (!value) throw new Error("Provide exactly one of text or html");
   return value;
 }
 
@@ -199,17 +189,10 @@ function resolveOptionalHtmlContent(input: { text?: string; html?: string }): st
   const hasText = input.text != null;
   const hasHtml = input.html != null;
 
-  if (hasText && hasHtml) {
-    throw new Error("Provide either text or html, not both");
-  }
-
+  if (hasText && hasHtml) throw new Error("Provide either text or html, not both");
   if (hasHtml) return input.html;
-  if (hasText) return plainTextToTelegramHtml(input.text ?? "");
+  if (hasText) return escapeTelegramHtml(input.text ?? "");
   return undefined;
-}
-
-function plainTextToTelegramHtml(input: string): string {
-  return escapeTelegramHtml(input);
 }
 
 type BinaryPhotoPart = {
@@ -223,8 +206,7 @@ async function resolvePhotoInput(
 ): Promise<string | BinaryPhotoPart> {
   if (input instanceof URL) return input.toString();
   if (typeof input === "string") {
-    if (isHttpUrl(input)) return input;
-
+    if (/^https?:\/\//i.test(input)) return input;
     const file = await readFile(input);
     return {
       blob: new Blob([file], { type: options.mimeType ?? inferMimeTypeFromName(input) }),
@@ -232,7 +214,7 @@ async function resolvePhotoInput(
     };
   }
 
-  if (isPathInput(input)) {
+  if (typeof input === "object" && input !== null && "path" in input) {
     const file = await readFile(input.path);
     return {
       blob: new Blob([file], { type: input.mimeType ?? options.mimeType ?? inferMimeTypeFromName(input.path) }),
@@ -241,29 +223,15 @@ async function resolvePhotoInput(
   }
 
   if (input instanceof Blob) {
-    return {
-      blob: input,
-      fileName: options.fileName ?? "image",
-    };
+    return { blob: input, fileName: options.fileName ?? "image" };
   }
 
   const uint8 = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
-  const arrayBuffer = uint8.buffer.slice(
-    uint8.byteOffset,
-    uint8.byteOffset + uint8.byteLength,
-  ) as ArrayBuffer;
+  const arrayBuffer = uint8.buffer.slice(uint8.byteOffset, uint8.byteOffset + uint8.byteLength) as ArrayBuffer;
   return {
     blob: new Blob([arrayBuffer], { type: options.mimeType ?? "application/octet-stream" }),
     fileName: options.fileName ?? "image",
   };
-}
-
-function isHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
-}
-
-function isPathInput(value: PhotoInput): value is Extract<PhotoInput, { path: string }> {
-  return typeof value === "object" && value !== null && "path" in value;
 }
 
 function inferMimeTypeFromName(name: string): string {
@@ -273,8 +241,4 @@ function inferMimeTypeFromName(name: string): string {
   if (lower.endsWith(".gif")) return "image/gif";
   if (lower.endsWith(".webp")) return "image/webp";
   return "application/octet-stream";
-}
-
-function apiUrl(botToken: string, method: string): string {
-  return `https://api.telegram.org/bot${botToken}/${method}`;
 }

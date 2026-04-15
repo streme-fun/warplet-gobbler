@@ -1,0 +1,10 @@
+{
+  "name": "warplet-activity-indexer",
+  "dockerfilePath": "/Dockerfile",
+  "port": null,
+  "notes": [
+    "Use this as a Docker-based Coolify service.",
+    "Attach a Postgres database and set DATABASE_URL.",
+    "Set Base RPC, contract addresses, Telegram routes, and optional Neynar env vars."
+  ]
+}
