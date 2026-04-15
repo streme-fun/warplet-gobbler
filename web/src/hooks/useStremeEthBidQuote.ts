@@ -8,7 +8,7 @@ import {
   quoteMinEthForZapBid,
 } from "@/lib/stremeZapEthQuote";
 
-const DEFAULT_BUFFER_BPS = 150n;
+const DEFAULT_BUFFER_BPS = 300n;
 
 export function useStremeEthBidQuote(opts: {
   enabled: boolean;
@@ -70,7 +70,7 @@ export function useStremeEthBidQuote(opts: {
         txValueFormatted: formatEther(txValueWei),
       };
     },
-    staleTime: 12_000,
+    staleTime: 4_000,
     gcTime: 60_000,
   });
 }

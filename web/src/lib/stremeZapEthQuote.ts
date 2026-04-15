@@ -70,7 +70,7 @@ export async function quoteMinEthForZapBid(
   const hintRatio = quoteRatioHints.get(hintKey);
   const hintedSeed =
     hintRatio != null
-      ? ((bidWei * hintRatio) / QUOTE_SCALE) * 102n / 100n
+      ? (bidWei * hintRatio * 102n) / (QUOTE_SCALE * 100n)
       : null;
 
   // Fast first guess: learned ratio if available, otherwise coarse bid-size heuristic.

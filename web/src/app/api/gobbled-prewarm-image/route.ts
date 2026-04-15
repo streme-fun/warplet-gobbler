@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createPublicClient, isAddressEqual } from "viem";
+import { base } from "viem/chains";
+import { auctionSellAbi } from "@/abi/auctionSell";
+import { baseHttp } from "@/lib/base-http";
+import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
 import { ensureGobbledImage } from "@/lib/generate-gobbled-image";
 
 export const dynamic = "force-dynamic";
@@ -6,6 +11,10 @@ export const maxDuration = 60;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 20;
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+let rateLimitCheckCount = 0;
+const RATE_LIMIT_SWEEP_INTERVAL = 100;
+
+const publicClient = createPublicClient({ chain: base, transport: baseHttp() });
 
 function getClientIp(request: NextRequest): string {
   const fwd = request.headers.get("x-forwarded-for");
@@ -16,6 +25,12 @@ function getClientIp(request: NextRequest): string {
 
 function checkPrewarmRateLimit(ip: string): boolean {
   const now = Date.now();
+  rateLimitCheckCount += 1;
+  if (rateLimitCheckCount % RATE_LIMIT_SWEEP_INTERVAL === 0) {
+    for (const [k, v] of rateLimitBuckets) {
+      if (v.resetAt <= now) rateLimitBuckets.delete(k);
+    }
+  }
   const existing = rateLimitBuckets.get(ip);
   if (!existing || existing.resetAt <= now) {
     rateLimitBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
@@ -25,6 +40,27 @@ function checkPrewarmRateLimit(ip: string): boolean {
   existing.count += 1;
   rateLimitBuckets.set(ip, existing);
   return true;
+}
+
+async function isLiveAuctionTokenId(tokenId: number): Promise<boolean> {
+  if (
+    isAddressEqual(CONTRACTS.auctionSell, ZERO_ADDRESS) ||
+    !Number.isInteger(tokenId) ||
+    tokenId <= 0
+  ) {
+    return false;
+  }
+  try {
+    const current = await publicClient.readContract({
+      address: CONTRACTS.auctionSell,
+      abi: auctionSellAbi,
+      functionName: "currentAuction",
+    });
+    const currentTokenId = Array.isArray(current) ? current[0] : current.tokenId;
+    return currentTokenId > 0n && currentTokenId === BigInt(tokenId);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -50,6 +86,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: "Invalid tokenId" },
         { status: 400 },
+      );
+    }
+    const liveToken = await isLiveAuctionTokenId(tokenId);
+    if (!liveToken) {
+      return NextResponse.json(
+        { success: false, error: "tokenId is not active for the live auction." },
+        { status: 403 },
       );
     }
 

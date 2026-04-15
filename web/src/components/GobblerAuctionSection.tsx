@@ -80,6 +80,7 @@ function dedupeQueueTokenIds(ids: bigint[]): bigint[] {
 const BUMP_FADE_SOURCE_MS = Math.round(420 * 1.2 * 1.2 * 0.9);
 const BUMP_HEAD_PREVIEW_MS = Math.round(680 * 1.2 * 1.2 * 0.9);
 const BUMP_FINALIZE_MS = Math.round(540 * 1.2 * 1.2 * 0.9);
+const MAX_PREWARM_SENT_KEYS = 200;
 const erc20BalanceOfAbi = [
   {
     type: "function",
@@ -501,6 +502,9 @@ export default function GobblerAuctionSection({
     const bidWei = prewarmBidWei;
     const key = `${tokenId}:${bidWei}`;
     if (prewarmSentKeysRef.current.has(key)) return;
+    if (prewarmSentKeysRef.current.size >= MAX_PREWARM_SENT_KEYS) {
+      prewarmSentKeysRef.current.clear();
+    }
     prewarmSentKeysRef.current.add(key);
 
     const trigger = prewarmTrigger;
