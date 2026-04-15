@@ -50,6 +50,17 @@ export function useAuctionSellAuction() {
 
   const refetchAuction = auctionQ.refetch;
 
+  const currentAuctionQ = useReadContract({
+    chainId: base.id,
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "currentAuction",
+    query: {
+      enabled: configured,
+      refetchInterval: 5_000,
+    },
+  });
+
   const bumpFeeQ = useReadContract({
     chainId: base.id,
     abi: auctionSellAbi,
@@ -99,6 +110,14 @@ export function useAuctionSellAuction() {
     },
   });
 
+  const stremeZapQ = useReadContract({
+    chainId: base.id,
+    abi: auctionSellAbi,
+    address: CONTRACTS.auctionSell,
+    functionName: "stremeZap",
+    query: { enabled: configured, refetchInterval: 60_000 },
+  });
+
   const bidTokenAddr =
     typeof bidTokenQ.data === "string" &&
     !isAddressEqual(bidTokenQ.data as Address, zeroAddress)
@@ -121,33 +140,48 @@ export function useAuctionSellAuction() {
     query: { enabled: !!bidTokenAddr },
   });
 
+  const currentLiveTokenId = useMemo((): bigint | null => {
+    const d = currentAuctionQ.data;
+    if (d == null) return null;
+    if (Array.isArray(d)) return d[0];
+    return d.tokenId;
+  }, [currentAuctionQ.data]);
+
   /**
    * Shape the raw `auction()` read into our `AuctionSellLot` type.
    *
    * viem decodes the tuple as either an array or an object depending on ABI
-   * component naming; we handle both. The deployed contract doesn't return a
-   * `settled` flag — treat every lot as unsettled here and let downstream
-   * callers decide whether it's live/expired/ready-to-restart using `endTime`
-   * and `auctionExpired` from `GobblerAuctionSection`. Any future contract
-   * variant that adds a boolean trailing field is ignored by viem during
-   * decoding, so this stays forward-compatible.
+   * component naming; we handle both. `auction()` still provides the canonical
+   * lot details (tokenId, amount, bidder, timers). We derive `settled` from
+   * `currentAuction()`: when it reports `tokenId == 0`, the currently stored
+   * lot has been settled and no live lot is running.
    */
   const chainLot: AuctionSellLot | null = useMemo(() => {
     const d = auctionQ.data;
     if (d == null) return null;
     if (Array.isArray(d)) {
       const [tokenId, amount, startTime, endTime, bidder] = d;
-      return { tokenId, amount, startTime, endTime, bidder, settled: false };
+      const settled =
+        amount > 0n &&
+        currentAuctionQ.isSuccess &&
+        currentLiveTokenId === 0n &&
+        tokenId > 0n;
+      return { tokenId, amount, startTime, endTime, bidder, settled };
     }
+    const settled =
+      d.amount > 0n &&
+      currentAuctionQ.isSuccess &&
+      currentLiveTokenId === 0n &&
+      d.tokenId > 0n;
     return {
       tokenId: d.tokenId,
       amount: d.amount,
       startTime: d.startTime,
       endTime: d.endTime,
       bidder: d.bidder,
-      settled: false,
+      settled,
     };
-  }, [auctionQ.data]);
+  }, [auctionQ.data, currentAuctionQ.isSuccess, currentLiveTokenId]);
 
   const auctionReadError = auctionQ.isError;
 
@@ -188,6 +222,15 @@ export function useAuctionSellAuction() {
   const isAuctionLoading =
     configured && (auctionQ.isPending || auctionQ.isLoading);
 
+  const stremeZapAddr =
+    stremeZapQ.isSuccess &&
+    typeof stremeZapQ.data === "string" &&
+    !isAddressEqual(stremeZapQ.data as Address, zeroAddress)
+      ? (stremeZapQ.data as Address)
+      : undefined;
+
+  const nativeEthBidConfigured = stremeZapAddr != null;
+
   return {
     configured,
     auction: chainLot,
@@ -206,5 +249,7 @@ export function useAuctionSellAuction() {
     minNextBidAmount,
     reservePrice: reserveQ.data,
     refetchAuction,
+    stremeZapAddress: stremeZapAddr,
+    nativeEthBidConfigured,
   };
 }

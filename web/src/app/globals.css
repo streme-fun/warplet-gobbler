@@ -7,6 +7,10 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 
+.font-display {
+  font-family: var(--font-display), var(--font-handwritten), cursive;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -309,6 +313,26 @@ body {
 
 .animate-bid-top-land {
   animation: bid-top-land 0.58s cubic-bezier(0.28, 0.9, 0.4, 1) forwards;
+}
+
+/* Top bid token — `content: attr()` is defined here; Tailwind arbitrary `content` was not applied reliably */
+.bid-top-symbol-after::after {
+  content: attr(data-symbol);
+  margin-left: 0.375rem;
+  display: inline-block;
+  transform: translateY(-0.06em);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: theme("colors.base-content / 0.4");
+  letter-spacing: 0;
+}
+
+@media (min-width: 640px) {
+  .bid-top-symbol-after::after {
+    font-size: 12px;
+  }
 }
 
 /* After finalize → new live lot: whole card breathes in */
@@ -717,9 +741,17 @@ body {
 }
 
 .auction-warplet-aura {
-  padding: 2px;
-  border-radius: 0.85rem;
-  animation: auction-aura-pulse 3.5s ease-in-out infinite;
+  padding: 0;
+  border-radius: 0;
+  animation: none;
+}
+
+@media (min-width: 640px) {
+  .auction-warplet-aura {
+    padding: 2px;
+    border-radius: 0.85rem;
+    animation: auction-aura-pulse 3.5s ease-in-out infinite;
+  }
 }
 
 /* Scrollbar styling */

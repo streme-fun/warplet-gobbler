@@ -41,11 +41,11 @@ export default function AuctionWarpletImage({
 
   if (variant === "hero") {
     return (
-      <div className="group relative h-full min-h-0 w-full overflow-hidden rounded-xl border-2 border-transparent">
+      <div className="group absolute inset-0 overflow-hidden rounded-[inherit] sm:rounded-l-[0.78rem]">
         <img
           src={src}
           alt={`Warplet #${fid}`}
-          className="block h-full w-full object-cover"
+          className="absolute inset-0 size-full object-cover object-center"
           draggable={false}
           loading="lazy"
           decoding="async"

@@ -41,6 +41,7 @@ export function useAuctionSellBid(opts: {
   bidTokenAddress: Address | undefined;
   bidDecimals: number;
   refetchAuction: () => Promise<unknown>;
+  stremeZapAddress?: Address;
 }) {
   const {
     enabled: bidFlowEnabled,
@@ -48,6 +49,7 @@ export function useAuctionSellBid(opts: {
     bidTokenAddress,
     bidDecimals,
     refetchAuction,
+    stremeZapAddress,
   } = opts;
   const { address } = useAccount();
   const publicClient = usePublicClient();
@@ -117,6 +119,47 @@ export function useAuctionSellBid(opts: {
     ],
   );
 
+  const placeBidWithNative = useCallback(
+    async (
+      amountWei: bigint,
+      txValueWei: bigint,
+      options?: PlaceBidOptions,
+    ) => {
+      if (
+        address == null ||
+        minBidWei == null ||
+        amountWei < minBidWei ||
+        txValueWei <= 0n
+      ) {
+        throw new Error("Invalid bid amount or ETH value");
+      }
+      if (!stremeZapAddress || isAddressEqual(stremeZapAddress, zeroAddress)) {
+        throw new Error("ETH bidding is not available for this auction.");
+      }
+      // Native path still calls `AuctionSell.bid`; contract reads configured zap internally.
+      const hash = await writeContractAsync({
+        abi: auctionSellAbi,
+        address: CONTRACTS.auctionSell,
+        functionName: "bid",
+        args: [amountWei],
+        value: txValueWei,
+      });
+      options?.onTransactionSubmitted?.(hash);
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+      await refetchAuction();
+    },
+    [
+      address,
+      minBidWei,
+      publicClient,
+      refetchAuction,
+      stremeZapAddress,
+      writeContractAsync,
+    ],
+  );
+
   const parseHumanToWei = useCallback(
     (human: string): bigint => parseUnits(human.trim() || "0", bidDecimals),
     [bidDecimals],
@@ -127,6 +170,7 @@ export function useAuctionSellBid(opts: {
     minBidHuman,
     reservePriceWei: reserveQ.data,
     placeBid,
+    placeBidWithNative,
     parseHumanToWei,
     isBidding: isWritePending,
     rulesLoading: reserveQ.isLoading || minPctQ.isLoading,

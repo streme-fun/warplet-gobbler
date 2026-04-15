@@ -51,12 +51,16 @@ export default function AuctionQueueBumpPanel({
             This Warplet is already at the front of the queue. Pick one behind
             them to skip the line.
           </p>
-        ) : (
+        ) : hasQueueSelection ? (
           <p className="text-sm leading-snug text-base-content/70">
             Pay 1M{" "}
             <span className="font-semibold tabular-nums text-secondary/95">
               {tokenLabel}
             </span>
+          </p>
+        ) : (
+          <p className="text-sm leading-snug text-base-content/70">
+            Pick a Warplet to skip the line
           </p>
         )}
       </div>
