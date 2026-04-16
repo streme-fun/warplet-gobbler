@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node", "ponder/virtual"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "ponder.config.ts",
+    "ponder.schema.ts",
+    "ponder-env.d.ts"
+  ]
+}
