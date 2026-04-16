@@ -7,7 +7,11 @@
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "test": "pnpm -r test",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "indexer:codegen": "pnpm --filter warplet-activity-indexer codegen",
+    "indexer:dev": "pnpm --filter warplet-activity-indexer dev",
+    "indexer:start": "pnpm --filter warplet-activity-indexer start",
+    "indexer:typecheck": "pnpm --filter warplet-activity-indexer typecheck"
   },
   "engines": {
     "node": ">=18",

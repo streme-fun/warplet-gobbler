@@ -1,0 +1,13 @@
+node_modules
+.pnpm-store
+.git
+.gitignore
+web/.next
+web/node_modules
+contracts/out
+contracts/cache
+packages/*/dist
+packages/*/.ponder
+*.log
+.env
+.env.*
