@@ -55,6 +55,11 @@ export const POOL_HOOKS: Address = optAddress(
   "POOL_HOOKS",
   "0x0000000000000000000000000000000000000000",
 );
+/** bytes32 pool id for Uniswap V4 StateView.getSlot0. Required — without it,
+ *  swap quotes silently return 0 and every opportunity looks unprofitable. */
+export const WARPGOBB_WETH_POOL_ID = requireEnv(
+  "WARPGOBB_WETH_POOL_ID",
+) as `0x${string}`;
 
 // ─── OpenSea ──────────────────────────────────────────────────────────
 export const OPENSEA_API_KEY = requireEnv("OPENSEA_API_KEY");

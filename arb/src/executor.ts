@@ -75,18 +75,6 @@ async function simulateWithArgs(
   }
 }
 
-/** Public simulate entry point — fetches fresh fulfillment data. */
-export async function simulateSnipe(
-  client: AnyPublicClient,
-  opp: Opportunity,
-  sniperAddress: Address,
-  botAddress: Address,
-): Promise<{ success: boolean; error?: string }> {
-  const built = await buildSnipeArgs(opp, sniperAddress);
-  if (!built) return { success: false, error: "Failed to get OpenSea fulfillment data" };
-  return simulateWithArgs(client, sniperAddress, botAddress, built.args);
-}
-
 // ─── Execute ──────────────────────────────────────────────────────────
 
 export async function executeSnipe(

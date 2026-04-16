@@ -13,6 +13,7 @@ import {
   DUTCH_AUCTION_ADDRESS,
   STATE_VIEW_ADDRESS,
   WARPGOBB_TOKEN_ADDRESS,
+  WARPGOBB_WETH_POOL_ID,
   WETH_ADDRESS,
   SWAP_SLIPPAGE_BPS,
   GAS_BUFFER_BPS,
@@ -21,11 +22,6 @@ import {
 } from "./config.js";
 import { log } from "./logger.js";
 import type { Listing } from "./opensea.js";
-
-// ─── V4 Pool ID (computed from pool key) ──────────────────────────────
-// The pool ID is keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks))
-// We read it from env or compute later.
-const POOL_ID = process.env.WARPGOBB_WETH_POOL_ID as `0x${string}` | undefined;
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -57,16 +53,11 @@ export async function estimateSwapOutput(
   client: AnyPublicClient,
   warpgobbAmountIn: bigint,
 ): Promise<bigint> {
-  if (!POOL_ID) {
-    log.warn("No WARPGOBB_WETH_POOL_ID set — cannot estimate swap output");
-    return 0n;
-  }
-
   const [sqrtPriceX96] = await client.readContract({
     address: STATE_VIEW_ADDRESS,
     abi: stateViewAbi,
     functionName: "getSlot0",
-    args: [POOL_ID],
+    args: [WARPGOBB_WETH_POOL_ID],
   });
 
   if (sqrtPriceX96 === 0n) {

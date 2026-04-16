@@ -111,6 +111,19 @@ contract GobbleSniper is IERC777Recipient, IERC721Receiver {
         poolKey = _poolKey;
         warpgobbIsCurrency0 = _warpgobb < _weth;
         nftReserve = IDutchAuctionV2(_gobbler).nftReserve();
+
+        // Register as ERC-777 recipient. Without this, WARPGOBB.send() reverts for
+        // contract recipients (ERC-1820 registry lookup returns address(0)).
+        address ERC1820_REGISTRY = 0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24;
+        (bool ok,) = ERC1820_REGISTRY.call(
+            abi.encodeWithSignature(
+                "setInterfaceImplementer(address,bytes32,address)",
+                address(this),
+                keccak256("ERC777TokensRecipient"),
+                address(this)
+            )
+        );
+        require(ok, "GobbleSniper: ERC1820 registration failed");
     }
 
     // ─────────────────────────────────────────────────────────────────
