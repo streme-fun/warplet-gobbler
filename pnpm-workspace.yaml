@@ -1,3 +1,4 @@
 packages:
   - "web"
+  - "arb"
   - "packages/warplet-activity-indexer"
