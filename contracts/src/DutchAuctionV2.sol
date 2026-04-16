@@ -58,12 +58,16 @@ contract DutchAuctionV2 is IDutchAuction, IERC721Receiver {
         return IERC721Receiver.onERC721Received.selector;
     }
 
-    /// @notice Gobble the NFT without needing funds.
-    /// @dev This function is used to gobble the NFT without needing funds. msg.sender should implement ERC777 hook and deliver the NFT to the reserve.
-    /// @param tokenId The ID of the NFT to gobble.
-    function gobbleFlash(uint256 tokenId) external {
+    /// @notice Flash-gobble: receive WARPGOBB up-front via ERC-777 `tokensReceived`, then deliver
+    ///         the Warplet to `nftReserve` before the call returns. Enables zero-capital arb.
+    /// @dev    `msg.sender` must implement `IERC777Recipient.tokensReceived` and must transfer the
+    ///         Warplet to `nftReserve` within that callback (the postcondition here enforces it).
+    /// @param tokenId   The Warplet token ID to gobble.
+    /// @param minPrice  Minimum acceptable $WARPGOBB payout; reverts if the pot is below this.
+    function gobbleFlash(uint256 tokenId, uint256 minPrice) external {
         require(warplets.ownerOf(tokenId) != nftReserve, "NFT already in reserve");
         uint256 payout = currentPrice();
+        require(payout >= minPrice, "Price is too low, try again later");
         IERC777Send(address(paymentToken)).send(msg.sender, payout, abi.encode(tokenId));
         require(warplets.ownerOf(tokenId) == nftReserve, "NFT not in reserve yet");
         emit Gobbled(msg.sender, tokenId, payout);

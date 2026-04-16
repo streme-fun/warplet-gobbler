@@ -43,10 +43,20 @@ const walletClient = createWalletClient({
 const recentlyAttempted = new Map<string, number>();
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 min cooldown per listing
 
+/** Drop expired cooldown entries so the map doesn't grow without bound. */
+function pruneRecentlyAttempted(now: number) {
+  for (const [hash, ts] of recentlyAttempted) {
+    if (now - ts > COOLDOWN_MS) recentlyAttempted.delete(hash);
+  }
+}
+
 // ─── Main loop ────────────────────────────────────────────────────────
 
 async function tick() {
   try {
+    // 0. Prune stale cooldown entries
+    pruneRecentlyAttempted(Date.now());
+
     // 1. Check bot balance
     const balance = await publicClient.getBalance({ address: account.address });
     log.debug("Bot balance", { eth: formatEther(balance) });

@@ -73,6 +73,10 @@ function parseListing(raw: OpenseaListing): Listing | null {
     const offer = params.offer[0];
     if (!offer) return null;
 
+    // Drop expired listings — fulfillment would fail at the API layer.
+    const expiry = Number(params.endTime);
+    if (expiry > 0 && expiry < Math.floor(Date.now() / 1000)) return null;
+
     // Sum all consideration items to get total price
     const totalPriceWei = params.consideration.reduce(
       (sum, c) => sum + BigInt(c.startAmount),
@@ -91,7 +95,7 @@ function parseListing(raw: OpenseaListing): Listing | null {
       priceWei: totalPriceWei,
       currency: currency as Address,
       seller: params.offerer as Address,
-      expiry: Number(params.endTime),
+      expiry,
       protocolAddress: raw.protocol_address as Address,
       raw,
     };

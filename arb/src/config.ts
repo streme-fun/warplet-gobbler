@@ -66,7 +66,11 @@ export const MIN_PROFIT_WEI = parseEther(process.env.MIN_PROFIT_ETH ?? "0.001");
 export const MAX_SPEND_WEI = parseEther(process.env.MAX_SPEND_ETH ?? "0.5");
 export const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_SEC ?? "15") * 1000;
 export const SWAP_SLIPPAGE_BPS = BigInt(process.env.SWAP_SLIPPAGE_BPS ?? "300");
-export const GAS_BUFFER = Number(process.env.GAS_BUFFER ?? "1.2");
+// Gas multiplier in bps (10000 = 1x, 12000 = 1.2x). Accept legacy float value via fallback.
+export const GAS_BUFFER_BPS = BigInt(
+  process.env.GAS_BUFFER_BPS ??
+    Math.round(Number(process.env.GAS_BUFFER ?? "1.2") * 10_000).toString(),
+);
 export const DRY_RUN = process.env.DRY_RUN === "true";
 
 // ─── Chain ────────────────────────────────────────────────────────────

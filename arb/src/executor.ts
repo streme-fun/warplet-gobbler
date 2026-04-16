@@ -1,6 +1,5 @@
 import {
   type Address,
-  type PublicClient,
   type WalletClient,
   type Hash,
   formatEther,
@@ -10,10 +9,10 @@ import {
   GOBBLE_SNIPER_ADDRESS,
   DRY_RUN,
   MIN_PROFIT_WEI,
-  GAS_BUFFER,
+  GAS_BUFFER_BPS,
 } from "./config.js";
-import { getFulfillment } from "./opensea.js";
-import type { Opportunity } from "./pricing.js";
+import { getFulfillment, type FulfillmentData } from "./opensea.js";
+import type { AnyPublicClient, Opportunity } from "./pricing.js";
 import { log } from "./logger.js";
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -25,40 +24,48 @@ export interface ExecutionResult {
   simulated?: boolean;
 }
 
+type SnipeArgs = readonly [bigint, `0x${string}`, bigint, bigint, bigint];
+
 // ─── Build snipe args ─────────────────────────────────────────────────
 
-async function buildSnipeArgs(opp: Opportunity, sniperAddress: Address) {
+/**
+ * Fetch fulfillment data and build the `snipe` contract args.
+ * Returns null if OpenSea fulfillment fails.
+ */
+async function buildSnipeArgs(
+  opp: Opportunity,
+  sniperAddress: Address,
+): Promise<{ args: SnipeArgs; fulfillment: FulfillmentData } | null> {
   const fulfillment = await getFulfillment(opp.listing, sniperAddress);
   if (!fulfillment) return null;
 
-  return {
-    args: [
-      BigInt(opp.listing.tokenId),
-      fulfillment.data,
-      fulfillment.value,
-      MIN_PROFIT_WEI,
-    ] as const,
-    fulfillment,
-  };
+  // Slippage guard on gobble payout: accept 5% less than current pot reading.
+  const minGobblePayout = (opp.gobblePayout * 95n) / 100n;
+
+  const args: SnipeArgs = [
+    BigInt(opp.listing.tokenId),
+    fulfillment.data,
+    fulfillment.value,
+    minGobblePayout,
+    MIN_PROFIT_WEI,
+  ];
+  return { args, fulfillment };
 }
 
-// ─── Simulate ─────────────────────────────────────────────────────────
+// ─── Simulate (using already-built args) ─────────────────────────────
 
-export async function simulateSnipe(
-  client: PublicClient,
-  opp: Opportunity,
+async function simulateWithArgs(
+  client: AnyPublicClient,
   sniperAddress: Address,
   botAddress: Address,
+  args: SnipeArgs,
 ): Promise<{ success: boolean; error?: string }> {
-  const built = await buildSnipeArgs(opp, sniperAddress);
-  if (!built) return { success: false, error: "Failed to get OpenSea fulfillment data" };
-
   try {
     await client.simulateContract({
       address: sniperAddress,
       abi: gobbleSniperAbi,
       functionName: "snipe",
-      args: built.args,
+      args,
       account: botAddress,
     });
     return { success: true };
@@ -68,10 +75,22 @@ export async function simulateSnipe(
   }
 }
 
+/** Public simulate entry point — fetches fresh fulfillment data. */
+export async function simulateSnipe(
+  client: AnyPublicClient,
+  opp: Opportunity,
+  sniperAddress: Address,
+  botAddress: Address,
+): Promise<{ success: boolean; error?: string }> {
+  const built = await buildSnipeArgs(opp, sniperAddress);
+  if (!built) return { success: false, error: "Failed to get OpenSea fulfillment data" };
+  return simulateWithArgs(client, sniperAddress, botAddress, built.args);
+}
+
 // ─── Execute ──────────────────────────────────────────────────────────
 
 export async function executeSnipe(
-  publicClient: PublicClient,
+  publicClient: AnyPublicClient,
   walletClient: WalletClient,
   opp: Opportunity,
 ): Promise<ExecutionResult> {
@@ -84,15 +103,15 @@ export async function executeSnipe(
     netProfit: formatEther(opp.netProfit),
   });
 
-  // 1. Build args (fetches fulfillment data)
+  // 1. Build args once — reused across simulate, gas estimate, and send
   const built = await buildSnipeArgs(opp, sniperAddress);
   if (!built) {
     return { success: false, error: "Failed to get fulfillment data" };
   }
 
-  // 2. Simulate
+  // 2. Simulate with the same args
   log.info("Simulating snipe tx...");
-  const sim = await simulateSnipe(publicClient, opp, sniperAddress, botAddress);
+  const sim = await simulateWithArgs(publicClient, sniperAddress, botAddress, built.args);
   if (!sim.success) {
     log.warn("Simulation failed", { error: sim.error });
     return { success: false, error: `Simulation failed: ${sim.error}`, simulated: true };
@@ -109,7 +128,7 @@ export async function executeSnipe(
     return { success: true, simulated: true };
   }
 
-  // 4. Estimate gas
+  // 4. Estimate gas (reuse args)
   let gasEstimate: bigint;
   try {
     gasEstimate = await publicClient.estimateContractGas({
@@ -124,7 +143,8 @@ export async function executeSnipe(
     return { success: false, error: `Gas estimation failed: ${msg}` };
   }
 
-  const gasLimit = BigInt(Math.ceil(Number(gasEstimate) * GAS_BUFFER));
+  // Stay in bigint — no float conversions.
+  const gasLimit = (gasEstimate * GAS_BUFFER_BPS) / 10_000n;
 
   // 5. Send tx — no msg.value needed, flash gobble is capital-free
   log.info("Sending snipe tx", { gasLimit: gasLimit.toString() });

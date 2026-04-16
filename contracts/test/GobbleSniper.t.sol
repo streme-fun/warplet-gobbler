@@ -249,7 +249,7 @@ contract GobbleSniperTest is Test {
         uint256 recipientBefore = recipientAddr.balance;
 
         vm.prank(anyoneCaller);
-        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0);
+        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0, 0);
 
         // NFT ended up in reserve
         assertEq(warplets.ownerOf(TOKEN_ID), address(reserve));
@@ -262,12 +262,16 @@ contract GobbleSniperTest is Test {
         assertEq(address(sniper).balance, 0);
     }
 
-    function test_snipe_emits_event() public {
-        vm.expectEmit(true, false, false, false, address(sniper));
-        emit GobbleSniper.Sniped(TOKEN_ID, 0, 0); // don't check non-indexed
+    function test_snipe_emits_event_with_payout_and_profit() public {
+        uint256 expectedSwapOut = (POT * 1e18) / SWAP_RATE;
+        uint256 expectedProfit = expectedSwapOut - NFT_PRICE;
+
+        // Check all fields including non-indexed (payout = POT, profit)
+        vm.expectEmit(true, false, false, true, address(sniper));
+        emit GobbleSniper.Sniped(TOKEN_ID, POT, expectedProfit);
 
         vm.prank(anyoneCaller);
-        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0);
+        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0, 0);
     }
 
     function test_snipe_anyone_can_call() public {
@@ -275,7 +279,7 @@ contract GobbleSniperTest is Test {
         uint256 recipientBefore = recipientAddr.balance;
 
         vm.prank(randomCaller);
-        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0);
+        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0, 0);
 
         assertGt(recipientAddr.balance - recipientBefore, 0);
     }
@@ -286,7 +290,7 @@ contract GobbleSniperTest is Test {
         uint256 recipientBefore = recipientAddr.balance;
 
         vm.prank(randomCaller);
-        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0);
+        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0, 0);
 
         // Caller balance unchanged
         assertEq(randomCaller.balance, callerBefore);
@@ -301,7 +305,7 @@ contract GobbleSniperTest is Test {
         // Require more than that → should revert
         vm.prank(anyoneCaller);
         vm.expectRevert("Not profitable");
-        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 600 ether);
+        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0, 600 ether);
     }
 
     function test_snipe_succeeds_at_exact_min_profit() public {
@@ -310,7 +314,7 @@ contract GobbleSniperTest is Test {
         uint256 expectedProfit = expectedSwapOut - NFT_PRICE;
 
         vm.prank(anyoneCaller);
-        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, expectedProfit);
+        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, 0, expectedProfit);
     }
 
     // ── Seaport failures ────────────────────────────────────────────
@@ -321,7 +325,7 @@ contract GobbleSniperTest is Test {
 
         vm.prank(anyoneCaller);
         vm.expectRevert(); // insufficient ETH in callback
-        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), 600 ether, 0);
+        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), 600 ether, 0, 0);
     }
 
     // ── Empty pot ───────────────────────────────────────────────────
@@ -359,7 +363,7 @@ contract GobbleSniperTest is Test {
         // Pot is 0 → swap returns 0 → can't buy NFT → reverts
         vm.prank(anyoneCaller);
         vm.expectRevert();
-        emptySniper.snipe(freshId, _dummySeaportCalldata(), NFT_PRICE, 0);
+        emptySniper.snipe(freshId, _dummySeaportCalldata(), NFT_PRICE, 0, 0);
     }
 
     // ── Admin: withdraw ─────────────────────────────────────────────
@@ -413,10 +417,36 @@ contract GobbleSniperTest is Test {
         assertEq(s.recipient(), deployer);
     }
 
-    // ── Transient state: tokensReceived blocked outside snipe ────────
+    // ── tokensReceived defense-in-depth checks ──────────────────────
+
+    function test_tokensReceived_reverts_when_caller_is_not_warpgobb() public {
+        // Random EOA/contract calling tokensReceived directly
+        address impostor = makeAddr("impostor");
+        vm.prank(impostor);
+        vm.expectRevert("not warpgobb");
+        sniper.tokensReceived(address(0), address(auction), address(0), 0, abi.encode(uint256(1)), "");
+    }
+
+    function test_tokensReceived_reverts_when_from_is_not_gobbler() public {
+        // WARPGOBB calls the callback but `from` is not our gobbler
+        vm.prank(address(warpgobb));
+        vm.expectRevert("not from gobbler");
+        sniper.tokensReceived(address(0), address(0xbad), address(0), 0, abi.encode(uint256(1)), "");
+    }
 
     function test_tokensReceived_reverts_outside_snipe() public {
+        // Correct caller + from, but no active snipe
+        vm.prank(address(warpgobb));
         vm.expectRevert("not in snipe");
-        sniper.tokensReceived(address(0), address(0), address(0), 0, abi.encode(uint256(1)), "");
+        sniper.tokensReceived(address(0), address(auction), address(0), 0, abi.encode(uint256(1)), "");
+    }
+
+    // ── minGobblePayout forwarded to gobbleFlash ─────────────────────
+
+    function test_snipe_reverts_when_minGobblePayout_above_pot() public {
+        // Pot = POT. Require more than that → gobbleFlash reverts internally.
+        vm.prank(anyoneCaller);
+        vm.expectRevert("Price is too low, try again later");
+        sniper.snipe(TOKEN_ID, _dummySeaportCalldata(), NFT_PRICE, POT + 1, 0);
     }
 }

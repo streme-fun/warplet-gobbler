@@ -8,6 +8,7 @@ export const gobbleSniperAbi = [
       { name: "tokenId", type: "uint256" },
       { name: "seaportCalldata_", type: "bytes" },
       { name: "ethForNft_", type: "uint256" },
+      { name: "minGobblePayout", type: "uint256" },
       { name: "minProfitWei", type: "uint256" },
     ],
     outputs: [],
@@ -34,23 +35,11 @@ export const gobbleSniperAbi = [
     outputs: [],
   },
   {
-    type: "function",
-    name: "approveToken",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "token", type: "address" },
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [],
-  },
-  {
     type: "event",
     name: "Sniped",
     inputs: [
       { name: "tokenId", type: "uint256", indexed: true },
-      { name: "spent", type: "uint256", indexed: false },
-      { name: "received", type: "uint256", indexed: false },
+      { name: "payout", type: "uint256", indexed: false },
       { name: "profit", type: "uint256", indexed: false },
     ],
   },

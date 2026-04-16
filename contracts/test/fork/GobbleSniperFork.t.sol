@@ -162,7 +162,7 @@ contract GobbleSniperForkTest is Test {
 
         // Execute snipe
         vm.prank(caller);
-        try forkSniper.snipe(tokenId, abi.encodeWithSignature("buy()"), nftPrice, 0) {
+        try forkSniper.snipe(tokenId, abi.encodeWithSignature("buy()"), nftPrice, 0, 0) {
             // Success: verify state
             assertEq(IERC721(WARPLETS).ownerOf(tokenId), address(reserve), "NFT should be in reserve");
             assertEq(auction.currentPrice(), 0, "Pot should be drained");
@@ -211,7 +211,7 @@ contract GobbleSniperForkTest is Test {
         uint256 hookBalBefore = IERC20(WARPGOBB).balanceOf(address(hook));
 
         vm.prank(address(hook));
-        auction.gobbleFlash(tokenId);
+        auction.gobbleFlash(tokenId, 0);
 
         // NFT in reserve
         assertEq(IERC721(WARPLETS).ownerOf(tokenId), address(reserve));

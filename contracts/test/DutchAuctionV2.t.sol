@@ -104,7 +104,7 @@ contract ReentrantFlashHook is IERC777Recipient {
     ) external override {
         if (!reentered) {
             reentered = true;
-            auction.gobbleFlash(reenterTokenId);
+            auction.gobbleFlash(reenterTokenId, 0);
         }
     }
 }
@@ -238,7 +238,7 @@ contract DutchAuctionV2Test is Test {
         warplets.transferFrom(seller, address(hook), TOKEN_ID);
 
         vm.prank(address(hook));
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
 
         assertEq(warplets.ownerOf(TOKEN_ID), address(reserve));
         assertEq(paymentToken.balanceOf(address(hook)), POT);
@@ -254,7 +254,7 @@ contract DutchAuctionV2Test is Test {
         emit IDutchAuction.Gobbled(address(hook), TOKEN_ID, POT);
 
         vm.prank(address(hook));
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
     }
 
     function test_flash_callback_receives_correct_params() public {
@@ -263,7 +263,7 @@ contract DutchAuctionV2Test is Test {
         warplets.transferFrom(seller, address(hook), TOKEN_ID);
 
         vm.prank(address(hook));
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
 
         assertEq(hook.lastFrom(), address(auction));
         assertEq(hook.lastAmount(), POT);
@@ -274,7 +274,20 @@ contract DutchAuctionV2Test is Test {
         DoNothingHook hook = new DoNothingHook();
         vm.prank(address(hook));
         vm.expectRevert("NFT not in reserve yet");
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
+    }
+
+    function test_flash_reverts_below_minPrice() public {
+        GoodFlashHook hook = new GoodFlashHook(address(warplets));
+        vm.prank(seller);
+        warplets.transferFrom(seller, address(hook), TOKEN_ID);
+
+        vm.prank(address(hook));
+        vm.expectRevert("Price is too low, try again later");
+        auction.gobbleFlash(TOKEN_ID, POT + 1);
+
+        // NFT not delivered
+        assertEq(warplets.ownerOf(TOKEN_ID), address(hook));
     }
 
     function test_flash_reverts_if_nft_already_in_reserve() public {
@@ -289,7 +302,7 @@ contract DutchAuctionV2Test is Test {
         GoodFlashHook hook = new GoodFlashHook(address(warplets));
         vm.prank(address(hook));
         vm.expectRevert("NFT already in reserve");
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
     }
 
     function test_flash_with_empty_pot_pays_zero_and_succeeds() public {
@@ -305,7 +318,7 @@ contract DutchAuctionV2Test is Test {
         warplets.transferFrom(address(this), address(hook), freshId);
 
         vm.prank(address(hook));
-        emptyAuction.gobbleFlash(freshId);
+        emptyAuction.gobbleFlash(freshId, 0);
 
         assertEq(warplets.ownerOf(freshId), address(reserve));
         assertEq(paymentToken.balanceOf(address(hook)), 0);
@@ -331,7 +344,7 @@ contract DutchAuctionV2Test is Test {
         // Outer call also reverts because TOKEN_ID never reached reserve.
         vm.prank(address(hook));
         vm.expectRevert();
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
     }
 
     function test_flash_reentrant_via_v1_gobble_reverts() public {
@@ -350,7 +363,7 @@ contract DutchAuctionV2Test is Test {
         // But back in the outer flash call, TOKEN_ID still isn't in reserve → reverts.
         vm.prank(address(hook));
         vm.expectRevert("NFT not in reserve yet");
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -362,7 +375,7 @@ contract DutchAuctionV2Test is Test {
         vm.prank(seller);
         warplets.transferFrom(seller, address(hook), TOKEN_ID);
         vm.prank(address(hook));
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
         assertEq(auction.currentPrice(), 0);
 
         // Refill pot
@@ -393,7 +406,7 @@ contract DutchAuctionV2Test is Test {
         GoodFlashHook hook = new GoodFlashHook(address(warplets));
         warplets.mint(address(hook), secondId);
         vm.prank(address(hook));
-        auction.gobbleFlash(secondId);
+        auction.gobbleFlash(secondId, 0);
 
         assertEq(warplets.ownerOf(secondId), address(reserve));
         assertEq(paymentToken.balanceOf(address(hook)), POT);
@@ -416,7 +429,7 @@ contract DutchAuctionV2Test is Test {
         vm.prank(seller);
         warplets.transferFrom(seller, address(hook), TOKEN_ID);
         vm.prank(address(hook));
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
         assertEq(auction.currentPrice(), 0);
     }
 
@@ -430,13 +443,13 @@ contract DutchAuctionV2Test is Test {
         address eoa = makeAddr("eoa");
         vm.prank(eoa);
         vm.expectRevert("NFT not in reserve yet");
-        auction.gobbleFlash(TOKEN_ID);
+        auction.gobbleFlash(TOKEN_ID, 0);
     }
 
     function test_flash_reverts_for_nonexistent_token() public {
         GoodFlashHook hook = new GoodFlashHook(address(warplets));
         vm.prank(address(hook));
         vm.expectRevert(); // ownerOf reverts for nonexistent token
-        auction.gobbleFlash(999);
+        auction.gobbleFlash(999, 0);
     }
 }

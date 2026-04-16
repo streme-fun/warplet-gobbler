@@ -1,17 +1,21 @@
 import {
-  type Address,
   type PublicClient,
+  type Transport,
   formatEther,
-  formatUnits,
 } from "viem";
-import { dutchAuctionAbi, erc20Abi, stateViewAbi } from "./abi.js";
+import { dutchAuctionAbi, stateViewAbi } from "./abi.js";
+
+// Structural type that accepts any chain (viem's Chain type is stricter than concrete
+// chains like `base`, which include additional tx types like `deposit`).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyPublicClient = PublicClient<Transport, any>;
 import {
   DUTCH_AUCTION_ADDRESS,
   STATE_VIEW_ADDRESS,
   WARPGOBB_TOKEN_ADDRESS,
   WETH_ADDRESS,
   SWAP_SLIPPAGE_BPS,
-  GAS_BUFFER,
+  GAS_BUFFER_BPS,
   MIN_PROFIT_WEI,
   MAX_SPEND_WEI,
 } from "./config.js";
@@ -37,7 +41,7 @@ export interface Opportunity {
 
 // ─── Gobbler payout ───────────────────────────────────────────────────
 
-export async function getGobblePayout(client: PublicClient): Promise<bigint> {
+export async function getGobblePayout(client: AnyPublicClient): Promise<bigint> {
   const payout = await client.readContract({
     address: DUTCH_AUCTION_ADDRESS,
     abi: dutchAuctionAbi,
@@ -50,7 +54,7 @@ export async function getGobblePayout(client: PublicClient): Promise<bigint> {
 
 /** Estimate WETH output for a given WARPGOBB input using pool sqrtPriceX96. */
 export async function estimateSwapOutput(
-  client: PublicClient,
+  client: AnyPublicClient,
   warpgobbAmountIn: bigint,
 ): Promise<bigint> {
   if (!POOL_ID) {
@@ -99,19 +103,20 @@ export async function estimateSwapOutput(
 // ─── Gas estimation ───────────────────────────────────────────────────
 
 /** Rough gas cost estimate for the full snipe tx. */
-export async function estimateGasCost(client: PublicClient): Promise<bigint> {
+export async function estimateGasCost(client: AnyPublicClient): Promise<bigint> {
   const gasPrice = await client.getGasPrice();
   // Seaport fulfill ≈ 150k, gobble ≈ 120k, V4 swap ≈ 200k, WETH unwrap ≈ 30k
   // Total ≈ 500k gas. Buffer for safety.
   const estimatedGas = 600_000n;
-  const buffered = BigInt(Math.ceil(Number(gasPrice) * GAS_BUFFER));
+  // Buffer in bps (e.g. 12000 = 1.2x). Stay in bigint for precision.
+  const buffered = (gasPrice * GAS_BUFFER_BPS) / 10_000n;
   return estimatedGas * buffered;
 }
 
 // ─── Full opportunity evaluation ──────────────────────────────────────
 
 export async function evaluateOpportunity(
-  client: PublicClient,
+  client: AnyPublicClient,
   listing: Listing,
 ): Promise<Opportunity> {
   // Only handle ETH-denominated listings
@@ -146,11 +151,10 @@ export async function evaluateOpportunity(
   const swapOutput = await estimateSwapOutput(client, gobblePayout);
 
   const totalSpent = listing.priceWei + gasCost;
-  const netProfit = swapOutput > totalSpent ? swapOutput - totalSpent : -(totalSpent - swapOutput);
-  const profitable = swapOutput > totalSpent && swapOutput - totalSpent >= MIN_PROFIT_WEI;
+  // BigInt subtraction handles negative results natively.
+  const profitable = swapOutput - totalSpent >= MIN_PROFIT_WEI;
 
   const result = makeResult(listing, gobblePayout, swapOutput, gasCost, totalSpent, profitable);
-  result.netProfit = netProfit;
 
   log.info("Opportunity evaluated", {
     tokenId: listing.tokenId,
@@ -158,7 +162,7 @@ export async function evaluateOpportunity(
     gobblePayout: formatEther(gobblePayout),
     swapOutput: formatEther(swapOutput),
     gasCost: formatEther(gasCost),
-    netProfit: formatEther(netProfit),
+    netProfit: formatEther(result.netProfit),
     profitable,
   });
 

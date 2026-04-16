@@ -65,7 +65,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     IGobbledWarplets public immutable gobbledWarplets;
 
     /// @notice Streme zap used when `bid` is called with `msg.value > 0`. May be `address(0)` if only ERC20 pulls are used.
-    IStremeZapUniversal public immutable stremeZap;
+    address public immutable stremeZap;
 
     address public proceedsRecipient;
 
@@ -113,7 +113,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
         nft = _nft;
         bidToken = _bidToken;
         gobbledWarplets = _gobbledWarplets;
-        stremeZap = IStremeZapUniversal(_stremeZap);
+        stremeZap = _stremeZap;
         proceedsRecipient = _proceedsRecipient;
         timeBuffer = _timeBuffer;
         reservePrice = _reservePrice;
@@ -192,7 +192,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     /// @inheritdoc IAuctionSell
     function bid(uint256 amount) external payable override nonReentrant whenNotPaused {
         if (msg.value > 0) {
-            require(address(stremeZap) != address(0), "AuctionSell: zap unset");
+            require(stremeZap != address(0), "AuctionSell: zap unset");
             // Same `zap` semantics as `FeeHandler._swapWethToToken`: `stremeCoin` is the **out** token,
             // `amountIn` is how much **native / wrapper input** is spent (`FeeHandler` passes WETH balance;
             // here we pass ETH via `msg.value`, so the input size is `msg.value`), `amountOutMin` is the
@@ -205,7 +205,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
             // settlement (the auction would be unable to pay `proceedsRecipient`). Same balance-delta
             // pattern as `FeeHandler._swapWethToToken`.
             uint256 balanceBefore = bidToken.balanceOf(address(this));
-            stremeZap.zap{value: msg.value}(
+            IStremeZapUniversal(stremeZap).zap{value: msg.value}(
                 address(bidToken),
                 msg.value,
                 uint256(amount),
