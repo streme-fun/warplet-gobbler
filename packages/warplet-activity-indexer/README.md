@@ -26,6 +26,7 @@ For each relevant event it:
 Copy `.env.example` and fill in:
 - `PONDER_RPC_URL_8453`
 - `DATABASE_URL` (recommended for Coolify)
+- `DATABASE_SCHEMA` (required by `ponder start`; e.g. `warplet_activity`)
 - `PONDER_AUCTION_SELL_ADDRESS`
 - `PONDER_DUTCH_AUCTION_ADDRESS`
 - `PONDER_START_BLOCK`
@@ -66,6 +67,10 @@ The container entrypoint runs:
 - `pnpm --filter warplet-activity-indexer start`
 
 So you only need one runtime service in Coolify.
+
+Important production notes:
+- `ponder start` requires `DATABASE_SCHEMA`, even when using local PGlite.
+- Ponder also requires an API app at `src/api/index.ts`; a minimal health endpoint is enough if you only need indexing + health checks.
 
 ## Telegram routing
 
