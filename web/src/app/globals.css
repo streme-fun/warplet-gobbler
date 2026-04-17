@@ -4,7 +4,7 @@
 
 body {
   font-family: var(--font-inter), sans-serif;
-  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.12) #0a0910 !important;
 }
 
 .font-display {
@@ -15,14 +15,14 @@ body {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #0a0910;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 /* Hide scrollbar but allow scrolling */

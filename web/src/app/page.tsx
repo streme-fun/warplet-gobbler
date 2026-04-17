@@ -1299,7 +1299,7 @@ function CaFooter({ pointerThrough = false }: { pointerThrough?: boolean }) {
       }`}
       onClick={pointerThrough ? undefined : handleCopy}
     >
-      <span className="text-xs sm:text-sm text-base-content/60 font-mono tracking-wide">
+      <span className="text-[8px] sm:text-sm text-base-content/60 font-mono tracking-wide">
         CA: <span className="text-base-content/80">{ca}</span>
         {copied ? (
           <svg
