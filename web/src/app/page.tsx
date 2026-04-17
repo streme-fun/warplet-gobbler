@@ -121,9 +121,9 @@ function MiniAppWalletButton() {
     return (
       <button
         onClick={() => disconnect()}
-        className="btn btn-outline btn-xs text-xs px-2 py-0.5 min-h-0 h-auto leading-snug"
+        className="text-xs px-2 py-0.5 text-base-content/60 hover:text-base-content transition-colors"
       >
-        {address?.slice(0, 6)}...{address?.slice(-4)}
+        {address?.slice(0, 4)}…{address?.slice(-3)}
       </button>
     );
   }
@@ -1078,11 +1078,6 @@ export default function Home() {
           />
           {/* Right — status + wallet */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {context?.user && (
-              <span className="text-sm text-base-content/50">
-                {context.user.displayName ?? `FID ${context.user.fid}`}
-              </span>
-            )}
             <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full border border-[#0052FF]/50">
               <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF] animate-pulse" />
               <span className="text-xs text-[#4C82FB]">Base</span>
@@ -1126,7 +1121,7 @@ export default function Home() {
       <button
         type="button"
         onClick={() => toggleView(activeView === "buy" ? "sell" : "buy")}
-        className={`group fixed left-0 bottom-0 z-[55] flex items-center gap-1.5 pl-[max(1rem,env(safe-area-inset-left))] pb-[max(1rem,env(safe-area-inset-bottom))] text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
+        className={`group fixed left-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom))] z-[55] flex items-center gap-1.5 pl-[max(1rem,env(safe-area-inset-left))] text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
           gobbling || buyingFid || claimBlockingActive || !bootDone
             ? "pointer-events-none opacity-0 scale-[0.98]"
             : "opacity-100 scale-100"
@@ -1340,7 +1335,7 @@ function CaFooter({ pointerThrough = false }: { pointerThrough?: boolean }) {
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm border-t border-base-content/10 py-3 sm:py-4 px-4 text-center select-all ${
+      className={`fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm py-3 sm:py-4 px-4 text-center select-all ${
         pointerThrough ? "pointer-events-none cursor-default" : "cursor-pointer"
       }`}
       onClick={pointerThrough ? undefined : handleCopy}
