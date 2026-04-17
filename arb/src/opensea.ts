@@ -1,4 +1,4 @@
-import type { Address } from "viem";
+import { type Address, encodeFunctionData } from "viem";
 import { OPENSEA_API_KEY, WARPLETS_COLLECTION_SLUG } from "./config.js";
 import { log } from "./logger.js";
 
@@ -107,11 +107,57 @@ function parseListing(raw: OpenseaListing): Listing | null {
 
 // ─── Get fulfillment calldata ─────────────────────────────────────────
 
+// ─── Seaport ABI (just the fulfillment function we need) ─────────────
+
+const seaportFulfillAbi = [
+  {
+    type: "function",
+    name: "fulfillBasicOrder_efficient_6GL6yc",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "parameters",
+        type: "tuple",
+        components: [
+          { name: "considerationToken", type: "address" },
+          { name: "considerationIdentifier", type: "uint256" },
+          { name: "considerationAmount", type: "uint256" },
+          { name: "offerer", type: "address" },
+          { name: "zone", type: "address" },
+          { name: "offerToken", type: "address" },
+          { name: "offerIdentifier", type: "uint256" },
+          { name: "offerAmount", type: "uint256" },
+          { name: "basicOrderType", type: "uint8" },
+          { name: "startTime", type: "uint256" },
+          { name: "endTime", type: "uint256" },
+          { name: "zoneHash", type: "bytes32" },
+          { name: "salt", type: "uint256" },
+          { name: "offererConduitKey", type: "bytes32" },
+          { name: "fulfillerConduitKey", type: "bytes32" },
+          { name: "totalOriginalAdditionalRecipients", type: "uint256" },
+          {
+            name: "additionalRecipients",
+            type: "tuple[]",
+            components: [
+              { name: "amount", type: "uint256" },
+              { name: "recipient", type: "address" },
+            ],
+          },
+          { name: "signature", type: "bytes" },
+        ],
+      },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+// ─── Get fulfillment calldata ─────────────────────────────────────────
+
 export async function getFulfillment(
   listing: Listing,
   fulfillerAddress: Address,
 ): Promise<FulfillmentData | null> {
-  const url = `${BASE_URL}/listings/fulfillment`;
+  const url = `${BASE_URL}/listings/fulfillment_data`;
   const body = {
     listing: {
       hash: listing.orderHash,
@@ -136,14 +182,63 @@ export async function getFulfillment(
 
   const json = (await res.json()) as {
     fulfillment_data: {
-      transaction: { to: string; value: number; input_data: string };
+      transaction: {
+        function: string;
+        to: string;
+        value: number;
+        input_data: { parameters: Record<string, unknown> };
+      };
     };
   };
 
   const tx = json.fulfillment_data.transaction;
-  return {
-    to: tx.to as Address,
-    value: BigInt(tx.value),
-    data: tx.input_data as `0x${string}`,
-  };
+  const params = tx.input_data.parameters;
+
+  try {
+    // ABI-encode the Seaport fulfillBasicOrder call from the decoded parameters.
+    const calldata = encodeFunctionData({
+      abi: seaportFulfillAbi,
+      functionName: "fulfillBasicOrder_efficient_6GL6yc",
+      args: [
+        {
+          considerationToken: params.considerationToken as Address,
+          considerationIdentifier: BigInt(params.considerationIdentifier as string),
+          considerationAmount: BigInt(params.considerationAmount as string),
+          offerer: params.offerer as Address,
+          zone: params.zone as Address,
+          offerToken: params.offerToken as Address,
+          offerIdentifier: BigInt(params.offerIdentifier as string),
+          offerAmount: BigInt(params.offerAmount as string),
+          basicOrderType: Number(params.basicOrderType),
+          startTime: BigInt(params.startTime as string),
+          endTime: BigInt(params.endTime as string),
+          zoneHash: params.zoneHash as `0x${string}`,
+          salt: BigInt(params.salt as string),
+          offererConduitKey: params.offererConduitKey as `0x${string}`,
+          fulfillerConduitKey: params.fulfillerConduitKey as `0x${string}`,
+          totalOriginalAdditionalRecipients: BigInt(
+            params.totalOriginalAdditionalRecipients as string,
+          ),
+          additionalRecipients: (
+            params.additionalRecipients as Array<{ amount: string; recipient: string }>
+          ).map((r) => ({
+            amount: BigInt(r.amount),
+            recipient: r.recipient as Address,
+          })),
+          signature: params.signature as `0x${string}`,
+        },
+      ],
+    });
+
+    return {
+      to: tx.to as Address,
+      value: BigInt(tx.value),
+      data: calldata,
+    };
+  } catch (err) {
+    log.error("Failed to encode Seaport calldata", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }

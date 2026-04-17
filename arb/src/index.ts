@@ -20,7 +20,7 @@ import {
   MAX_SPEND_WEI,
 } from "./config.js";
 import { fetchListings } from "./opensea.js";
-import { evaluateOpportunity, getGobblePayout } from "./pricing.js";
+import { evaluateOpportunity, getMarketSnapshot } from "./pricing.js";
 import { executeSnipe } from "./executor.js";
 import { log } from "./logger.js";
 
@@ -65,11 +65,15 @@ async function tick() {
       log.warn("Bot balance very low", { eth: formatEther(balance) });
     }
 
-    // 2. Check gobbler pot
-    const gobblePayout = await getGobblePayout(publicClient);
-    log.info("Gobbler pot", { warpgobb: formatEther(gobblePayout) });
+    // 2. Snapshot market state once per tick (3 RPC calls total, not per-listing)
+    const snap = await getMarketSnapshot(publicClient);
+    log.info("Market snapshot", {
+      gobblePayout: formatEther(snap.gobblePayout),
+      swapOutput: formatEther(snap.swapOutput),
+      gasCost: formatEther(snap.gasCost),
+    });
 
-    if (gobblePayout === 0n) {
+    if (snap.gobblePayout === 0n) {
       log.info("Gobbler pot is empty — skipping cycle");
       return;
     }
@@ -95,9 +99,9 @@ async function tick() {
     // 5. Sort by price ascending (cheapest first = best arb opportunity)
     fresh.sort((a, b) => (a.priceWei < b.priceWei ? -1 : a.priceWei > b.priceWei ? 1 : 0));
 
-    // 6. Evaluate opportunities
+    // 6. Evaluate opportunities (pure math — no RPC calls)
     for (const listing of fresh) {
-      const opp = await evaluateOpportunity(publicClient, listing);
+      const opp = evaluateOpportunity(listing, snap);
 
       if (!opp.profitable) {
         log.debug("Not profitable", {

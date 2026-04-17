@@ -104,13 +104,35 @@ export async function estimateGasCost(client: AnyPublicClient): Promise<bigint> 
   return estimatedGas * buffered;
 }
 
+// ─── Per-tick market snapshot (query once, reuse for all listings) ────
+
+export interface MarketSnapshot {
+  gobblePayout: bigint;
+  swapOutput: bigint;
+  gasCost: bigint;
+}
+
+/** Fetch gobble payout, estimated swap output, and gas cost in one batch.
+ *  Call once per tick then feed into evaluateOpportunity for each listing. */
+export async function getMarketSnapshot(client: AnyPublicClient): Promise<MarketSnapshot> {
+  const [gobblePayout, gasCost] = await Promise.all([
+    getGobblePayout(client),
+    estimateGasCost(client),
+  ]);
+  const swapOutput = gobblePayout > 0n
+    ? await estimateSwapOutput(client, gobblePayout)
+    : 0n;
+  return { gobblePayout, swapOutput, gasCost };
+}
+
 // ─── Full opportunity evaluation ──────────────────────────────────────
 
-export async function evaluateOpportunity(
-  client: AnyPublicClient,
+export function evaluateOpportunity(
   listing: Listing,
-): Promise<Opportunity> {
-  // Only handle ETH-denominated listings
+  snap: MarketSnapshot,
+): Opportunity {
+  const { gobblePayout, swapOutput, gasCost } = snap;
+
   const isEthListing =
     listing.currency.toLowerCase() === "0x0000000000000000000000000000000000000000" ||
     listing.currency.toLowerCase() === WETH_ADDRESS.toLowerCase();
@@ -119,30 +141,15 @@ export async function evaluateOpportunity(
     return makeResult(listing, 0n, 0n, 0n, listing.priceWei, false);
   }
 
-  // Check max spend
   if (listing.priceWei > MAX_SPEND_WEI) {
-    log.debug("Listing exceeds MAX_SPEND_ETH", {
-      tokenId: listing.tokenId,
-      price: formatEther(listing.priceWei),
-    });
     return makeResult(listing, 0n, 0n, 0n, listing.priceWei, false);
   }
-
-  // Fetch payout and gas in parallel
-  const [gobblePayout, gasCost] = await Promise.all([
-    getGobblePayout(client),
-    estimateGasCost(client),
-  ]);
 
   if (gobblePayout === 0n) {
     return makeResult(listing, gobblePayout, 0n, gasCost, listing.priceWei, false);
   }
 
-  // Estimate swap output
-  const swapOutput = await estimateSwapOutput(client, gobblePayout);
-
   const totalSpent = listing.priceWei + gasCost;
-  // BigInt subtraction handles negative results natively.
   const profitable = swapOutput - totalSpent >= MIN_PROFIT_WEI;
 
   const result = makeResult(listing, gobblePayout, swapOutput, gasCost, totalSpent, profitable);
