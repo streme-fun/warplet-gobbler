@@ -297,6 +297,63 @@ contract GobbleSniperForkTest is Test {
         address impl = abi.decode(data, (address));
         assertEq(impl, deployed, "Deployed sniper not registered as ERC777 recipient");
     }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  Step 7: Full snipe using REAL deployed contracts + live pot
+    // ═════════════════════════════════════════════════════════════════
+
+    function test_fork_full_snipe_real_contracts() public {
+        _fork();
+
+        // Real deployed contracts
+        address LIVE_AUCTION = 0xD3598909A51Ac1227D8EFa240A216A61a43c8344;
+        address LIVE_SNIPER  = 0x691110e5C643cEE2155Adb745D6dcdca67E23CA8;
+
+        GobbleSniper liveSniper = GobbleSniper(payable(LIVE_SNIPER));
+        address liveNftReserve = liveSniper.nftReserve();
+        address liveRecipient = liveSniper.recipient();
+
+        // Check pot
+        uint256 pot = IERC20(WARPGOBB).balanceOf(LIVE_AUCTION);
+        console2.log("Live pot (WARPGOBB):", pot);
+        require(pot > 0, "Live pot is empty");
+
+        // Find a Warplet to use
+        uint256 tokenId = 1;
+        address nftOwner = IERC721(WARPLETS).ownerOf(tokenId);
+        console2.log("Warplet #1 owner:", nftOwner);
+        require(nftOwner != liveNftReserve, "Warplet #1 already in reserve");
+
+        // Deploy mock seaport that sells Warplet #1 for a tiny price
+        MockForkSeaport mockSeaport = new MockForkSeaport(WARPLETS, tokenId, nftOwner);
+        uint256 nftPrice = 0.0000001 ether; // 100 gwei — should be achievable
+        mockSeaport.setPrice(nftPrice);
+        vm.prank(nftOwner);
+        IERC721(WARPLETS).approve(address(mockSeaport), tokenId);
+
+        // The live sniper has a baked-in seaport address. We can't change it.
+        // So we need a fresh sniper pointing to our mock seaport but using the
+        // live auction (which has the real pot).
+        GobbleSniper testSniper = new GobbleSniper(
+            WARPLETS, LIVE_AUCTION, WARPGOBB, WETH,
+            POOL_MANAGER, address(mockSeaport), _poolKey(), liveRecipient
+        );
+
+        uint256 recipientBefore = liveRecipient.balance;
+        console2.log("NFT price:", nftPrice);
+        console2.log("Recipient before:", recipientBefore);
+
+        // Execute
+        vm.prank(caller);
+        testSniper.snipe(tokenId, abi.encodeWithSignature("buy()"), nftPrice, 0, 0);
+
+        // Verify
+        assertEq(IERC721(WARPLETS).ownerOf(tokenId), testSniper.nftReserve(), "NFT not in reserve");
+        uint256 profit = liveRecipient.balance - recipientBefore;
+        console2.log("Profit (wei):", profit);
+        assertGt(profit, 0, "No profit");
+        console2.log("Profit (ETH):", profit / 1e14, "* 1e-4");
+    }
 }
 
 /// @dev Helper to test V4 swaps in isolation on fork.
