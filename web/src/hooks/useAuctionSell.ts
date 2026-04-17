@@ -143,8 +143,7 @@ export function useAuctionSellAuction() {
   const currentLiveTokenId = useMemo((): bigint | null => {
     const d = currentAuctionQ.data;
     if (d == null) return null;
-    if (Array.isArray(d)) return d[0];
-    return d.tokenId;
+    return d[0];
   }, [currentAuctionQ.data]);
 
   /**

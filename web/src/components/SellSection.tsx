@@ -14,7 +14,6 @@ const WARPLET_PICKER_SKELETON_COUNT = 8;
 
 type SellSectionProps = {
   claimBlocking: boolean;
-  topInsetRoom?: boolean;
   payoutStream: {
     start: number;
     perSecond: number;
@@ -44,7 +43,6 @@ type SellSectionProps = {
 
 export default function SellSection({
   claimBlocking,
-  topInsetRoom = false,
   payoutStream,
   payoutSymbol,
   isAmountMissing,
@@ -85,9 +83,7 @@ export default function SellSection({
   return (
     <section
       id="sell-section"
-      className={`relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pb-24 sm:pb-32 ${
-        topInsetRoom ? "pt-24 sm:pt-28" : "pt-8 sm:pt-20"
-      }`}
+      className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-8 sm:pt-20 pb-24 sm:pb-32"
     >
       <div className="text-center animate-fade-up-delay-1 mt-8 sm:mt-16">
         <h2 className="text-lg sm:text-2xl tracking-wide">Sell your Warplet to</h2>

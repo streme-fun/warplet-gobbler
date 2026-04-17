@@ -56,7 +56,7 @@ async function isLiveAuctionTokenId(tokenId: number): Promise<boolean> {
       abi: auctionSellAbi,
       functionName: "currentAuction",
     });
-    const currentTokenId = Array.isArray(current) ? current[0] : current.tokenId;
+    const currentTokenId = current[0];
     return currentTokenId > 0n && currentTokenId === BigInt(tokenId);
   } catch {
     return false;

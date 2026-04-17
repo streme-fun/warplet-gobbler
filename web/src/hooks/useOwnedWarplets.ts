@@ -42,12 +42,11 @@ export function useOwnedWarplets() {
 
   const [cacheEpoch, setCacheEpoch] = useState(0);
 
-  const cachedPayload = useMemo(
-    () => (address ? readOwnedWarpletsCache(address) : null),
-    // `cacheEpoch` is not read inside the memo; it is an explicit invalidation
-    // tick when we clear or refresh cache so this recomputes from storage.
-    [address, cacheEpoch],
-  );
+  const cachedPayload = useMemo(() => {
+    // Explicit invalidation tick when cache is cleared or refreshed.
+    void cacheEpoch;
+    return address ? readOwnedWarpletsCache(address) : null;
+  }, [address, cacheEpoch]);
 
   const cachedWarplets = useMemo((): OwnedWarplet[] => {
     if (!cachedPayload?.tokenIds.length) return [];
@@ -69,7 +68,15 @@ export function useOwnedWarplets() {
   // Pin every Warplets read to Base regardless of the wallet's current chain —
   // the NFT contract only lives on Base, so targeting the wallet's chain throws
   // whenever the user is connected to mainnet, Optimism, etc.
-  const { data: balance, ...balanceQuery } = useReadContract({
+  const {
+    data: balance,
+    isSuccess: balanceIsSuccess,
+    isFetching: balanceIsFetching,
+    isError: balanceIsError,
+    isFetched: balanceIsFetched,
+    isPending: balanceIsPending,
+    refetch: refetchBalance,
+  } = useReadContract({
     chainId: base.id,
     address: warpletsAddress,
     abi: warpletsErc721EnumerableAbi,
@@ -93,7 +100,14 @@ export function useOwnedWarplets() {
     }));
   }, [address, balance, warpletsAddress]);
 
-  const { data: ownerIndexResults, ...indexQuery } = useReadContracts({
+  const {
+    data: ownerIndexResults,
+    isError: indexIsError,
+    isFetched: indexIsFetched,
+    isPending: indexIsPending,
+    isFetching: indexIsFetching,
+    refetch: refetchIndex,
+  } = useReadContracts({
     contracts: indexContracts,
     query: {
       enabled: indexContracts.length > 0,
@@ -123,22 +137,22 @@ export function useOwnedWarplets() {
     if (
       !address ||
       !warpletsConfigured ||
-      !balanceQuery.isSuccess ||
-      balanceQuery.isFetching
+      !balanceIsSuccess ||
+      balanceIsFetching
     )
       return;
     if (balance !== 0n) return;
     if (cachedWarplets.length === 0) return;
     if (mismatchRefetchRef.current) return;
     mismatchRefetchRef.current = true;
-    void balanceQuery.refetch();
+    void refetchBalance();
   }, [
     address,
     warpletsConfigured,
     balance,
-    balanceQuery.isSuccess,
-    balanceQuery.isFetching,
-    balanceQuery.refetch,
+    balanceIsSuccess,
+    balanceIsFetching,
+    refetchBalance,
     cachedWarplets.length,
   ]);
 
@@ -146,8 +160,8 @@ export function useOwnedWarplets() {
     if (
       !address ||
       !warpletsConfigured ||
-      !balanceQuery.isSuccess ||
-      balanceQuery.isFetching
+      !balanceIsSuccess ||
+      balanceIsFetching
     )
       return;
     if (balance !== 0n) return;
@@ -160,8 +174,8 @@ export function useOwnedWarplets() {
     address,
     warpletsConfigured,
     balance,
-    balanceQuery.isSuccess,
-    balanceQuery.isFetching,
+    balanceIsSuccess,
+    balanceIsFetching,
     warplets.length,
     cacheBalance,
   ]);
@@ -174,17 +188,15 @@ export function useOwnedWarplets() {
     if (!warpletsConfigured) {
       return;
     }
-    if (balanceQuery.isError || indexQuery.isError) {
+    if (balanceIsError || indexIsError) {
       return;
     }
 
     const waitingOnBalance =
-      !balanceQuery.isFetched ||
-      balanceQuery.isPending ||
-      balanceQuery.isFetching;
+      !balanceIsFetched || balanceIsPending || balanceIsFetching;
     const waitingOnIndex =
       indexContracts.length > 0 &&
-      (!indexQuery.isFetched || indexQuery.isPending || indexQuery.isFetching);
+      (!indexIsFetched || indexIsPending || indexIsFetching);
     if (waitingOnBalance || waitingOnIndex) {
       return;
     }
@@ -206,30 +218,30 @@ export function useOwnedWarplets() {
     warpletsConfigured,
     balance,
     indexContracts.length,
-    balanceQuery.isError,
-    balanceQuery.isFetched,
-    balanceQuery.isPending,
-    balanceQuery.isFetching,
-    indexQuery.isError,
-    indexQuery.isFetched,
-    indexQuery.isPending,
-    indexQuery.isFetching,
+    balanceIsError,
+    balanceIsFetched,
+    balanceIsPending,
+    balanceIsFetching,
+    indexIsError,
+    indexIsFetched,
+    indexIsPending,
+    indexIsFetching,
   ]);
 
   const awaitingInitialBalance =
-    Boolean(address) && (!balanceQuery.isFetched || balanceQuery.isPending);
+    Boolean(address) && (!balanceIsFetched || balanceIsPending);
 
   const awaitingIndexForOwned =
     Boolean(address) &&
-    balanceQuery.isFetched &&
+    balanceIsFetched &&
     balance !== undefined &&
     balance > 0n &&
     indexContracts.length > 0 &&
-    (!indexQuery.isFetched || indexQuery.isPending);
+    (!indexIsFetched || indexIsPending);
 
   const rpcClaimsNoBalanceButCacheDisagrees =
     Boolean(address) &&
-    balanceQuery.isFetched &&
+    balanceIsFetched &&
     balance === 0n &&
     warplets.length === 0 &&
     cacheBalance > 0n;
@@ -242,12 +254,12 @@ export function useOwnedWarplets() {
 
   const inFlightSameAddress =
     Boolean(address) &&
-    !balanceQuery.isError &&
-    !indexQuery.isError &&
-    (balanceQuery.isFetching ||
-      indexQuery.isFetching ||
-      balanceQuery.isPending ||
-      (indexContracts.length > 0 && indexQuery.isPending));
+    !balanceIsError &&
+    !indexIsError &&
+    (balanceIsFetching ||
+      indexIsFetching ||
+      balanceIsPending ||
+      (indexContracts.length > 0 && indexIsPending));
 
   const warpletsForUi = useMemo(() => {
     if (!address) return [];
@@ -267,12 +279,12 @@ export function useOwnedWarplets() {
     return warplets;
   }, [address, warplets, isLoading, inFlightSameAddress, cachedWarplets]);
 
-  const isError = balanceQuery.isError || indexQuery.isError;
+  const isError = balanceIsError || indexIsError;
 
   const refetch = useCallback(async () => {
-    await balanceQuery.refetch();
-    await indexQuery.refetch();
-  }, [balanceQuery.refetch, indexQuery.refetch]);
+    await refetchBalance();
+    await refetchIndex();
+  }, [refetchBalance, refetchIndex]);
 
   return {
     warplets: warpletsForUi,

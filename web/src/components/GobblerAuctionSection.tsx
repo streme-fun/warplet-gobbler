@@ -116,7 +116,6 @@ export default function GobblerAuctionSection({
   onBid,
   bidDisabled,
   onClaimBlockingChange,
-  onSettledQueueEmptyChange,
   viewerDisplayName,
   viewerPfpUrl,
 }: {
@@ -129,8 +128,6 @@ export default function GobblerAuctionSection({
   bidDisabled?: boolean;
   /** When true, the home page hides buy/sell navigation and the sell section. */
   onClaimBlockingChange?: (blocking: boolean) => void;
-  /** Notifies parent when settled state has no queued next lot. */
-  onSettledQueueEmptyChange?: (hidden: boolean) => void;
   /** Mini App display name for the rescue thank-you line. */
   viewerDisplayName?: string | null;
   /** Mini App profile image when the viewer is the winner (API may not have Farcaster). */
@@ -805,12 +802,16 @@ export default function GobblerAuctionSection({
       ? viewerAddress
       : chainTopBidder;
 
-  const queuedRows = queueReadsEnabled
-    ? stripQueueIds.map((id, i) => ({
-        fid: Number(id),
-        place: i + 2,
-      }))
-    : [];
+  const queuedRows = useMemo(
+    () =>
+      queueReadsEnabled
+        ? stripQueueIds.map((id, i) => ({
+            fid: Number(id),
+            place: i + 2,
+          }))
+        : [],
+    [queueReadsEnabled, stripQueueIds],
+  );
 
   /** Same render as `queuedRows` updates — avoids one frame with a stale selection after the queue drops a fid. */
   const selectedInQueueFid = useMemo(() => {
@@ -1147,19 +1148,6 @@ export default function GobblerAuctionSection({
       ? "No Warplets are queued yet. Sell one to the Gobbler to open the next auction."
       : "Auction settled. Start the next auction when you're ready.";
 
-  const settledQueueEmpty =
-    onChainMode &&
-    auctionSettled &&
-    queueReadsEnabled &&
-    !queueIsLoading &&
-    chainQueuedIds.length === 0 &&
-    !claimBlocking;
-
-  useEffect(() => {
-    onSettledQueueEmptyChange?.(settledQueueEmpty);
-    return () => onSettledQueueEmptyChange?.(false);
-  }, [onSettledQueueEmptyChange, settledQueueEmpty]);
-
   if (claimBlocking && claimFocusRecord && claimAction != null) {
     return (
       <div className="w-full max-w-4xl flex flex-col items-center justify-start pb-4 sm:pb-6">
@@ -1175,10 +1163,6 @@ export default function GobblerAuctionSection({
         />
       </div>
     );
-  }
-
-  if (settledQueueEmpty) {
-    return null;
   }
 
   return (

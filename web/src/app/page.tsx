@@ -655,14 +655,12 @@ export default function Home() {
   const [activeView, setActiveView] = useState<"sell" | "buy">("buy");
   const [scrollBlend, setScrollBlend] = useState(0); // 0 = buy (purple), 1 = sell (cyan)
   const [claimBlocking, setClaimBlocking] = useState<boolean | null>(null);
-  const [hideAuctionSection, setHideAuctionSection] = useState(false);
   const claimBlockingResolved = claimBlocking !== null;
   const claimBlockingActive = claimBlocking ?? false;
   const [initialViewResolved, setInitialViewResolved] = useState(false);
   const [bootDone, setBootDone] = useState(false);
   /** Hysteresis for jump-link label — avoids flip-flopping when scroll sits near 50% blend. */
   const viewHintScrollRef = useRef<"sell" | "buy">("buy");
-  const settledEmptyAutoscrollDoneRef = useRef(false);
 
   // Resolve startup target only after claim blocking status is known.
   useEffect(() => {
@@ -711,41 +709,6 @@ export default function Home() {
       cancelled = true;
     };
   }, [claimBlockingResolved, claimBlockingActive]);
-
-  useEffect(() => {
-    if (!initialViewResolved || claimBlockingActive) return;
-    if (!hideAuctionSection) {
-      settledEmptyAutoscrollDoneRef.current = false;
-      return;
-    }
-    if (settledEmptyAutoscrollDoneRef.current) return;
-
-    settledEmptyAutoscrollDoneRef.current = true;
-    viewHintScrollRef.current = "sell";
-    setActiveView("sell");
-    setScrollBlend(1);
-
-    let cancelled = false;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 6;
-
-    const settleAtSell = () => {
-      if (cancelled) return;
-      const sellSection = document.getElementById("sell-section");
-      if (sellSection) {
-        sellSection.scrollIntoView({ behavior: "auto" });
-        return;
-      }
-      attempts += 1;
-      if (attempts >= MAX_ATTEMPTS) return;
-      requestAnimationFrame(settleAtSell);
-    };
-
-    requestAnimationFrame(settleAtSell);
-    return () => {
-      cancelled = true;
-    };
-  }, [initialViewResolved, claimBlockingActive, hideAuctionSection]);
 
   const handleBootDone = useCallback(() => setBootDone(true), []);
 
@@ -1243,8 +1206,6 @@ export default function Home() {
         <section
           id="auction"
           className={`relative z-10 flex flex-col items-center px-4 sm:px-6 ${
-            hideAuctionSection && !claimBlockingActive ? "hidden " : ""
-          }${
             claimBlockingActive
               ? "pt-[calc(env(safe-area-inset-top)+8.0625rem)] sm:pt-[calc(env(safe-area-inset-top)+11.625rem)] pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-16"
               : "pt-36 sm:pt-56 pb-12 sm:pb-20"
@@ -1255,7 +1216,6 @@ export default function Home() {
             onBid={handleBuy}
             bidDisabled={auctionBidDisabled}
             onClaimBlockingChange={setClaimBlocking}
-            onSettledQueueEmptyChange={setHideAuctionSection}
             viewerDisplayName={rescueViewerDisplayName}
             viewerPfpUrl={rescueViewerPfpUrl}
           />
@@ -1269,7 +1229,6 @@ export default function Home() {
         {/* === Sell Section === */}
         <SellSection
           claimBlocking={claimBlockingActive}
-          topInsetRoom={hideAuctionSection}
           payoutStream={payoutStream}
           payoutSymbol={payoutSymbol}
           isAmountMissing={isAmountMissing}
@@ -1331,7 +1290,7 @@ function CaFooter({ pointerThrough = false }: { pointerThrough?: boolean }) {
         // clipboard API can reject in non-secure contexts / iframes / when
         // permission is denied — silently no-op so we don't unhandle-reject.
       });
-  }, []);
+  }, [ca]);
 
   return (
     <div

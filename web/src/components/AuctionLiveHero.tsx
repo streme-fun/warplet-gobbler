@@ -347,6 +347,19 @@ export default function AuctionLiveHero({
   );
   const [showExtendSuccessBanner, setShowExtendSuccessBanner] = useState(false);
   const [paymentMode, setPaymentMode] = useState<AuctionBidPaymentMode>("token");
+  const hasChainBid = chainBid != null;
+  const chainBidMinBidWei = chainBid?.minBidWei;
+  const chainBidMinBidHuman = chainBid?.minBidHuman;
+  const chainBidDecimals = chainBid?.bidDecimals;
+  const chainBidDefaultPaymentMethod = chainBid?.defaultPaymentMethod;
+  const chainBidParseHumanToWei = chainBid?.parseHumanToWei;
+  const chainBidOnBidWeiDebounced = chainBid?.onBidWeiDebounced;
+  const chainBidNativeEthAvailable = chainBid?.nativeEthBid?.available;
+  const chainBidNativeEthQuoteLoading = chainBid?.nativeEthBid?.quoteLoading;
+  const chainBidNativeEthTxValueWei = chainBid?.nativeEthBid?.txValueWei;
+  const chainBidNativeEthTxValueFormatted =
+    chainBid?.nativeEthBid?.txValueFormatted;
+  const chainBidNativeEthOnRefreshQuote = chainBid?.nativeEthBid?.onRefreshQuote;
 
   const chainBlocksBid = Boolean(
     contractPaused || auctionExpiredOnChain || idleNoChainAuction,
@@ -378,51 +391,49 @@ export default function AuctionLiveHero({
   }, [bidAmountRaw, chainBid?.bidTokenPriceUsd, chainBid?.bidDecimals]);
 
   useEffect(() => {
-    if (chainBid?.minBidWei == null || chainBid.bidDecimals == null) return;
+    if (chainBidMinBidWei == null || chainBidDecimals == null) return;
     let chosen: bigint;
     try {
-      const floor = parseUnits(DEFAULT_BID_FLOOR_HUMAN, chainBid.bidDecimals);
-      chosen = chainBid.minBidWei > floor ? chainBid.minBidWei : floor;
+      const floor = parseUnits(DEFAULT_BID_FLOOR_HUMAN, chainBidDecimals);
+      chosen = chainBidMinBidWei > floor ? chainBidMinBidWei : floor;
     } catch {
-      chosen = chainBid.minBidWei;
+      chosen = chainBidMinBidWei;
     }
     try {
-      const human = trimDecimalDisplay(
-        formatUnits(chosen, chainBid.bidDecimals),
-      );
+      const human = trimDecimalDisplay(formatUnits(chosen, chainBidDecimals));
       setBidAmountRaw(
         formatBidAmountDisplay(
           human,
-          Math.min(chainBid.bidDecimals, TOKEN_INPUT_MAX_FRAC_DIGITS),
+          Math.min(chainBidDecimals, TOKEN_INPUT_MAX_FRAC_DIGITS),
           BID_INPUT_MAX_INT_DIGITS,
         ),
       );
     } catch {
-      if (chainBid.minBidHuman != null) {
+      if (chainBidMinBidHuman != null) {
         setBidAmountRaw(
           formatBidAmountDisplay(
-            trimDecimalDisplay(chainBid.minBidHuman),
-            Math.min(chainBid.bidDecimals, TOKEN_INPUT_MAX_FRAC_DIGITS),
+            trimDecimalDisplay(chainBidMinBidHuman),
+            Math.min(chainBidDecimals, TOKEN_INPUT_MAX_FRAC_DIGITS),
             BID_INPUT_MAX_INT_DIGITS,
           ),
         );
       }
     }
     setBidValidationError(null);
-  }, [chainBid?.minBidWei, chainBid?.bidDecimals, chainBid?.minBidHuman]);
+  }, [chainBidMinBidWei, chainBidDecimals, chainBidMinBidHuman]);
 
   useEffect(() => {
-    if (!chainBid) return;
-    const nativeAvailable = chainBid.nativeEthBid?.available === true;
+    if (!hasChainBid) return;
+    const nativeAvailable = chainBidNativeEthAvailable === true;
     if (!nativeAvailable) {
       setPaymentMode("token");
       userSelectedPaymentModeRef.current = false;
       return;
     }
     if (!userSelectedPaymentModeRef.current) {
-      setPaymentMode(chainBid.defaultPaymentMethod ?? "token");
+      setPaymentMode(chainBidDefaultPaymentMethod ?? "token");
     }
-  }, [chainBid?.defaultPaymentMethod, chainBid?.nativeEthBid?.available]);
+  }, [hasChainBid, chainBidDefaultPaymentMethod, chainBidNativeEthAvailable]);
 
   useEffect(() => {
     // New lot -> re-apply automatic default until user switches again.
@@ -430,13 +441,18 @@ export default function AuctionLiveHero({
   }, [displayTokenId]);
 
   useEffect(() => {
-    if (!chainBid?.onBidWeiDebounced || chainBid?.bidDecimals == null) return;
+    if (
+      !chainBidOnBidWeiDebounced ||
+      !chainBidParseHumanToWei ||
+      chainBidDecimals == null
+    )
+      return;
     const id = window.setTimeout(() => {
       try {
-        const wei = chainBid.parseHumanToWei(
-          bidDisplayToParseable(bidAmountRaw, chainBid.bidDecimals),
+        const wei = chainBidParseHumanToWei(
+          bidDisplayToParseable(bidAmountRaw, chainBidDecimals),
         );
-        chainBid.onBidWeiDebounced?.(wei);
+        chainBidOnBidWeiDebounced(wei);
       } catch {
         // ignore invalid intermediate input
       }
@@ -444,14 +460,14 @@ export default function AuctionLiveHero({
     return () => window.clearTimeout(id);
   }, [
     bidAmountRaw,
-    chainBid?.onBidWeiDebounced,
-    chainBid?.parseHumanToWei,
-    chainBid?.bidDecimals,
+    chainBidOnBidWeiDebounced,
+    chainBidParseHumanToWei,
+    chainBidDecimals,
   ]);
 
   useEffect(() => {
     if (paymentMode !== "eth") return;
-    const quoted = chainBid?.nativeEthBid?.txValueFormatted;
+    const quoted = chainBidNativeEthTxValueFormatted;
     if (!quoted) return;
     const formatted = formatBidAmountDisplay(
       normalizeBidString(quoted),
@@ -459,20 +475,20 @@ export default function AuctionLiveHero({
       BID_INPUT_MAX_INT_DIGITS,
     );
     setEthAmountDisplayRaw(formatted);
-  }, [paymentMode, chainBid?.nativeEthBid?.txValueFormatted]);
+  }, [paymentMode, chainBidNativeEthTxValueFormatted]);
 
   useEffect(() => {
     if (paymentMode !== "eth") return;
-    if (!chainBid?.nativeEthBid?.available) return;
-    if (chainBid.nativeEthBid.quoteLoading) return;
-    if (chainBid.nativeEthBid.txValueWei != null) return;
-    chainBid.nativeEthBid.onRefreshQuote();
+    if (!chainBidNativeEthAvailable) return;
+    if (chainBidNativeEthQuoteLoading) return;
+    if (chainBidNativeEthTxValueWei != null) return;
+    chainBidNativeEthOnRefreshQuote?.();
   }, [
     paymentMode,
-    chainBid?.nativeEthBid?.available,
-    chainBid?.nativeEthBid?.quoteLoading,
-    chainBid?.nativeEthBid?.txValueWei,
-    chainBid?.nativeEthBid?.onRefreshQuote,
+    chainBidNativeEthAvailable,
+    chainBidNativeEthQuoteLoading,
+    chainBidNativeEthTxValueWei,
+    chainBidNativeEthOnRefreshQuote,
   ]);
 
   const tick = extendSuccessTick ?? 0;
