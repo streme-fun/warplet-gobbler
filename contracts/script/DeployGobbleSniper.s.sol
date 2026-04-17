@@ -9,6 +9,10 @@ import {
 } from "../src/GobbleSniper.sol";
 import {DeployHelpers} from "./DeployHelpers.sol";
 
+interface IERC1820Registry {
+    function getInterfaceImplementer(address account, bytes32 interfaceHash) external view returns (address);
+}
+
 /// @notice Deploy `GobbleSniper` wired to `DutchAuctionV2`.
 /// @dev Required env:
 /// - `WARPLETS_NFT_ADDRESS`
@@ -23,6 +27,9 @@ import {DeployHelpers} from "./DeployHelpers.sol";
 /// - `SNIPER_PROFIT_RECIPIENT` (optional; defaults deployer)
 /// - Exactly one of `PRIVATE_KEY` or `DEPLOYER_PRIVATE_KEY`
 contract DeployGobbleSniper is DeployHelpers {
+    bytes32 internal constant ERC777_TOKENS_RECIPIENT_HASH = keccak256("ERC777TokensRecipient");
+    address internal constant ERC1820_REGISTRY = 0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24;
+
     function run() external {
         uint256 pk = _loadPrivateKey();
         address deployer = vm.addr(pk);
@@ -61,8 +68,18 @@ contract DeployGobbleSniper is DeployHelpers {
 
         vm.stopBroadcast();
 
+        address registeredRecipient = IERC1820Registry(ERC1820_REGISTRY).getInterfaceImplementer(
+            address(sniper),
+            ERC777_TOKENS_RECIPIENT_HASH
+        );
+        require(
+            registeredRecipient == address(sniper),
+            "DeployGobbleSniper: ERC1820 recipient registration missing"
+        );
+
         console2.log("GobbleSniper:", address(sniper));
         console2.log("gobbler (DutchAuctionV2):", gobbler);
         console2.log("recipient:", recipient);
+        console2.log("ERC777 recipient registered:", registeredRecipient);
     }
 }

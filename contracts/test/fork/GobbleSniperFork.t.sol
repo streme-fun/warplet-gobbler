@@ -20,6 +20,10 @@ contract ForkNftReserve is IERC721Receiver {
 /// @notice Base mainnet fork: tests the full flash-gobble arb flow against
 ///         real WARPGOBB SuperToken, real Uniswap V4 PoolManager, real Warplets.
 /// @dev Requires BASE_RPC_URL. Seaport buy is simulated by dealing the NFT.
+interface IERC1820Registry {
+    function getInterfaceImplementer(address account, bytes32 interfaceHash) external view returns (address);
+}
+
 contract GobbleSniperForkTest is Test {
     // ── Real Base addresses ──────────────────────────────────────────
     address internal constant WARPLETS    = 0x699727F9E01A822EFdcf7333073f0461e5914b4E;
@@ -28,6 +32,8 @@ contract GobbleSniperForkTest is Test {
     address internal constant POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     // Seaport 1.6 on Base
     address internal constant SEAPORT     = 0x0000000000000068F116a894984e2DB1123eB395;
+    address internal constant ERC1820_REGISTRY = 0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24;
+    bytes32 internal constant ERC777_TOKENS_RECIPIENT_HASH = keccak256("ERC777TokensRecipient");
 
     DutchAuctionV2 internal auction;
     GobbleSniper internal sniper;
@@ -97,6 +103,14 @@ contract GobbleSniperForkTest is Test {
             pk,
             recipient
         );
+    }
+
+    function test_fork_constructor_registers_erc777_recipient() public view {
+        address implementer = IERC1820Registry(ERC1820_REGISTRY).getInterfaceImplementer(
+            address(sniper),
+            ERC777_TOKENS_RECIPIENT_HASH
+        );
+        assertEq(implementer, address(sniper), "sniper should self-register as ERC777 recipient");
     }
 
     /// @notice Verify the WARPGOBB/WETH V4 pool exists and has liquidity.
