@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import { encodeFunctionData, parseAbiItem } from "viem";
 import { OPENSEA_API_KEY, WARPLETS_COLLECTION_SLUG } from "./config.js";
 import { log } from "./logger.js";
 
@@ -53,6 +54,38 @@ export interface FulfillmentData {
   value: bigint;
   data: `0x${string}`;
 }
+
+type OpenSeaFulfillmentResponse = {
+  fulfillment_data: {
+    transaction: {
+      function: string;
+      to: string;
+      value: string;
+      input_data: {
+        parameters: {
+          considerationToken: string;
+          considerationIdentifier: string;
+          considerationAmount: string;
+          offerer: string;
+          zone: string;
+          offerToken: string;
+          offerIdentifier: string;
+          offerAmount: string;
+          basicOrderType: number;
+          startTime: string;
+          endTime: string;
+          zoneHash: string;
+          salt: string;
+          offererConduitKey: string;
+          fulfillerConduitKey: string;
+          totalOriginalAdditionalRecipients: string;
+          additionalRecipients: Array<{ amount: string; recipient: string }>;
+          signature: string;
+        };
+      };
+    };
+  };
+};
 
 // ─── Fetch listings ───────────────────────────────────────────────────
 
@@ -111,7 +144,7 @@ export async function getFulfillment(
   listing: Listing,
   fulfillerAddress: Address,
 ): Promise<FulfillmentData | null> {
-  const url = `${BASE_URL}/listings/fulfillment`;
+  const url = `${BASE_URL}/listings/fulfillment_data`;
   const body = {
     listing: {
       hash: listing.orderHash,
@@ -134,16 +167,42 @@ export async function getFulfillment(
     return null;
   }
 
-  const json = (await res.json()) as {
-    fulfillment_data: {
-      transaction: { to: string; value: number; input_data: string };
-    };
-  };
-
+  const json = (await res.json()) as OpenSeaFulfillmentResponse;
   const tx = json.fulfillment_data.transaction;
+  const params = tx.input_data.parameters;
+  const abiItem = parseAbiItem(`function ${tx.function}`);
+  const functionName = tx.function.slice(0, tx.function.indexOf("("));
+  const data = encodeFunctionData({
+    abi: [abiItem],
+    functionName,
+    args: [[
+      params.considerationToken,
+      BigInt(params.considerationIdentifier),
+      BigInt(params.considerationAmount),
+      params.offerer,
+      params.zone,
+      params.offerToken,
+      BigInt(params.offerIdentifier),
+      BigInt(params.offerAmount),
+      params.basicOrderType,
+      BigInt(params.startTime),
+      BigInt(params.endTime),
+      params.zoneHash as `0x${string}`,
+      BigInt(params.salt),
+      params.offererConduitKey as `0x${string}`,
+      params.fulfillerConduitKey as `0x${string}`,
+      BigInt(params.totalOriginalAdditionalRecipients),
+      params.additionalRecipients.map((recipient) => [
+        BigInt(recipient.amount),
+        recipient.recipient as Address,
+      ]),
+      params.signature as `0x${string}`,
+    ]],
+  });
+
   return {
     to: tx.to as Address,
     value: BigInt(tx.value),
-    data: tx.input_data as `0x${string}`,
+    data,
   };
 }
