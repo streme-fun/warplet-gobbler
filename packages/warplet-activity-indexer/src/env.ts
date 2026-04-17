@@ -56,6 +56,7 @@ export const env = {
   auctionSellAddress: required("PONDER_AUCTION_SELL_ADDRESS") as `0x${string}`,
   dutchAuctionAddress: required("PONDER_DUTCH_AUCTION_ADDRESS") as `0x${string}`,
   startBlockRaw: process.env.PONDER_START_BLOCK ?? "latest",
+  telegramDedupeFile: optionalString("INDEXER_TELEGRAM_DEDUPE_FILE"),
   neynarApiKey: process.env.NEYNAR_API_KEY,
   neynarClientId: process.env.NEYNAR_CLIENT_ID,
   notifyOnBackfill: optionalBoolean("INDEXER_NOTIFY_ON_BACKFILL", true),

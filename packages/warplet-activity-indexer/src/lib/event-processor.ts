@@ -34,26 +34,30 @@ export async function processActivity(
   context: IndexerContext,
   record: BaseActivityRecord,
 ): Promise<void> {
-  await context.db
-    .insert(activityEvent)
-    .values({
-      id: record.id,
-      type: record.type,
-      chainId: record.chainId,
-      contractAddress: record.contractAddress,
-      blockNumber: record.blockNumber,
-      blockTimestamp: record.blockTimestamp,
-      transactionHash: record.transactionHash,
-      logIndex: record.logIndex,
-      actorAddress: record.actorAddress,
-      secondaryAddress: record.secondaryAddress,
-      tokenId: record.tokenId,
-      amount: record.amount,
-      payout: record.payout,
-      gobbledTokenId: record.gobbledTokenId,
-      summary: record.summary,
-      metadata: record.metadata ?? {},
-    });
+  const existingEvent = await context.db.find(activityEvent, { id: record.id });
+
+  if (!existingEvent) {
+    await context.db
+      .insert(activityEvent)
+      .values({
+        id: record.id,
+        type: record.type,
+        chainId: record.chainId,
+        contractAddress: record.contractAddress,
+        blockNumber: record.blockNumber,
+        blockTimestamp: record.blockTimestamp,
+        transactionHash: record.transactionHash,
+        logIndex: record.logIndex,
+        actorAddress: record.actorAddress,
+        secondaryAddress: record.secondaryAddress,
+        tokenId: record.tokenId,
+        amount: record.amount,
+        payout: record.payout,
+        gobbledTokenId: record.gobbledTokenId,
+        summary: record.summary,
+        metadata: record.metadata ?? {},
+      });
+  }
 
   let profile: NeynarUser | null = null;
   let newUserEventId: string | null = null;
@@ -68,10 +72,12 @@ export async function processActivity(
     newUserEventId = isNewUser ? syntheticId : null;
   }
 
-  if (shouldNotify(record.blockNumber)) {
+  if (shouldNotify(record.blockNumber) && !existingEvent?.telegramNotifiedAt) {
     const message = renderTelegramMessage(record, profile);
-    const telegramMessage = await sendTelegramNotification(record.type, message);
-    if (telegramMessage) {
+    const telegramResult = await sendTelegramNotification(record.type, message, {
+      dedupeKey: record.id,
+    });
+    if (telegramResult.outcome === "sent" || telegramResult.outcome === "deduped") {
       await context.db
         .update(activityEvent, { id: record.id })
         .set({ telegramNotifiedAt: BigInt(Math.floor(Date.now() / 1000)) });
@@ -79,12 +85,17 @@ export async function processActivity(
   }
 
   if (newUserEventId && record.actorAddress && shouldNotify(record.blockNumber)) {
+    const existingNewUserEvent = await context.db.find(activityEvent, { id: newUserEventId });
+    if (existingNewUserEvent?.telegramNotifiedAt) return;
+
     const newUser = await context.db.find(user, { address: record.actorAddress });
     if (!newUser) return;
 
     const newUserMessage = renderNewUserTelegramMessage(newUser, record.transactionHash);
-    const telegramMessage = await sendTelegramNotification("NEW_USER_INTERACTION", newUserMessage);
-    if (telegramMessage) {
+    const telegramResult = await sendTelegramNotification("NEW_USER_INTERACTION", newUserMessage, {
+      dedupeKey: newUserEventId,
+    });
+    if (telegramResult.outcome === "sent" || telegramResult.outcome === "deduped") {
       await context.db
         .update(activityEvent, { id: newUserEventId })
         .set({ telegramNotifiedAt: BigInt(Math.floor(Date.now() / 1000)) });

@@ -1,13 +1,18 @@
 import { createConfig } from "ponder";
 import { auctionSellAbi } from "./src/abis/auctionSell.js";
 import { dutchAuctionAbi } from "./src/abis/dutchAuction.js";
+import { resolveDatabaseConnectionString } from "./src/lib/database.js";
 import { env, startBlock } from "./src/env.js";
 
+const databaseConnectionString = resolveDatabaseConnectionString(process.env.DATABASE_URL, {
+  sslMode: process.env.DATABASE_SSL_MODE,
+});
+
 export default createConfig({
-  database: process.env.DATABASE_URL
+  database: databaseConnectionString
     ? {
         kind: "postgres",
-        connectionString: process.env.DATABASE_URL,
+        connectionString: databaseConnectionString,
       }
     : {
         kind: "pglite",

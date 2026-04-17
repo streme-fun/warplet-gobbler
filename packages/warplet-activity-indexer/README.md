@@ -27,9 +27,11 @@ Copy `.env.example` and fill in:
 - `PONDER_RPC_URL_8453`
 - `DATABASE_URL` (recommended for Coolify)
 - `DATABASE_SCHEMA` (required by `ponder start`; e.g. `warplet_activity`)
+- optional `DATABASE_SSL_MODE` (`disable` is useful for non-TLS internal Coolify Postgres links)
 - `PONDER_AUCTION_SELL_ADDRESS`
 - `PONDER_DUTCH_AUCTION_ADDRESS`
 - `PONDER_START_BLOCK`
+- optional `INDEXER_TELEGRAM_DEDUPE_FILE` to persist notification ids across restarts
 - `TELEGRAM_DEFAULT_BOT_TOKEN`
 - `TELEGRAM_DEFAULT_CHAT_ID`
 - optional `TELEGRAM_DEFAULT_MESSAGE_THREAD_ID`
@@ -70,6 +72,7 @@ So you only need one runtime service in Coolify.
 
 Important production notes:
 - `ponder start` requires `DATABASE_SCHEMA`, even when using local PGlite.
+- If Coolify gives you a Postgres URL with `sslmode=require` but the attached DB only accepts plain internal traffic, set `DATABASE_SSL_MODE=disable`.
 - Ponder also requires an API app at `src/api/index.ts`; a minimal health endpoint is enough if you only need indexing + health checks.
 
 ## Telegram routing
@@ -93,3 +96,4 @@ Routing precedence:
 - If you want historical indexing, set `PONDER_START_BLOCK` to the deployment block.
 - `INDEXER_NOTIFY_ON_BACKFILL=false` suppresses historical notifications.
 - If you still want notifications after a historical sync, set `INDEXER_NOTIFY_FROM_BLOCK` to the first block you want alerts from.
+- For extra belt-and-suspenders dedupe across restarts, point `INDEXER_TELEGRAM_DEDUPE_FILE` at a mounted file path.
