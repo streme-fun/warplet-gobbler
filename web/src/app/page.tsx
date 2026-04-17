@@ -82,7 +82,6 @@ const MORPH_SHAPES = [
 
 const FIRST_SELL_VISIT_KEY = "warpletgobbler:first-sell-visit-complete";
 
-
 function MorphingSilhouettes({ scrollBlend }: { scrollBlend: number }) {
   return (
     <svg
@@ -108,6 +107,16 @@ function MiniAppWalletButton() {
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
 
+  // Auto-connect: inside a Farcaster mini app the wallet is already
+  // available via the host client — connect eagerly so the user never
+  // sees a "Connect Wallet" button.
+  useEffect(() => {
+    if (isConnected) return;
+    const fc =
+      connectors.find((c) => c.id === "farcasterMiniApp") ?? connectors[0];
+    if (fc) connect({ connector: fc });
+  }, [isConnected, connectors, connect]);
+
   if (isConnected) {
     return (
       <button
@@ -119,16 +128,9 @@ function MiniAppWalletButton() {
     );
   }
 
-  const connector = connectors[0];
-  return (
-    <button
-      onClick={() => connector && connect({ connector })}
-      disabled={!connector}
-      className="btn btn-primary btn-sm"
-    >
-      Connect Wallet
-    </button>
-  );
+  // Fallback: if auto-connect hasn't resolved yet, show nothing
+  // (avoids a flash of "Connect Wallet" in the mini app)
+  return null;
 }
 
 function GobblerBootOverlay({
@@ -209,7 +211,10 @@ function GobblerBootOverlay({
     }[] = [];
     function regenerateBumps() {
       bumps.length = 0;
-      const count = Math.max(8, Math.min(160, Math.round(W / TARGET_SPACING_PX)));
+      const count = Math.max(
+        8,
+        Math.min(160, Math.round(W / TARGET_SPACING_PX)),
+      );
       for (let jaw = 0; jaw < 2; jaw++) {
         const yoSign = jaw === 0 ? 1 : -1;
         for (let i = 0; i < count; i++) {
@@ -348,8 +353,7 @@ function GobblerBootOverlay({
             const mid = 1 - Math.abs(f - 0.5) * 2;
             const mid2 = mid * mid;
             const sag =
-              mid2 * gap * 0.22 +
-              Math.sin(t * 0.6 + s.ph + j * 0.4) * 3 * mid;
+              mid2 * gap * 0.22 + Math.sin(t * 0.6 + s.ph + j * 0.4) * 3 * mid;
             const cy = te + dist * f + sag;
             const cx_ = sx + (wobble + jolt) * mid * 0.6;
             const endBoost = j === 0 || j === CPS - 1 ? 1.5 : 1;

@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.js",
+    "dev:next": "next dev",
+    "dev:tunnel": "USE_TUNNEL=true node scripts/dev.js",
+    "cleanup": "lsof -ti :3000 | xargs kill -9 2>/dev/null || true",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
