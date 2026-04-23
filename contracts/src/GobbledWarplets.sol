@@ -58,6 +58,11 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
     ///         transfer if the bare overload was called first.
     mapping(uint256 tokenId => bool) public warpletRescued;
 
+    /// @notice Count of reservations that still depend on the current `minter` to transfer the underlying Warplet.
+    ///         Decrements on the first successful underlying rescue (bare or signed path) and must be zero
+    ///         before the owner can rotate `minter`.
+    uint256 public pendingUnderlyingRescues;
+
     event MinterChanged(address indexed newMinter);
 
     event TokenURISetterChanged(address indexed newTokenURISetter);
@@ -91,6 +96,7 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
 
     function setMinter(address newMinter) external onlyOwner {
         require(newMinter != address(0), "GobbledWarplets: zero minter");
+        require(pendingUnderlyingRescues == 0, "GobbledWarplets: pending rescues");
         minter = newMinter;
         emit MinterChanged(newMinter);
     }
@@ -111,6 +117,9 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
 
         _gobbles[warpletId] = gobbleIndex + 1;
         _reservedRecipient[tokenId] = to;
+        unchecked {
+            ++pendingUnderlyingRescues;
+        }
         emit Reserved(to, warpletId, tokenId, gobbleIndex);
     }
 
@@ -124,6 +133,9 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
         require(!warpletRescued[tokenId], "GobbledWarplets: already rescued");
 
         warpletRescued[tokenId] = true;
+        unchecked {
+            --pendingUnderlyingRescues;
+        }
 
         (uint256 wid, uint256 idx) = _decodeTokenId(tokenId);
         IERC721 warplets = IGobbledWarpletsMinter(minter).nft();
@@ -158,6 +170,9 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
         (uint256 wid, uint256 idx) = _decodeTokenId(tokenId);
         if (!warpletRescued[tokenId]) {
             warpletRescued[tokenId] = true;
+            unchecked {
+                --pendingUnderlyingRescues;
+            }
             IERC721 warplets = IGobbledWarpletsMinter(minter).nft();
             warplets.transferFrom(minter, to, wid);
         }

@@ -138,7 +138,7 @@ contract GobbledWarpletsTest is Test {
 
     function test_setMinter_onlyOwner() public {
         // The new minter must be a contract exposing `nft()`, otherwise rescue paths break — but
-        // `setMinter` itself only checks non-zero. Use a fresh mock minter so the assertion sticks.
+        // `setMinter` itself only checks non-zero + no pending rescues. Use a fresh mock minter so the assertion sticks.
         MockGobbledMinter newM = new MockGobbledMinter(IERC721(address(warplets)));
         vm.prank(alice);
         vm.expectRevert();
@@ -147,6 +147,20 @@ contract GobbledWarpletsTest is Test {
         vm.prank(owner);
         g.setMinter(address(newM));
         assertEq(g.minter(), address(newM));
+    }
+
+    function test_setMinter_reverts_while_pending_rescue_exists() public {
+        uint256 wid = _seedHeldWarplet();
+        vm.prank(address(minterContract));
+        g.reserve(alice, wid);
+
+        MockGobbledMinter newM = new MockGobbledMinter(IERC721(address(warplets)));
+        vm.prank(owner);
+        vm.expectRevert("GobbledWarplets: pending rescues");
+        g.setMinter(address(newM));
+
+        assertEq(g.minter(), address(minterContract));
+        assertEq(g.pendingUnderlyingRescues(), 1);
     }
 
     /// @dev `tokenURISetter` is the EIP-712 signer for `rescueWarplet`, not an on-chain URI setter.
@@ -172,6 +186,7 @@ contract GobbledWarpletsTest is Test {
         vm.prank(address(minterContract));
         uint256 tid = g.reserve(alice, wid);
         assertEq(tid, wid);
+        assertEq(g.pendingUnderlyingRescues(), 1);
 
         vm.expectRevert();
         g.ownerOf(tid);
@@ -180,6 +195,7 @@ contract GobbledWarpletsTest is Test {
         assertEq(g.ownerOf(tid), alice);
         assertEq(warplets.ownerOf(wid), alice);
         assertEq(g.totalSupply(), 1);
+        assertEq(g.pendingUnderlyingRescues(), 0);
     }
 
     function test_reserve_reverts_warplet_id_too_large() public {
@@ -350,6 +366,7 @@ contract GobbledWarpletsTest is Test {
 
         assertEq(warplets.ownerOf(wid), alice);
         assertTrue(g.warpletRescued(tid));
+        assertEq(g.pendingUnderlyingRescues(), 0);
         // Receipt was NOT minted.
         vm.expectRevert();
         g.ownerOf(tid);
@@ -385,6 +402,22 @@ contract GobbledWarpletsTest is Test {
         g.rescueWarplet(tid);
     }
 
+    function test_setMinter_succeeds_after_bare_rescue_clears_pending_dependency() public {
+        uint256 wid = _seedHeldWarplet();
+        vm.prank(address(minterContract));
+        uint256 tid = g.reserve(alice, wid);
+
+        vm.prank(alice);
+        g.rescueWarplet(tid);
+
+        MockGobbledMinter newMinter = new MockGobbledMinter(IERC721(address(warplets)));
+        vm.prank(owner);
+        g.setMinter(address(newMinter));
+
+        assertEq(g.minter(), address(newMinter));
+        assertEq(g.pendingUnderlyingRescues(), 0);
+    }
+
     /* ========== variant 1 → variant 2 sequence ========== */
 
     function test_signed_rescue_after_bare_rescue_mints_receipt_skips_transfer() public {
@@ -408,6 +441,7 @@ contract GobbledWarpletsTest is Test {
         assertEq(g.ownerOf(tid), alice);
         assertEq(g.tokenURI(tid), IPFS_URI);
         assertEq(warplets.ownerOf(wid), alice);
+        assertEq(g.pendingUnderlyingRescues(), 0);
     }
 
     function test_bare_rescue_after_signed_rescue_reverts() public {
@@ -420,6 +454,21 @@ contract GobbledWarpletsTest is Test {
         vm.prank(alice);
         vm.expectRevert("GobbledWarplets: not reserved");
         g.rescueWarplet(tid);
+    }
+
+    function test_setMinter_succeeds_after_signed_rescue_clears_pending_dependency() public {
+        uint256 wid = _seedHeldWarplet();
+        vm.prank(address(minterContract));
+        uint256 tid = g.reserve(alice, wid);
+
+        _rescueWithSig(alice, tid, IPFS_URI);
+
+        MockGobbledMinter newMinter = new MockGobbledMinter(IERC721(address(warplets)));
+        vm.prank(owner);
+        g.setMinter(address(newMinter));
+
+        assertEq(g.minter(), address(newMinter));
+        assertEq(g.pendingUnderlyingRescues(), 0);
     }
 
     /* ========== misc ========== */

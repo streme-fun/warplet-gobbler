@@ -12,6 +12,39 @@ interface IERC777Like {
     function balanceOf(address account) external view returns (uint256);
 }
 
+interface IERC1820Registry {
+    function setInterfaceImplementer(address account, bytes32 interfaceHash, address implementer) external;
+}
+
+contract RefundRevertingBidder {
+    IERC777Like internal immutable token;
+    AuctionSell internal immutable sell;
+
+    bool internal revertOnReceive;
+
+    bytes32 internal constant TOKENS_RECIPIENT_HASH = keccak256("ERC777TokensRecipient");
+    IERC1820Registry internal constant ERC1820 = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
+
+    constructor(IERC777Like _token, AuctionSell _sell) {
+        token = _token;
+        sell = _sell;
+        ERC1820.setInterfaceImplementer(address(this), TOKENS_RECIPIENT_HASH, address(this));
+    }
+
+    function setRevertOnReceive(bool value) external {
+        revertOnReceive = value;
+    }
+
+    function placeBid(uint256 amount) external {
+        token.send(address(sell), amount, "");
+    }
+
+    function tokensReceived(address, address, address, uint256, bytes calldata, bytes calldata) external view {
+        require(msg.sender == address(token), "unexpected token");
+        require(!revertOnReceive, "refund rejected");
+    }
+}
+
 /// @notice Fork test: verifies bids can be placed via ERC777 `send` + `tokensReceived` using a real SuperToken.
 /// @dev Requires `BASE_RPC_URL` and a real SuperToken address in `AUCTION_SELL_FORK_BID_TOKEN`
 ///      (falls back to `FEE_HANDLER_FORK_STREME` for convenience).
@@ -136,6 +169,33 @@ contract AuctionSellForkTest is Test {
         assertEq(IERC777Like(bidTokenAddr).balanceOf(bob), bobStart - bobBid);
         assertEq(IERC777Like(bidTokenAddr).balanceOf(address(sell)), bobBid);
         assertEq(IERC777Like(bidTokenAddr).balanceOf(proceeds), proceedsStart);
+    }
+
+    function test_tokensReceived_reverting_recipient_hook_does_not_block_outbid() public requiresIntegration {
+        uint256 aliceBid = RESERVE_PRICE;
+        uint256 bobBid = aliceBid + ((aliceBid * MIN_INCREMENT_PCT) / 100);
+
+        RefundRevertingBidder attacker = new RefundRevertingBidder(IERC777Like(bidTokenAddr), sell);
+
+        _stealTokensFromSingleton(bidTokenAddr, address(attacker), aliceBid);
+        _stealTokensFromSingleton(bidTokenAddr, bob, bobBid);
+
+        attacker.placeBid(aliceBid);
+
+        (, address highBidder1, uint256 highBid1,) = sell.currentAuction();
+        assertEq(highBidder1, address(attacker));
+        assertEq(highBid1, aliceBid);
+        assertEq(IERC777Like(bidTokenAddr).balanceOf(address(attacker)), 0);
+
+        attacker.setRevertOnReceive(true);
+
+        vm.prank(bob);
+        IERC777Like(bidTokenAddr).send(address(sell), bobBid, "");
+
+        (, address highBidder2, uint256 highBid2,) = sell.currentAuction();
+        assertEq(highBidder2, bob);
+        assertEq(highBid2, bobBid);
+        assertEq(IERC777Like(bidTokenAddr).balanceOf(address(attacker)), aliceBid);
     }
 
     function _stealTokensFromSingleton(address token, address to, uint256 amount) internal {

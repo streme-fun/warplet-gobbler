@@ -228,6 +228,24 @@ contract FeeHandlerTest is Test {
         assertFalse(handler.streamActive());
     }
 
+    function test_setAuction_reverts_for_stranger_even_if_old_auction_has_balance() public {
+        uint256 oldBal = 1_234e18;
+        streme.mint(address(oldAuction), oldBal);
+        oldAuction.approveToken(address(streme), address(handler), type(uint256).max);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, handler.DEFAULT_ADMIN_ROLE()
+            )
+        );
+        vm.prank(stranger);
+        handler.setAuction(newAuction);
+
+        assertEq(streme.balanceOf(address(oldAuction)), oldBal);
+        assertEq(streme.balanceOf(address(handler)), 0);
+        assertEq(handler.auction(), address(oldAuction));
+    }
+
     function test_rebalanceFlowRate_reverts_when_stream_inactive() public {
         vm.prank(admin);
         handler.setAuction(newAuction);
