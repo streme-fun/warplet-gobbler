@@ -393,6 +393,32 @@ function GobblerBootOverlay({
       }
     }
 
+    // Prebuilt eye-glow gradient on an offscreen canvas; we just stamp it.
+    // Stops don't depend on eyeA (we fade the whole pass via globalAlpha).
+    let glowSprite: HTMLCanvasElement | null = null;
+    let glowSpriteR = 0;
+    function ensureGlowSprite(glowR: number) {
+      if (glowSprite && glowSpriteR === glowR) return;
+      glowSpriteR = glowR;
+      glowSprite = document.createElement("canvas");
+      glowSprite.width = glowR * 2;
+      glowSprite.height = glowR * 2;
+      const sx = glowSprite.getContext("2d")!;
+      const g1 = sx.createRadialGradient(
+        glowR,
+        glowR,
+        0,
+        glowR,
+        glowR,
+        glowR,
+      );
+      g1.addColorStop(0, "rgba(220,200,255,0.15)");
+      g1.addColorStop(0.3, "rgba(160,120,220,0.06)");
+      g1.addColorStop(1, "rgba(0,0,0,0)");
+      sx.fillStyle = g1;
+      sx.fillRect(0, 0, glowR * 2, glowR * 2);
+    }
+
     function drawTop() {
       tx!.clearRect(0, 0, W, H);
       if (eyeA > 0.005) {
@@ -402,23 +428,17 @@ function GobblerBootOverlay({
         const eyeOffset = m ? 35 : 65;
         const t = time * 0.01;
         const ey = topY - eyeOffset + Math.sin(t * 0.6) * 2;
+        ensureGlowSprite(glowR);
+        tx!.save();
+        tx!.globalAlpha = eyeA;
         for (const ex of [W * 0.34, W * 0.66]) {
-          tx!.save();
-          tx!.globalAlpha = eyeA;
-          const g1 = tx!.createRadialGradient(ex, ey, 0, ex, ey, glowR);
-          g1.addColorStop(0, `rgba(220,200,255,${0.15 * eyeA})`);
-          g1.addColorStop(0.3, `rgba(160,120,220,${0.06 * eyeA})`);
-          g1.addColorStop(1, "rgba(0,0,0,0)");
-          tx!.fillStyle = g1;
-          tx!.beginPath();
-          tx!.arc(ex, ey, glowR, 0, Math.PI * 2);
-          tx!.fill();
+          tx!.drawImage(glowSprite!, ex - glowR, ey - glowR);
           tx!.beginPath();
           tx!.arc(ex, ey, orbR, 0, Math.PI * 2);
           tx!.fillStyle = "rgba(255,245,255,1)";
           tx!.fill();
-          tx!.restore();
         }
+        tx!.restore();
       }
     }
 
@@ -427,27 +447,41 @@ function GobblerBootOverlay({
     //   2: eyes visible, jaws breathe — waiting for page ready
     //   3: jaws open wide (= GobbleOverlay phase 6)
     //   4: jaws off screen, dark fades (= GobbleOverlay phase 9) → onDone
+    let last = performance.now();
+    let phaseStart = last;
+    // Framerate-independent lerp coefficient. Base value is tuned for 60fps
+    // (~16.67ms frame); this formula scales it so convergence is the same
+    // wall-clock duration regardless of actual frame rate.
+    const fc = (base: number, dt: number) =>
+      1 - Math.pow(1 - base, dt / 16.67);
     function update() {
+      const now = performance.now();
+      const dt = now - last;
+      last = now;
       time++;
       pTopY = topY;
       pBotY = botY;
 
       const jSpd =
         phase <= 2 ? 0.008 : phase === 3 ? 0.02 : phase === 4 ? 0.03 : 0.02;
-      topY = lerp(topY, topT, jSpd);
-      botY = lerp(botY, botT, jSpd);
-      dark = lerp(dark, darkT, 0.018);
-      eyeA = lerp(eyeA, eyeAT, 0.012);
+      topY = lerp(topY, topT, fc(jSpd, dt));
+      botY = lerp(botY, botT, fc(jSpd, dt));
+      dark = lerp(dark, darkT, fc(0.018, dt));
+      eyeA = lerp(eyeA, eyeAT, fc(0.012, dt));
       pt++;
+
+      const phaseElapsed = now - phaseStart;
 
       if (phase === 1) {
         darkT = 0.97;
         eyeAT = 1;
         topT = MID - 4;
         botT = MID + 4;
-        if (pt > 80) {
+        // 80 frames at 60fps = ~1.33s; cap at 1800ms for slow devices.
+        if (pt > 80 || phaseElapsed > 1800) {
           phase = 2;
           pt = 0;
+          phaseStart = now;
         }
       }
       if (phase === 2) {
@@ -458,6 +492,7 @@ function GobblerBootOverlay({
         if (openingRef.current) {
           phase = 3;
           pt = 0;
+          phaseStart = now;
         }
       }
       if (phase === 3) {
@@ -466,9 +501,11 @@ function GobblerBootOverlay({
         botT = MID + openHalf;
         darkT = 0.92;
         eyeAT = 0;
-        if (pt > 160) {
+        // 160 frames at 60fps = ~2.67s; cap at 3200ms.
+        if (pt > 160 || phaseElapsed > 3200) {
           phase = 4;
           pt = 0;
+          phaseStart = now;
         }
       }
       if (phase === 4) {
@@ -476,7 +513,8 @@ function GobblerBootOverlay({
         botT = H + 350;
         darkT = 0;
         if (topY < -100) eyeAT = 0;
-        if (topY < -280 && dark < 0.03) {
+        // Normal exit OR safety: force unmount if phase 4 runs >2s.
+        if ((topY < -280 && dark < 0.03) || phaseElapsed > 2000) {
           cancelled = true;
           onDoneRef.current();
         }
@@ -503,31 +541,44 @@ function GobblerBootOverlay({
   return (
     <div
       className="fixed inset-0 z-[120]"
-      style={{ width: "100vw", height: "100vh" }}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        // Solid dark base so the goo wrapper's white bg has something to
+        // multiply against even before the bg canvas has painted its first
+        // frame (prevents a white flash on slow loads / SSR hydration).
+        background: "#040404",
+      }}
       aria-hidden
     >
-      <svg width="0" height="0" style={{ position: "absolute" }}>
-        <defs>
-          <filter id="bootGooFilter" colorInterpolationFilters="sRGB">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b" />
-            <feColorMatrix
-              in="b"
-              type="matrix"
-              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9"
-            />
-          </filter>
-        </defs>
-      </svg>
       <canvas
         ref={bgRef}
         className="absolute inset-0"
         style={{ width: "100%", height: "100%" }}
       />
-      <canvas
-        ref={gooRef}
+      {/* Goo wrapper: GPU-accelerated metaball equivalent of the old SVG
+          feGaussianBlur + colorMatrix filter.
+            - Wrapper has white bg + blur(6px) contrast(20): the blur softens
+              canvas-shape edges, then contrast snaps the resulting grays to
+              hard black-or-white step edges (metaball threshold).
+            - mix-blend-mode: multiply makes the wrapper's white areas vanish
+              against the bg canvas behind it, leaving only the hard-edged
+              dark silhouette. Both filters are GPU-composited in WebKit;
+              filter: url() was not, which caused the 10fps boot. */}
+      <div
         className="absolute inset-0"
-        style={{ width: "100%", height: "100%", filter: "url(#bootGooFilter)" }}
-      />
+        style={{
+          background: "#fff",
+          filter: "blur(6px) contrast(20)",
+          mixBlendMode: "multiply",
+        }}
+      >
+        <canvas
+          ref={gooRef}
+          className="absolute inset-0"
+          style={{ width: "100%", height: "100%" }}
+        />
+      </div>
       <canvas
         ref={topRef}
         className="absolute inset-0"

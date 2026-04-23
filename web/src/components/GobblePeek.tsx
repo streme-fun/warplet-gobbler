@@ -337,18 +337,6 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
 
   return (
     <>
-      <svg width="0" height="0" style={{ position: "absolute" }}>
-        <defs>
-          <filter id="peekGooFilter" colorInterpolationFilters="sRGB">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b" />
-            <feColorMatrix
-              in="b"
-              type="matrix"
-              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9"
-            />
-          </filter>
-        </defs>
-      </svg>
       {/* Unfiltered fill below the bottom goo band (see BOTTOM_JAW_GOOPY_DEPTH) */}
       <canvas
         ref={jawBackdropRef}
@@ -360,18 +348,31 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
           opacity: hidden ? 0 : 1,
         }}
       />
-      {/* Goo-filtered jaw canvas */}
-      <canvas
-        ref={gooRef}
+      {/* Goo-filtered jaw wrapper: GPU-accelerated metaball equivalent of the
+          old SVG feGaussianBlur + colorMatrix filter.
+            - White bg + blur(6px) contrast(20) = hard-edged threshold on blur
+            - mix-blend-mode: multiply drops the wrapper's white areas against
+              the page, leaving only the hard dark silhouette.
+          filter: url() was CPU-rasterized full-viewport every frame in WebKit,
+          which tanked ambient framerate. This stack is GPU-composited. */}
+      <div
         className="fixed inset-0 pointer-events-none transition-opacity duration-500"
         style={{
           width: "100vw",
           height: "100vh",
           zIndex: 40,
-          filter: "url(#peekGooFilter)",
+          background: "#fff",
+          filter: "blur(6px) contrast(20)",
+          mixBlendMode: "multiply",
           opacity: hidden ? 0 : 1,
         }}
-      />
+      >
+        <canvas
+          ref={gooRef}
+          className="absolute inset-0"
+          style={{ width: "100%", height: "100%" }}
+        />
+      </div>
       {/* Crisp eye canvas (no goo filter) */}
       <canvas
         ref={eyeRef}

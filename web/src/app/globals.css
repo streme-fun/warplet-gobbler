@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Respect user's motion preference. Infinite CSS animations are the primary
+   steady-state GPU cost on WebKit; when the OS asks for reduced motion we
+   honor it across the whole app. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 body {
   font-family: var(--font-inter), sans-serif;
   scrollbar-color: rgba(255, 255, 255, 0.12) #0a0910 !important;
@@ -34,17 +48,16 @@ body {
   display: none;
 }
 
-/* Warplet breathing glow */
+/* Warplet breathing glow — single drop-shadow layer; stacked filters cause
+   3-5x paint cost on WebKit. Cyan-biased to blend the old two-tone look. */
 @keyframes breathe {
   0%,
   100% {
-    filter: drop-shadow(0 0 20px rgba(0, 245, 255, 0.4))
-      drop-shadow(0 0 60px rgba(0, 245, 255, 0.15));
+    filter: drop-shadow(0 0 28px rgba(0, 245, 255, 0.4));
     transform: translateY(0px);
   }
   50% {
-    filter: drop-shadow(0 0 35px rgba(0, 245, 255, 0.7))
-      drop-shadow(0 0 80px rgba(123, 97, 255, 0.3));
+    filter: drop-shadow(0 0 46px rgba(89, 170, 255, 0.6));
     transform: translateY(-8px);
   }
 }
@@ -724,19 +737,19 @@ body {
     0 0 30px rgba(0, 245, 255, 0.1);
 }
 
+/* Auction aura — collapsed to one blur layer + inset line. The prior 3-layer
+   stack (including a 72px-blur outer shadow) was a WebKit paint hotspot. */
 @keyframes auction-aura-pulse {
   0%,
   100% {
     box-shadow:
       0 0 0 1px rgba(123, 97, 255, 0.35),
-      0 0 28px rgba(123, 97, 255, 0.2),
-      0 0 52px rgba(0, 245, 255, 0.08);
+      0 0 32px rgba(123, 97, 255, 0.22);
   }
   50% {
     box-shadow:
       0 0 0 1px rgba(123, 97, 255, 0.55),
-      0 0 40px rgba(123, 97, 255, 0.35),
-      0 0 72px rgba(0, 245, 255, 0.14);
+      0 0 48px rgba(123, 97, 255, 0.38);
   }
 }
 

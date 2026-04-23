@@ -30,7 +30,9 @@ function SettlementProgressStrip({
     >
       <span className="loading loading-spinner loading-md text-secondary shrink-0" />
       <div className="min-w-0">
-        <p className="text-sm font-medium text-secondary/90">Settling auction</p>
+        <p className="text-sm font-medium text-secondary/90">
+          Settling auction
+        </p>
         <p className="text-xs text-base-content/55 mt-0.5 leading-snug">
           {statusLine}
         </p>
@@ -111,13 +113,19 @@ function formatBidAmountDisplay(
 }
 
 /** Plain decimal string for parseUnits (no grouping, no trailing dot). */
-function bidDisplayToParseable(displayed: string, maxFracDigits: number): string {
+function bidDisplayToParseable(
+  displayed: string,
+  maxFracDigits: number,
+): string {
   const n = normalizeBidString(displayed);
   if (n === "" || n === ".") return "0";
   const idx = n.indexOf(".");
   if (idx === -1) return n.replace(/\D/g, "") || "0";
   const int = n.slice(0, idx).replace(/\D/g, "");
-  const frac = n.slice(idx + 1).replace(/\D/g, "").slice(0, maxFracDigits);
+  const frac = n
+    .slice(idx + 1)
+    .replace(/\D/g, "")
+    .slice(0, maxFracDigits);
   return frac.length > 0 ? `${int}.${frac}` : int || "0";
 }
 
@@ -246,7 +254,9 @@ function StartNewAuctionPanel({
         </p>
       ) : null}
       {cfg.error ? (
-        <p className="text-xs text-error/90 break-words text-center">{cfg.error}</p>
+        <p className="text-xs text-error/90 break-words text-center">
+          {cfg.error}
+        </p>
       ) : cfg.housePaused ? (
         <p className="max-w-md mx-auto text-xs text-warning/85 leading-relaxed text-center">
           Auction house is paused on-chain — unpause (owner) first. You can then
@@ -346,7 +356,8 @@ export default function AuctionLiveHero({
     null,
   );
   const [showExtendSuccessBanner, setShowExtendSuccessBanner] = useState(false);
-  const [paymentMode, setPaymentMode] = useState<AuctionBidPaymentMode>("token");
+  const [paymentMode, setPaymentMode] =
+    useState<AuctionBidPaymentMode>("token");
   const hasChainBid = chainBid != null;
   const chainBidMinBidWei = chainBid?.minBidWei;
   const chainBidMinBidHuman = chainBid?.minBidHuman;
@@ -359,28 +370,24 @@ export default function AuctionLiveHero({
   const chainBidNativeEthTxValueWei = chainBid?.nativeEthBid?.txValueWei;
   const chainBidNativeEthTxValueFormatted =
     chainBid?.nativeEthBid?.txValueFormatted;
-  const chainBidNativeEthOnRefreshQuote = chainBid?.nativeEthBid?.onRefreshQuote;
+  const chainBidNativeEthOnRefreshQuote =
+    chainBid?.nativeEthBid?.onRefreshQuote;
 
   const chainBlocksBid = Boolean(
     contractPaused || auctionExpiredOnChain || idleNoChainAuction,
   );
   const nativeEthBlocksBid = Boolean(
     paymentMode === "eth" &&
-      chainBid?.nativeEthBid?.available === true &&
-      (chainBid.nativeEthBid.txValueWei == null ||
-        (chainBid.nativeEthBid.quoteLoading &&
-          chainBid.nativeEthBid.txValueWei == null)),
+    chainBid?.nativeEthBid?.available === true &&
+    (chainBid.nativeEthBid.txValueWei == null ||
+      (chainBid.nativeEthBid.quoteLoading &&
+        chainBid.nativeEthBid.txValueWei == null)),
   );
 
   const bidUsdEstimate = useMemo(() => {
     const spot = chainBid?.bidTokenPriceUsd;
     const dec = chainBid?.bidDecimals;
-    if (
-      spot == null ||
-      !Number.isFinite(spot) ||
-      spot <= 0 ||
-      dec == null
-    ) {
+    if (spot == null || !Number.isFinite(spot) || spot <= 0 || dec == null) {
       return null;
     }
     const raw = bidDisplayToParseable(bidAmountRaw, dec);
@@ -674,41 +681,41 @@ export default function AuctionLiveHero({
     >
       <div className="auction-warplet-aura">
         <div className="px-2 pb-4 text-center sm:hidden">
-          <h2 className="m-0 text-[1.37rem] font-bold uppercase tracking-tight text-secondary leading-tight">
+          <h2 className="m-0 text-xl font-bold uppercase tracking-tight text-secondary leading-tight">
             DAILY WARPLET AUCTION
           </h2>
           <p className="mx-auto mt-1.5 mb-3 max-w-xl text-[10px] leading-snug text-base-content/65">
-            A Warplet a day keeps the Gobbler away. Bid to win.
+            A Warplet a day keeps the Gobbler away.
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-0 overflow-hidden rounded-none border-0 bg-transparent shadow-none sm:grid-cols-[minmax(272px,2.4fr)_minmax(17rem,2fr)] sm:items-stretch sm:rounded-[0.82rem] sm:border sm:border-secondary/25 sm:bg-base-100/25 sm:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
-        {/* Left — square art (~20% narrower track than prior 3fr); never squashed */}
-        <div className="relative isolate flex w-full flex-col bg-transparent sm:min-h-0 sm:h-full sm:bg-gradient-to-br sm:from-base-200/45 sm:to-base-300/25">
-          {idleNoChainAuction ? (
-            <div className="flex aspect-square w-full flex-col items-center justify-center gap-1.5 border-b border-dashed border-secondary/25 px-3 py-6 text-center sm:border-b-0">
-              <p className="text-sm text-base-content/55 font-medium">
-                No live listing
-              </p>
-              <p className="text-[11px] text-base-content/40 leading-snug">
-                Start or restart the auction on the right when the on-chain queue
-                has a Warplet.
-              </p>
-            </div>
-          ) : showSettleSkeleton || artworkSkeleton ? (
-            <div className="relative mx-auto aspect-square w-[90%] min-h-0 overflow-hidden rounded-xl border border-base-content/15 bg-base-200/25 shadow-[0_10px_28px_-20px_rgba(0,0,0,0.85)] sm:mx-0 sm:w-full sm:aspect-auto sm:flex-1 sm:rounded-l-[0.78rem] sm:rounded-r-none sm:border-0 sm:bg-transparent sm:shadow-none">
-              <div className="skeleton absolute inset-0 min-h-0 w-full" />
-            </div>
-          ) : (
-            <div className="relative mx-auto aspect-square w-[90%] min-h-0 overflow-hidden rounded-xl border border-base-content/15 bg-base-200/25 shadow-[0_10px_28px_-20px_rgba(0,0,0,0.85)] sm:mx-0 sm:w-full sm:aspect-auto sm:flex-1 sm:rounded-l-[0.78rem] sm:rounded-r-none sm:border-0 sm:bg-transparent sm:shadow-none">
-              <AuctionWarpletImage fid={displayTokenId} variant="hero" />
-              <p className="absolute bottom-0 inset-x-0 z-[1] text-[10px] sm:text-xs lg:text-sm font-medium text-base-content/70 bg-black/50 backdrop-blur-sm py-1 sm:py-1.5 px-2 text-center m-0">
-                Warplet #{displayTokenId}
-              </p>
-            </div>
-          )}
-        </div>
+        <div className="grid grid-cols-[2fr_1fr] gap-0 overflow-hidden rounded-[0.82rem] border border-secondary/25 bg-base-100/25 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] sm:grid-cols-[minmax(272px,2.4fr)_minmax(17rem,2fr)] sm:items-stretch">
+          {/* Left — square art (~20% narrower track than prior 3fr); never squashed */}
+          <div className="relative isolate flex w-full flex-col bg-gradient-to-br from-base-200/45 to-base-300/25 min-h-0 h-full">
+            {idleNoChainAuction ? (
+              <div className="flex aspect-square w-full flex-col items-center justify-center gap-1.5 px-3 py-6 text-center">
+                <p className="text-sm text-base-content/55 font-medium">
+                  No live listing
+                </p>
+                <p className="text-[11px] text-base-content/40 leading-snug">
+                  Start or restart the auction on the right when the on-chain
+                  queue has a Warplet.
+                </p>
+              </div>
+            ) : showSettleSkeleton || artworkSkeleton ? (
+              <div className="relative aspect-square w-full min-h-0 overflow-hidden rounded-l-[0.78rem] rounded-r-none bg-transparent sm:aspect-auto sm:flex-1">
+                <div className="skeleton absolute inset-0 min-h-0 w-full" />
+              </div>
+            ) : (
+              <div className="relative aspect-square w-full min-h-0 overflow-hidden rounded-l-[0.78rem] rounded-r-none bg-transparent sm:aspect-auto sm:flex-1">
+                <AuctionWarpletImage fid={displayTokenId} variant="hero" />
+                <p className="absolute bottom-0 inset-x-0 z-[1] text-[10px] sm:text-xs lg:text-sm font-medium text-base-content/70 bg-black/50 backdrop-blur-sm py-1 sm:py-1.5 px-2 text-center m-0">
+                  Warplet #{displayTokenId}
+                </p>
+              </div>
+            )}
+          </div>
 
-        <div className="flex min-h-0 min-w-0 max-w-[min(100%,26rem)] flex-col gap-3 border-t-0 bg-transparent px-2 py-2 text-center sm:h-full sm:border-l sm:border-t-0 sm:border-base-content/10 sm:bg-base-100/20 sm:px-3.5 sm:py-3.5 lg:max-w-[28rem]">
+          <div className="flex min-h-0 min-w-0 flex-col gap-1.5 border-l border-base-content/10 bg-base-100/20 px-1.5 py-1.5 text-center sm:h-full sm:gap-3 sm:px-3.5 sm:py-3.5 sm:max-w-[26rem] lg:max-w-[28rem]">
             <div className="hidden shrink-0 border-b border-base-content/10 pb-2 sm:block">
               <h2 className="max-w-full truncate text-lg sm:text-xl lg:text-2xl font-bold tracking-tight uppercase text-secondary m-0 leading-tight">
                 DAILY WARPLET AUCTION
@@ -718,54 +725,54 @@ export default function AuctionLiveHero({
               </p>
             </div>
 
-              {showExtendSuccessBanner && !idleNoChainAuction && !sold ? (
-                <div
-                  className="w-full rounded-lg border border-primary/35 bg-primary/10 px-3 py-2.5 text-center shadow-[0_0_24px_-8px_rgba(0,245,255,0.35)] animate-fade-up shrink-0"
-                  role="status"
-                >
-                  <p className="text-sm font-medium text-primary/95">
-                    Listing extended
-                  </p>
-                  <p className="text-xs text-base-content/60 mt-1 leading-relaxed">
-                    The chain has opened a fresh window — bidding picks up from
-                    the updated countdown.
-                  </p>
-                </div>
-              ) : null}
-
+            {showExtendSuccessBanner && !idleNoChainAuction && !sold ? (
               <div
-                ref={renewFlashRef}
-                className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto transition-[box-shadow] duration-500"
+                className="w-full rounded-lg border border-primary/35 bg-primary/10 px-3 py-2.5 text-center shadow-[0_0_24px_-8px_rgba(0,245,255,0.35)] animate-fade-up shrink-0"
+                role="status"
               >
-                <div
-                  className={`flex min-h-0 w-full flex-1 flex-col transition-colors duration-500 ${
-                    startNewAuction?.loading ? "animate-auction-tx-pending" : ""
-                  }`}
-                >
-                  {showSettleSkeleton ? (
-                    <div className="flex min-h-0 flex-1 flex-col items-center text-center">
-                      <div className="flex w-full shrink-0 flex-col items-center justify-center gap-2 py-1 mb-6 sm:mb-10">
-                        <div className="skeleton mx-auto h-3 w-24 rounded-md" />
-                        <div className="skeleton mx-auto h-11 w-44 max-w-full rounded-md sm:h-12" />
+                <p className="text-sm font-medium text-primary/95">
+                  Listing extended
+                </p>
+                <p className="text-xs text-base-content/60 mt-1 leading-relaxed">
+                  The chain has opened a fresh window — bidding picks up from
+                  the updated countdown.
+                </p>
+              </div>
+            ) : null}
+
+            <div
+              ref={renewFlashRef}
+              className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto transition-[box-shadow] duration-500"
+            >
+              <div
+                className={`flex min-h-0 w-full flex-1 flex-col transition-colors duration-500 ${
+                  startNewAuction?.loading ? "animate-auction-tx-pending" : ""
+                }`}
+              >
+                {showSettleSkeleton ? (
+                  <div className="flex min-h-0 flex-1 flex-col items-center text-center">
+                    <div className="flex w-full shrink-0 flex-col items-center justify-center gap-2 py-1 mb-6 sm:mb-10">
+                      <div className="skeleton mx-auto h-3 w-24 rounded-md" />
+                      <div className="skeleton mx-auto h-11 w-44 max-w-full rounded-md sm:h-12" />
+                    </div>
+                    <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-start gap-1 py-1">
+                      <div className="flex w-full flex-col items-center gap-2">
+                        <div className="skeleton mx-auto h-3 w-16 rounded-md" />
+                        <div className="skeleton mx-auto h-10 w-48 max-w-full rounded-md sm:h-11" />
+                        <div className="skeleton mx-auto h-2.5 w-[4.5rem] rounded-md opacity-80" />
                       </div>
-                      <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-start gap-1 py-1">
-                        <div className="flex w-full flex-col items-center gap-2">
-                          <div className="skeleton mx-auto h-3 w-16 rounded-md" />
-                          <div className="skeleton mx-auto h-10 w-48 max-w-full rounded-md sm:h-11" />
-                          <div className="skeleton mx-auto h-2.5 w-[4.5rem] rounded-md opacity-80" />
-                        </div>
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="skeleton h-2.5 w-5 shrink-0 rounded" />
-                          <div className="skeleton h-10 w-44 max-w-full rounded-md" />
-                        </div>
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="skeleton h-2.5 w-5 shrink-0 rounded" />
+                        <div className="skeleton h-10 w-44 max-w-full rounded-md" />
                       </div>
                     </div>
-                  ) : (
+                  </div>
+                ) : (
                   <>
                     <div className="flex min-h-0 flex-1 flex-col items-center text-center">
                       {/* Row 1 — countdown (extra space before bid block) */}
                       <div
-                        className="flex w-full shrink-0 flex-col items-center justify-center py-2 sm:py-3 mb-6 sm:mb-10"
+                        className="flex w-full shrink-0 flex-col items-center justify-center py-1 sm:py-3 mb-2 sm:mb-10"
                         aria-live="polite"
                         aria-label="Time remaining in lot"
                       >
@@ -776,17 +783,19 @@ export default function AuctionLiveHero({
                             </p>
                             {countdownEndUnix !== undefined ? (
                               <CountdownTimer
-                                key={countdownResetKey ?? String(countdownEndUnix)}
+                                key={
+                                  countdownResetKey ?? String(countdownEndUnix)
+                                }
                                 endUnix={countdownEndUnix}
-                                className="block text-center text-3xl sm:text-4xl lg:text-5xl font-mono font-semibold text-secondary tabular-nums tracking-tight"
+                                className="block text-center text-lg sm:text-4xl lg:text-5xl font-mono font-semibold text-secondary tabular-nums tracking-tight"
                               />
                             ) : countdownDurationSecs !== undefined ? (
                               <CountdownTimer
                                 startSecs={countdownDurationSecs}
-                                className="block text-center text-3xl sm:text-4xl lg:text-5xl font-mono font-semibold text-secondary tabular-nums tracking-tight"
+                                className="block text-center text-lg sm:text-4xl lg:text-5xl font-mono font-semibold text-secondary tabular-nums tracking-tight"
                               />
                             ) : (
-                              <span className="block text-center text-3xl sm:text-4xl lg:text-5xl font-mono font-semibold text-base-content/25 tabular-nums">
+                              <span className="block text-center text-lg sm:text-4xl lg:text-5xl font-mono font-semibold text-base-content/25 tabular-nums">
                                 —:—:—
                               </span>
                             )}
@@ -813,62 +822,68 @@ export default function AuctionLiveHero({
                         }`}
                       >
                         <div className="flex w-full flex-col items-center">
-                          <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
-                            {topBidUsdNotional != null
-                              ? `Top bid: ${formatUsdSmallBelow(topBidUsdNotional)}`
-                              : "Top bid"}
-                          </p>
-                          {idleNoChainAuction ? (
-                            <div className="space-y-1">
-                              <p className="text-2xl sm:text-3xl font-mono text-base-content/45">
-                                —
+                          {sold &&
+                          startNewAuction?.queueBlockedReason ? null : (
+                            <>
+                              <p className="text-[10px] sm:text-xs uppercase tracking-wider text-base-content/45 mb-1">
+                                {topBidUsdNotional != null
+                                  ? `Top bid: ${formatUsdSmallBelow(topBidUsdNotional)}`
+                                  : "Top bid"}
                               </p>
-                              {startNewAuction ? (
-                                <p className="mx-auto max-w-sm text-xs text-base-content/50 leading-snug">
-                                  Use <span className="text-secondary/90">Restart
-                                  auction</span> to open the next lot from the queue.
+                              {idleNoChainAuction ? (
+                                <div className="space-y-1">
+                                  <p className="text-base sm:text-3xl font-mono text-base-content/45">
+                                    —
+                                  </p>
+                                  {startNewAuction ? (
+                                    <p className="mx-auto max-w-sm text-xs text-base-content/50 leading-snug">
+                                      Use{" "}
+                                      <span className="text-secondary/90">
+                                        Restart auction
+                                      </span>{" "}
+                                      to open the next lot from the queue.
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : sold ? (
+                                <p
+                                  className={`text-xl sm:text-4xl font-mono text-success transition-all duration-300 ${
+                                    startNewAuction?.loading
+                                      ? "scale-[1.02] drop-shadow-[0_0_12px_rgba(52,211,153,0.35)]"
+                                      : ""
+                                  }`}
+                                >
+                                  Settled
                                 </p>
-                              ) : null}
-                            </div>
-                          ) : sold ? (
-                            <div className="space-y-2">
-                              <p
-                                className={`text-3xl sm:text-4xl font-mono text-success transition-all duration-300 ${
-                                  startNewAuction?.loading
-                                    ? "scale-[1.02] drop-shadow-[0_0_12px_rgba(52,211,153,0.35)]"
-                                    : ""
-                                }`}
-                              >
-                                Settled
-                              </p>
-                              <p className="mx-auto max-w-sm text-xs text-base-content/50 leading-snug">
-                                Auction complete.
-                              </p>
-                            </div>
-                          ) : showNoBids ? (
-                            <div className="flex flex-col items-center gap-2">
-                              <p className="text-xl sm:text-2xl font-mono text-base-content/50">
-                                No bids yet
-                              </p>
-                              {bidInviteCopy && !auctionExpiredOnChain ? (
-                                <p className="mx-auto max-w-sm text-xs text-secondary/80 font-medium leading-snug">
-                                  {bidInviteCopy}
-                                </p>
+                              ) : showNoBids ? (
+                                <div className="flex flex-col items-center gap-2">
+                                  <p className="text-sm sm:text-2xl font-mono text-base-content/50">
+                                    No bids yet
+                                  </p>
+                                  {bidInviteCopy && !auctionExpiredOnChain ? (
+                                    <p className="mx-auto max-w-sm text-xs text-secondary/80 font-medium leading-snug">
+                                      {bidInviteCopy}
+                                    </p>
+                                  ) : (
+                                    <span
+                                      className="block min-h-[1.125rem]"
+                                      aria-hidden
+                                    />
+                                  )}
+                                </div>
                               ) : (
-                                <span className="block min-h-[1.125rem]" aria-hidden />
+                                <div className="flex w-full max-w-sm flex-col items-center px-1">
+                                  <p
+                                    ref={bidTopAmountRef}
+                                    data-symbol={bidSymbol}
+                                    aria-label={`${topBidAmountStr} ${bidSymbol}`}
+                                    className="bid-top-symbol-after m-0 text-center text-sm sm:text-2xl lg:text-3xl font-mono text-base-content tabular-nums tracking-tight"
+                                  >
+                                    {topBidAmountStr}
+                                  </p>
+                                </div>
                               )}
-                            </div>
-                          ) : (
-                            <div className="flex w-full max-w-sm flex-col items-center px-1">
-                              <p
-                                ref={bidTopAmountRef}
-                                data-symbol={bidSymbol}
-                                aria-label={`${topBidAmountStr} ${bidSymbol}`}
-                                className="bid-top-symbol-after m-0 text-center text-xl sm:text-2xl lg:text-3xl font-mono text-base-content tabular-nums tracking-tight"
-                              >
-                                {topBidAmountStr}
-                              </p>
-                            </div>
+                            </>
                           )}
                         </div>
 
@@ -889,252 +904,261 @@ export default function AuctionLiveHero({
                         ) : null}
                       </div>
                     </div>
-                  <div className="shrink-0 space-y-2 pt-1">
-                  {contractPaused && !sold && !idleNoChainAuction && (
-                    <p className="mx-auto max-w-md text-center text-xs text-warning/80">
-                      Auction house is paused — bidding is disabled on-chain.
-                    </p>
-                  )}
-                  </div>
+                    <div className="shrink-0 space-y-2 pt-1">
+                      {contractPaused && !sold && !idleNoChainAuction && (
+                        <p className="mx-auto max-w-md text-center text-xs text-warning/80">
+                          Auction house is paused — bidding is disabled
+                          on-chain.
+                        </p>
+                      )}
+                    </div>
                   </>
-                  )}
-                </div>
+                )}
               </div>
+            </div>
 
-              <div className="mt-auto w-full shrink-0 space-y-3 border-t border-base-content/10 pt-3 text-left sm:pt-2.5">
-                {sold ? (
-                  <>
+            <div className="mt-auto w-full shrink-0 space-y-1.5 sm:space-y-3 border-t border-base-content/10 pt-1.5 sm:pt-2.5 text-left">
+              {sold ? (
+                <>
+                  {settledFooterCopy ? (
                     <p
-                      className={`text-sm transition-all duration-300 ${
+                      className={`text-[10px] sm:text-sm transition-all duration-300 ${
                         startNewAuction?.loading
                           ? "text-secondary/75 animate-pulse font-medium"
                           : "text-base-content/40"
                       }`}
                     >
-                      {settledFooterCopy ??
-                        "The last auction has ended. Restart when the queue is ready."}
+                      {settledFooterCopy}
                     </p>
-                    {startNewAuction ? (
+                  ) : null}
+                  {startNewAuction ? (
+                    startNewAuction.queueBlockedReason ? (
+                      <p className="text-[10px] sm:text-xs text-base-content/50 leading-snug text-center">
+                        {startNewAuction.queueBlockedReason}
+                      </p>
+                    ) : (
                       <StartNewAuctionPanel cfg={startNewAuction} />
-                    ) : null}
-                  </>
-                ) : showSettleSkeleton ? (
-                  <SettlementProgressStrip stage={settleStage} />
-                ) : chainSettlement ? (
-                  <div className="space-y-2">
-                    {chainSettlement.hint ? (
-                      <p className="text-center text-xs text-base-content/45">
-                        {chainSettlement.hint}
-                      </p>
-                    ) : null}
-                    {chainSettlement.error ? (
-                      <p className="text-center text-xs text-error/90 break-words">
-                        {chainSettlement.error}
-                      </p>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => void chainSettlement.onSubmit()}
-                      disabled={
-                        chainSettlement.disabled || chainSettlement.loading
-                      }
-                      className="btn btn-secondary w-full text-base font-semibold tracking-wide disabled:opacity-50"
-                    >
-                      {chainSettlement.loading ? (
-                        <span className="loading loading-spinner loading-sm" />
-                      ) : (
-                        chainSettlement.label
-                      )}
-                    </button>
-                  </div>
-                ) : postAuctionNoActionHint ? (
-                  <p className="text-center text-xs text-base-content/50 leading-relaxed">
-                    {postAuctionNoActionHint}
-                  </p>
-                ) : chainBid ? (
-                  <div className="space-y-2">
-                    {chainBid.viewerBidTokenBalanceHuman != null ||
-                    chainBid.nativeEthBid?.available ? (
-                      <p className="text-[10px] text-base-content/45 px-0.5 flex items-center justify-end gap-1 text-right sm:hidden">
-                        <span>
-                          Balance:{" "}
-                          {paymentMode === "eth"
-                            ? (chainBid.viewerEthBalanceHuman ?? "--")
-                            : (chainBid.viewerBidTokenBalanceHuman ?? "--")}
-                        </span>
+                    )
+                  ) : null}
+                </>
+              ) : showSettleSkeleton ? (
+                <SettlementProgressStrip stage={settleStage} />
+              ) : chainSettlement ? (
+                <div className="space-y-2">
+                  {chainSettlement.hint ? (
+                    <p className="text-center text-xs text-base-content/45">
+                      {chainSettlement.hint}
+                    </p>
+                  ) : null}
+                  {chainSettlement.error ? (
+                    <p className="text-center text-xs text-error/90 break-words">
+                      {chainSettlement.error}
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void chainSettlement.onSubmit()}
+                    disabled={
+                      chainSettlement.disabled || chainSettlement.loading
+                    }
+                    className="btn btn-secondary w-full text-base font-semibold tracking-wide disabled:opacity-50"
+                  >
+                    {chainSettlement.loading ? (
+                      <span className="loading loading-spinner loading-sm" />
+                    ) : (
+                      chainSettlement.label
+                    )}
+                  </button>
+                </div>
+              ) : postAuctionNoActionHint ? (
+                <p className="text-center text-xs text-base-content/50 leading-relaxed">
+                  {postAuctionNoActionHint}
+                </p>
+              ) : chainBid ? (
+                <div className="space-y-2">
+                  {chainBid.viewerBidTokenBalanceHuman != null ||
+                  chainBid.nativeEthBid?.available ? (
+                    <p className="text-[10px] text-base-content/45 px-0.5 flex items-center justify-end gap-1 text-right sm:hidden">
+                      <span>
+                        Balance:{" "}
+                        {paymentMode === "eth"
+                          ? (chainBid.viewerEthBalanceHuman ?? "--")
+                          : (chainBid.viewerBidTokenBalanceHuman ?? "--")}
+                      </span>
+                      <button
+                        type="button"
+                        className={`font-semibold transition-colors ${
+                          chainBid.nativeEthBid?.available
+                            ? "text-secondary hover:text-secondary/80"
+                            : "text-base-content/55"
+                        }`}
+                        onClick={handlePaymentModeToggle}
+                        disabled={!chainBid.nativeEthBid?.available}
+                      >
+                        {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
+                      </button>
+                      {paymentMode === "eth" &&
+                      chainBid.nativeEthBid?.quoteError ? (
                         <button
                           type="button"
-                          className={`font-semibold transition-colors ${
-                            chainBid.nativeEthBid?.available
-                              ? "text-secondary hover:text-secondary/80"
-                              : "text-base-content/55"
-                          }`}
-                          onClick={handlePaymentModeToggle}
-                          disabled={!chainBid.nativeEthBid?.available}
+                          className="btn btn-ghost btn-xs text-error normal-case ml-auto"
+                          onClick={() =>
+                            chainBid.nativeEthBid?.onRefreshQuote()
+                          }
                         >
-                          {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
+                          Retry estimate
                         </button>
-                        {paymentMode === "eth" &&
-                        chainBid.nativeEthBid?.quoteError ? (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-xs text-error normal-case ml-auto"
-                            onClick={() => chainBid.nativeEthBid?.onRefreshQuote()}
-                          >
-                            Retry estimate
-                          </button>
-                        ) : null}
-                      </p>
-                    ) : null}
-                    <label className="form-control w-full">
-                      <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <div
-                          className={`flex min-h-10 w-full min-w-0 items-center gap-2 rounded-md border border-base-content/15 bg-base-200/35 px-2 transition-colors focus-within:border-secondary/70 focus-within:bg-base-200/45 sm:flex-1 sm:px-0.5 sm:rounded-none sm:border-0 sm:border-b sm:border-base-content/20 sm:bg-transparent ${
+                      ) : null}
+                    </p>
+                  ) : null}
+                  <label className="form-control w-full">
+                    <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <div
+                        className={`flex min-h-8 sm:min-h-10 w-full min-w-0 items-center gap-1 sm:gap-2 rounded-md border border-base-content/15 bg-base-200/35 px-1.5 sm:px-2 transition-colors focus-within:border-secondary/70 focus-within:bg-base-200/45 sm:flex-1 sm:px-0.5 sm:rounded-none sm:border-0 sm:border-b sm:border-base-content/20 sm:bg-transparent ${
+                          chainBid.disabled ||
+                          chainBid.loading ||
+                          chainBid.minBidWei == null ||
+                          chainBid.bidDecimals == null
+                            ? "opacity-50 pointer-events-none"
+                            : ""
+                        }`}
+                      >
+                        <span
+                          className="shrink-0 text-left text-xs sm:text-sm font-mono tabular-nums text-base-content/50 select-none"
+                          title="Approximate USD (spot)"
+                        >
+                          {formatUsdTilde(bidUsdEstimate, 2)}
+                        </span>
+                        <input
+                          ref={bidInputRef}
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          className="min-w-0 flex-1 bg-transparent py-1.5 sm:py-2 text-right font-mono text-sm sm:text-xl tabular-nums tracking-tight text-base-content placeholder:text-base-content/25 outline-none border-0 focus:ring-0"
+                          value={
+                            paymentMode === "eth"
+                              ? ethAmountDisplayRaw ||
+                                (chainBid.nativeEthBid?.txValueFormatted
+                                  ? formatBidAmountDisplay(
+                                      normalizeBidString(
+                                        chainBid.nativeEthBid.txValueFormatted,
+                                      ),
+                                      ETH_INPUT_MAX_FRAC_DIGITS,
+                                      BID_INPUT_MAX_INT_DIGITS,
+                                    )
+                                  : "")
+                              : bidAmountRaw
+                          }
+                          onChange={(e) => {
+                            if (paymentMode === "eth") return;
+                            const el = e.target;
+                            const next = formatBidAmountDisplay(
+                              normalizeBidString(el.value),
+                              Math.min(
+                                chainBid.bidDecimals,
+                                TOKEN_INPUT_MAX_FRAC_DIGITS,
+                              ),
+                              BID_INPUT_MAX_INT_DIGITS,
+                            );
+                            setBidAmountRaw(next);
+                            setBidValidationError(null);
+                            chainBid.onClearTxError?.();
+                            requestAnimationFrame(() => {
+                              try {
+                                el.setSelectionRange(next.length, next.length);
+                              } catch {
+                                /* ignore */
+                              }
+                            });
+                          }}
+                          readOnly={paymentMode === "eth"}
+                          disabled={
                             chainBid.disabled ||
                             chainBid.loading ||
                             chainBid.minBidWei == null ||
                             chainBid.bidDecimals == null
-                              ? "opacity-50 pointer-events-none"
-                              : ""
-                          }`}
-                        >
-                          <span
-                            className="shrink-0 text-left text-xs sm:text-sm font-mono tabular-nums text-base-content/50 select-none"
-                            title="Approximate USD (spot)"
-                          >
-                            {formatUsdTilde(bidUsdEstimate, 2)}
-                          </span>
-                          <input
-                            ref={bidInputRef}
-                            type="text"
-                            inputMode="decimal"
-                            autoComplete="off"
-                            className="min-w-0 flex-1 bg-transparent py-2 text-right font-mono text-lg sm:text-xl tabular-nums tracking-tight text-base-content placeholder:text-base-content/25 outline-none border-0 focus:ring-0"
-                            value={
-                              paymentMode === "eth"
-                                ? (ethAmountDisplayRaw ||
-                                  (chainBid.nativeEthBid?.txValueFormatted
-                                    ? formatBidAmountDisplay(
-                                        normalizeBidString(
-                                          chainBid.nativeEthBid.txValueFormatted,
-                                        ),
-                                        ETH_INPUT_MAX_FRAC_DIGITS,
-                                        BID_INPUT_MAX_INT_DIGITS,
-                                      )
-                                    : ""))
-                                : bidAmountRaw
-                            }
-                            onChange={(e) => {
-                              if (paymentMode === "eth") return;
-                              const el = e.target;
-                              const next = formatBidAmountDisplay(
-                                normalizeBidString(el.value),
-                                Math.min(
-                                  chainBid.bidDecimals,
-                                  TOKEN_INPUT_MAX_FRAC_DIGITS,
-                                ),
-                                BID_INPUT_MAX_INT_DIGITS,
-                              );
-                              setBidAmountRaw(next);
-                              setBidValidationError(null);
-                              chainBid.onClearTxError?.();
-                              requestAnimationFrame(() => {
-                                try {
-                                  el.setSelectionRange(
-                                    next.length,
-                                    next.length,
-                                  );
-                                } catch {
-                                  /* ignore */
-                                }
-                              });
-                            }}
-                            readOnly={paymentMode === "eth"}
-                            disabled={
-                              chainBid.disabled ||
-                              chainBid.loading ||
-                              chainBid.minBidWei == null ||
-                              chainBid.bidDecimals == null
-                            }
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleChainBidSubmit}
-                          disabled={
-                            bidDisabled ||
-                            chainBlocksBid ||
-                            nativeEthBlocksBid ||
-                            chainBid.disabled ||
-                            chainBid.loading ||
-                            chainBid.minBidWei == null
                           }
-                          className="btn btn-secondary w-full shrink-0 px-3 font-semibold tracking-wide disabled:opacity-50 sm:w-auto sm:min-w-[4.75rem]"
-                        >
-                          {chainBid.loading ? (
-                            <span className="loading loading-spinner loading-sm" />
-                          ) : (
-                            "BID"
-                          )}
-                        </button>
+                        />
                       </div>
-                    </label>
-                    {chainBid.viewerBidTokenBalanceHuman != null ||
-                    chainBid.nativeEthBid?.available ? (
-                      <p className="hidden text-[10px] text-base-content/45 px-0.5 items-center justify-end gap-1 text-right sm:flex sm:pr-[5.5rem]">
-                        <span>
-                          Balance:{" "}
-                          {paymentMode === "eth"
-                            ? (chainBid.viewerEthBalanceHuman ?? "--")
-                            : (chainBid.viewerBidTokenBalanceHuman ?? "--")}
-                        </span>
+                      <button
+                        type="button"
+                        onClick={handleChainBidSubmit}
+                        disabled={
+                          bidDisabled ||
+                          chainBlocksBid ||
+                          nativeEthBlocksBid ||
+                          chainBid.disabled ||
+                          chainBid.loading ||
+                          chainBid.minBidWei == null
+                        }
+                        className="btn btn-secondary btn-sm sm:btn-md w-full shrink-0 px-3 font-semibold tracking-wide disabled:opacity-50 sm:w-auto sm:min-w-[4.75rem]"
+                      >
+                        {chainBid.loading ? (
+                          <span className="loading loading-spinner loading-sm" />
+                        ) : (
+                          "BID"
+                        )}
+                      </button>
+                    </div>
+                  </label>
+                  {chainBid.viewerBidTokenBalanceHuman != null ||
+                  chainBid.nativeEthBid?.available ? (
+                    <p className="hidden text-[10px] text-base-content/45 px-0.5 items-center justify-end gap-1 text-right sm:flex sm:pr-[5.5rem]">
+                      <span>
+                        Balance:{" "}
+                        {paymentMode === "eth"
+                          ? (chainBid.viewerEthBalanceHuman ?? "--")
+                          : (chainBid.viewerBidTokenBalanceHuman ?? "--")}
+                      </span>
+                      <button
+                        type="button"
+                        className={`font-semibold transition-colors ${
+                          chainBid.nativeEthBid?.available
+                            ? "text-secondary hover:text-secondary/80"
+                            : "text-base-content/55"
+                        }`}
+                        onClick={handlePaymentModeToggle}
+                        disabled={!chainBid.nativeEthBid?.available}
+                      >
+                        {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
+                      </button>
+                      {paymentMode === "eth" &&
+                      chainBid.nativeEthBid?.quoteError ? (
                         <button
                           type="button"
-                          className={`font-semibold transition-colors ${
-                            chainBid.nativeEthBid?.available
-                              ? "text-secondary hover:text-secondary/80"
-                              : "text-base-content/55"
-                          }`}
-                          onClick={handlePaymentModeToggle}
-                          disabled={!chainBid.nativeEthBid?.available}
+                          className="btn btn-ghost btn-xs text-error normal-case ml-auto"
+                          onClick={() =>
+                            chainBid.nativeEthBid?.onRefreshQuote()
+                          }
                         >
-                          {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
+                          Retry estimate
                         </button>
-                        {paymentMode === "eth" &&
-                        chainBid.nativeEthBid?.quoteError ? (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-xs text-error normal-case ml-auto"
-                            onClick={() => chainBid.nativeEthBid?.onRefreshQuote()}
-                          >
-                            Retry estimate
-                          </button>
-                        ) : null}
-                      </p>
-                    ) : null}
-                    {txOrValidationError ? (
-                      <p className="text-xs text-error/90 text-left break-words px-0.5">
-                        {txOrValidationError}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : startNewAuction ? (
-                  <StartNewAuctionPanel cfg={startNewAuction} />
-                ) : idleNoChainAuction ? null : (
-                  <button
-                    ref={btnRef}
-                    type="button"
-                    onClick={handleDemoBid}
-                    disabled={bidDisabled || chainBlocksBid}
-                    className="btn btn-secondary w-full text-base font-semibold tracking-wide disabled:opacity-50"
-                  >
-                    Bid
-                  </button>
-                )}
-              </div>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  {txOrValidationError ? (
+                    <p className="text-xs text-error/90 text-left break-words px-0.5">
+                      {txOrValidationError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : startNewAuction ? (
+                <StartNewAuctionPanel cfg={startNewAuction} />
+              ) : idleNoChainAuction ? null : (
+                <button
+                  ref={btnRef}
+                  type="button"
+                  onClick={handleDemoBid}
+                  disabled={bidDisabled || chainBlocksBid}
+                  className="btn btn-secondary w-full text-base font-semibold tracking-wide disabled:opacity-50"
+                >
+                  Bid
+                </button>
+              )}
             </div>
           </div>
-          </div>
+        </div>
+      </div>
     </div>
   );
 }
