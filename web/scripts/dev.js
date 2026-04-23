@@ -85,34 +85,38 @@ async function checkCloudflared() {
   });
 }
 
+// Named tunnel: stable URL, managed via `cloudflared tunnel create` +
+// `cloudflared tunnel route dns`. Config file defines which hostname maps to
+// which local port, so we don't share the global ~/.cloudflared/config.yml
+// with other tunnels on this machine.
+const TUNNEL_NAME = "warplet-gobbler";
+const TUNNEL_HOSTNAME = "gobbler.zenigame.net";
+const TUNNEL_CONFIG = `${process.env.HOME}/.cloudflared/warplet-gobbler.yml`;
+
 async function startCloudflaredTunnel() {
   return new Promise((resolve, reject) => {
-    console.log("🚇 Starting Cloudflare tunnel...");
+    console.log(`🚇 Starting Cloudflare tunnel (${TUNNEL_NAME})...`);
 
     tunnelProcess = spawn(
       "cloudflared",
-      ["tunnel", "--url", "http://localhost:3000"],
+      ["tunnel", "--config", TUNNEL_CONFIG, "run", TUNNEL_NAME],
       {
         shell: true,
         stdio: ["pipe", "pipe", "pipe"],
       }
     );
 
-    let tunnelUrl = null;
+    let resolved = false;
+    const finalUrl = `https://${TUNNEL_HOSTNAME}`;
 
+    // A named tunnel has no URL to scrape — we resolve once cloudflared
+    // reports its first edge connection is live.
     tunnelProcess.stderr.on("data", (data) => {
       const output = data.toString();
-
-      // Look for the tunnel URL in the output
-      const urlMatch = output.match(
-        /https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/
-      );
-      if (urlMatch && !tunnelUrl) {
-        tunnelUrl = urlMatch[0];
-        resolve(tunnelUrl);
+      if (!resolved && /Registered tunnel connection/i.test(output)) {
+        resolved = true;
+        resolve(finalUrl);
       }
-
-      // Still log the output for debugging
       if (output.includes("error") || output.includes("Error")) {
         console.error(output);
       }
@@ -123,17 +127,18 @@ async function startCloudflaredTunnel() {
     });
 
     tunnelProcess.on("exit", (code) => {
-      if (code !== 0 && !tunnelUrl) {
+      if (code !== 0 && !resolved) {
         reject(new Error(`cloudflared exited with code ${code}`));
       }
     });
 
-    // Timeout after 10 seconds
+    // Named tunnels typically register an edge connection within ~3s; allow
+    // 15s before giving up for slow networks / first-time token handshake.
     setTimeout(() => {
-      if (!tunnelUrl) {
-        reject(new Error("Timeout waiting for cloudflared tunnel URL"));
+      if (!resolved) {
+        reject(new Error("Timeout waiting for cloudflared tunnel to register"));
       }
-    }, 10000);
+    }, 15000);
   });
 }
 
