@@ -236,7 +236,8 @@ export default function GobblerAuctionSection({
     auctionSellConfigured && !auctionReadError && chainLot != null;
 
   /** Consider a lot live only while it is not marked settled on-chain. */
-  const liveAuction = hasParsedLot && chainLot.tokenId > 0n && !chainLot.settled;
+  const liveAuction =
+    hasParsedLot && chainLot.tokenId > 0n && !chainLot.settled;
 
   const idleNoChainAuction = hasParsedLot && chainLot.startTime === 0n;
 
@@ -321,7 +322,9 @@ export default function GobblerAuctionSection({
 
   useEffect(() => {
     if (minBidWei != null) {
-      setQuoteBidWei((prev) => (prev == null || prev < minBidWei ? minBidWei : prev));
+      setQuoteBidWei((prev) =>
+        prev == null || prev < minBidWei ? minBidWei : prev,
+      );
     }
   }, [minBidWei]);
 
@@ -1016,9 +1019,7 @@ export default function GobblerAuctionSection({
         });
 
   const ethBidQuoteError =
-    ethBidQuote.isError && ethBidQuote.error
-      ? ethBidQuote.error.message
-      : null;
+    ethBidQuote.isError && ethBidQuote.error ? ethBidQuote.error.message : null;
 
   const handleSettlePaused = useCallback(async () => {
     setSettleError(null);
@@ -1142,11 +1143,10 @@ export default function GobblerAuctionSection({
   const onChainLiveQueueEmpty =
     queueReadsEnabled && liveAuction && chainQueuedIds.length === 0;
 
-  const settledFooterCopy = !auctionSettled
-    ? null
-    : onChainMode && queueReadsEnabled && chainQueuedIds.length === 0
-      ? "No Warplets are queued yet. Sell one to the Gobbler to open the next auction."
-      : "Auction settled. Start the next auction when you're ready.";
+  const settledFooterCopy =
+    !auctionSettled || startAuctionQueueEmpty
+      ? null
+      : "Auction settled. Start the next auction.";
 
   if (claimBlocking && claimFocusRecord && claimAction != null) {
     return (
@@ -1207,7 +1207,7 @@ export default function GobblerAuctionSection({
                   : startAuctionQueueLoading
                     ? "Loading the queue…"
                     : startAuctionQueueEmpty
-                      ? "No Warplets are queued yet. Sell one to the Gobbler first, then start the auction here."
+                      ? "Queue empty — sell a Warplet to the Gobbler."
                       : null,
               }
             : null
