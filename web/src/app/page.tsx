@@ -824,8 +824,14 @@ export default function Home() {
   const toggleView = useCallback((view: "sell" | "buy") => {
     viewHintScrollRef.current = view;
     setActiveView(view);
-    const target = view === "buy" ? "auction" : "sell-section";
-    document.getElementById(target)?.scrollIntoView({ behavior: "smooth" });
+    if (view === "sell") {
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: "smooth",
+      });
+    } else {
+      document.getElementById("auction")?.scrollIntoView({ behavior: "smooth" });
+    }
   }, []);
 
   const cardRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
@@ -1131,11 +1137,11 @@ export default function Home() {
         </svg>
       </nav>
 
-      {/* Buy ↔ Sell — text jump link, bottom-left (above CaFooter z-[50] and full-width content) */}
+      {/* Buy ↔ Sell — text jump link, bottom-left on the same line as the CA footer */}
       <button
         type="button"
         onClick={() => toggleView(activeView === "buy" ? "sell" : "buy")}
-        className={`group fixed left-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom))] z-[55] flex items-center gap-1.5 pl-[max(1rem,env(safe-area-inset-left))] text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
+        className={`group fixed left-0 bottom-0 z-[55] flex items-center gap-1.5 pl-[max(1rem,env(safe-area-inset-left))] py-3 sm:py-4 text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
           gobbling || buyingFid || claimBlockingActive || !bootDone
             ? "pointer-events-none opacity-0 scale-[0.98]"
             : "opacity-100 scale-100"
@@ -1345,7 +1351,7 @@ function CaFooter({ pointerThrough = false }: { pointerThrough?: boolean }) {
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm py-3 sm:py-4 px-4 text-center select-all ${
+      className={`fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm py-3 sm:py-4 pr-4 pl-[calc(5rem+env(safe-area-inset-left))] text-right select-all ${
         pointerThrough ? "pointer-events-none cursor-default" : "cursor-pointer"
       }`}
       onClick={pointerThrough ? undefined : handleCopy}

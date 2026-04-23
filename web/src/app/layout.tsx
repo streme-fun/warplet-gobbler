@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Caveat, Inter, Rubik_Wet_Paint } from "next/font/google";
+import { Caveat, Creepster, Inter, Rubik_Wet_Paint } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -17,6 +17,12 @@ const handwritten = Caveat({
 const display = Rubik_Wet_Paint({
   subsets: ["latin"],
   variable: "--font-display",
+  weight: "400",
+});
+
+const creepster = Creepster({
+  subsets: ["latin"],
+  variable: "--font-creepster",
   weight: "400",
 });
 
@@ -52,7 +58,7 @@ export default function RootLayout({
     <html
       lang="en"
       data-theme="warplet"
-      className={`${inter.variable} ${handwritten.variable} ${display.variable}`}
+      className={`${inter.variable} ${handwritten.variable} ${display.variable} ${creepster.variable}`}
     >
       <body className="min-h-screen bg-base-100 text-base-content">
         <Providers>{children}</Providers>

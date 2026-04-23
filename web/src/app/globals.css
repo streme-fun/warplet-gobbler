@@ -25,6 +25,23 @@ body {
   font-family: var(--font-display), var(--font-handwritten), cursive;
 }
 
+.font-creepster {
+  font-family: var(--font-creepster), cursive;
+}
+
+.gobble-title-shadow {
+  text-shadow:
+    3px 3px 0 rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(0, 0, 0, 0.4);
+}
+
+.gobble-title-glow {
+  text-shadow:
+    3px 3px 0 rgba(0, 0, 0, 0.5),
+    0 0 24px rgba(95, 245, 245, 0.6),
+    0 0 56px rgba(95, 245, 245, 0.35);
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -778,3 +795,300 @@ body {
   background: #7b61ff;
   border-radius: 3px;
 }
+
+/* Dripping "GOBBLE" action button */
+.gobble-btn {
+  background: linear-gradient(180deg, #5ff5f5 0%, #2dd4d4 60%, #1ba8a8 100%);
+  color: #0a1a1a;
+  font-family: var(--font-creepster), cursive;
+  font-size: 32px;
+  letter-spacing: 3px;
+  padding: 20px 56px 28px;
+  border: none;
+  cursor: pointer;
+  clip-path: polygon(
+    0% 0%, 100% 0%, 100% 70%,
+    96% 85%, 92% 72%, 88% 90%, 84% 75%, 80% 92%, 76% 78%,
+    72% 88%, 68% 74%, 64% 90%, 60% 76%, 56% 92%, 52% 78%,
+    48% 88%, 44% 74%, 40% 90%, 36% 76%, 32% 92%, 28% 78%,
+    24% 88%, 20% 74%, 16% 90%, 12% 76%, 8% 92%, 4% 78%,
+    0% 85%
+  );
+  box-shadow:
+    0 0 40px rgba(95, 245, 245, 0.4),
+    0 0 80px rgba(95, 245, 245, 0.2),
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.3);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease, filter 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gobble-btn:hover:not(:disabled) {
+  transform: scale(1.04);
+  filter: brightness(1.1);
+  box-shadow:
+    0 0 60px rgba(95, 245, 245, 0.7),
+    0 0 120px rgba(95, 245, 245, 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.gobble-btn:active:not(:disabled) {
+  transform: scale(0.98) translateY(2px);
+  filter: brightness(0.9);
+}
+
+.gobble-btn:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.6) brightness(0.7);
+  box-shadow:
+    0 0 20px rgba(95, 245, 245, 0.15),
+    inset 0 2px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 640px) {
+  .gobble-btn {
+    font-size: 22px;
+    letter-spacing: 2px;
+    padding: 14px 32px 20px;
+  }
+}
+
+/* ============ 02 · GHOST OUTLINE ============ */
+.gobble-btn-ghost {
+  background: #5ff5f5;
+  color: #0a1a1a;
+  border: 2px solid #0a1a1a;
+  border-radius: 8px;
+  padding: 16px 48px;
+  font-family: var(--font-creepster), cursive;
+  font-size: 24px;
+  letter-spacing: 4px;
+  cursor: pointer;
+  box-shadow:
+    0 0 16px rgba(95, 245, 245, 0.35),
+    inset 0 0 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+.gobble-btn-ghost:hover:not(:disabled) {
+  background: #7dffff;
+  box-shadow:
+    0 0 28px rgba(95, 245, 245, 0.55),
+    inset 0 0 18px rgba(0, 0, 0, 0.15);
+}
+.gobble-btn-ghost:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+@media (max-width: 640px) {
+  .gobble-btn-ghost {
+    font-size: 18px;
+    letter-spacing: 2px;
+    padding: 12px 28px;
+  }
+}
+
+/* ============ 03 · TORN CURTAIN ============ */
+.gobble-btn-torn {
+  background: linear-gradient(180deg, #5ff5f5 0%, #1ba8a8 100%);
+  color: #0a1a1a;
+  font-family: var(--font-creepster), cursive;
+  font-size: 30px;
+  letter-spacing: 3px;
+  padding: 30px 56px;
+  border: none;
+  cursor: pointer;
+  clip-path: polygon(
+    0% 14%, 4% 6%, 8% 18%, 12% 4%, 16% 15%, 20% 2%, 24% 12%,
+    28% 6%, 32% 16%, 36% 4%, 40% 14%, 44% 8%, 48% 18%, 52% 4%,
+    56% 15%, 60% 6%, 64% 16%, 68% 2%, 72% 14%, 76% 6%, 80% 18%,
+    84% 4%, 88% 16%, 92% 8%, 96% 14%, 100% 4%,
+    100% 86%, 96% 94%, 92% 82%, 88% 96%, 84% 85%, 80% 98%, 76% 88%,
+    72% 94%, 68% 84%, 64% 96%, 60% 86%, 56% 92%, 52% 82%, 48% 96%,
+    44% 85%, 40% 94%, 36% 84%, 32% 98%, 28% 86%, 24% 94%, 20% 82%,
+    16% 96%, 12% 84%, 8% 92%, 4% 86%, 0% 96%
+  );
+  box-shadow:
+    0 0 40px rgba(95, 245, 245, 0.4),
+    inset 0 0 30px rgba(255, 255, 255, 0.15);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
+  transition: transform 0.1s, filter 0.2s;
+}
+.gobble-btn-torn:hover:not(:disabled) {
+  transform: scale(1.03);
+  filter: brightness(1.12);
+}
+.gobble-btn-torn:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.6) brightness(0.7);
+}
+
+/* ============ 04 · WATCHING EYES ============ */
+.gobble-btn-eyes {
+  position: relative;
+  background: #000;
+  color: #5ff5f5;
+  font-family: var(--font-creepster), cursive;
+  font-size: 28px;
+  letter-spacing: 3px;
+  padding: 54px 56px 20px;
+  border: 2px solid #5ff5f5;
+  border-radius: 12px 12px 4px 4px;
+  cursor: pointer;
+  box-shadow:
+    0 0 30px rgba(95, 245, 245, 0.4),
+    inset 0 0 40px rgba(0, 0, 0, 0.8);
+  text-shadow: 0 0 12px rgba(95, 245, 245, 0.9);
+  transition: all 0.2s;
+  overflow: hidden;
+}
+.gobble-btn-eyes::before,
+.gobble-btn-eyes::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  width: 14px;
+  height: 14px;
+  background: radial-gradient(circle at 35% 35%, #fff, #e0e0e0);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+  transition: transform 0.15s;
+}
+.gobble-btn-eyes::before { left: 28%; }
+.gobble-btn-eyes::after { right: 28%; }
+.gobble-btn-eyes:hover:not(:disabled)::before { transform: translateY(2px) scale(0.3); }
+.gobble-btn-eyes:hover:not(:disabled)::after { transform: translateY(2px) scale(0.3); }
+.gobble-btn-eyes:hover:not(:disabled) {
+  box-shadow:
+    0 0 50px rgba(95, 245, 245, 0.6),
+    inset 0 0 40px rgba(0, 0, 0, 0.8);
+}
+.gobble-btn-eyes:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* ============ 05 · TOOTH MOUTH ============ */
+.gobble-btn-teeth {
+  position: relative;
+  background: linear-gradient(180deg, #6b1a2a 0%, #3a0a15 100%);
+  color: #5ff5f5;
+  font-family: var(--font-creepster), cursive;
+  font-size: 28px;
+  letter-spacing: 3px;
+  padding: 38px 48px 18px;
+  border: none;
+  cursor: pointer;
+  border-radius: 0 0 8px 8px;
+  box-shadow:
+    0 0 30px rgba(107, 26, 42, 0.6),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.4);
+  text-shadow:
+    0 0 12px rgba(95, 245, 245, 0.8),
+    2px 2px 0 rgba(0, 0, 0, 0.5);
+  margin-top: 18px;
+  transition: all 0.2s;
+}
+.gobble-btn-teeth::before {
+  content: "";
+  position: absolute;
+  top: -18px;
+  left: 0;
+  right: 0;
+  height: 22px;
+  background: #f4ecd8;
+  clip-path: polygon(
+    0% 0%, 10% 100%, 20% 0%, 30% 100%, 40% 0%, 50% 100%,
+    60% 0%, 70% 100%, 80% 0%, 90% 100%, 100% 0%
+  );
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.4));
+}
+.gobble-btn-teeth:hover:not(:disabled) {
+  filter: brightness(1.15);
+  box-shadow:
+    0 0 50px rgba(107, 26, 42, 0.8),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.4);
+}
+.gobble-btn-teeth:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* ============ 06 · WARPLET CARD ============ */
+.gobble-btn-card {
+  position: relative;
+  background: #1a1a1a;
+  color: #5ff5f5;
+  font-family: var(--font-creepster), cursive;
+  font-size: 22px;
+  letter-spacing: 3px;
+  padding: 14px 44px 36px;
+  border: 3px solid #5ff5f5;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow:
+    0 0 24px rgba(95, 245, 245, 0.35),
+    inset 0 0 30px rgba(95, 245, 245, 0.06),
+    6px 6px 0 rgba(95, 245, 245, 0.15);
+  text-shadow: 0 0 10px rgba(95, 245, 245, 0.8);
+  transition: all 0.15s;
+}
+.gobble-btn-card::after {
+  content: "#987458";
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  color: rgba(95, 245, 245, 0.5);
+  letter-spacing: 2px;
+}
+.gobble-btn-card:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow:
+    0 0 40px rgba(95, 245, 245, 0.55),
+    inset 0 0 30px rgba(95, 245, 245, 0.1),
+    8px 8px 0 rgba(95, 245, 245, 0.25);
+}
+.gobble-btn-card:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* ============ 07 · VINE CORNERS ============ */
+.gobble-btn-vine {
+  position: relative;
+  background: linear-gradient(180deg, #5ff5f5 0%, #1ba8a8 100%);
+  color: #0a1a1a;
+  font-family: var(--font-creepster), cursive;
+  font-size: 28px;
+  letter-spacing: 3px;
+  padding: 18px 64px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow:
+    0 0 30px rgba(95, 245, 245, 0.4),
+    inset 0 3px 0 rgba(255, 255, 255, 0.5);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
+  overflow: visible;
+  transition: filter 0.2s;
+}
+.gobble-vine-wrap {
+  position: relative;
+  display: inline-block;
+}
+.gobble-vine-wrap svg {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  pointer-events: none;
+  opacity: 0.9;
+  transition: transform 0.4s ease-out, opacity 0.3s;
+}
+.gobble-vine-wrap .vine-tl { top: -28px; left: -28px; }
+.gobble-vine-wrap .vine-tr { top: -28px; right: -28px; transform: scaleX(-1); }
+.gobble-vine-wrap .vine-bl { bottom: -28px; left: -28px; transform: scaleY(-1); }
+.gobble-vine-wrap .vine-br { bottom: -28px; right: -28px; transform: scale(-1, -1); }
+.gobble-vine-wrap:hover .vine-tl { transform: scale(1.25); }
+.gobble-vine-wrap:hover .vine-tr { transform: scaleX(-1) scale(1.25); }
+.gobble-vine-wrap:hover .vine-bl { transform: scaleY(-1) scale(1.25); }
+.gobble-vine-wrap:hover .vine-br { transform: scale(-1.25, -1.25); }
+.gobble-vine-wrap:hover .gobble-btn-vine:not(:disabled),
+.gobble-vine-wrap:hover .gobble-btn-ghost:not(:disabled) {
+  filter: brightness(1.1);
+}
+.gobble-btn-vine:disabled { cursor: not-allowed; opacity: 0.55; }

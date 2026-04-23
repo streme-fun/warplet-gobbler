@@ -56,13 +56,13 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     // the corners and the valley felt too thick. Bottom trimmed again to
     // reclaim vertical space for page content (valley only; footer lift unchanged).
     const mobile = () => W < 640;
-    const restTop = () => (mobile() ? 97 : 154);
-    const restBot = () => (mobile() ? 30 : 0);
+    const restTop = () => (mobile() ? 80 : 128);
+    const restBot = () => (mobile() ? 18 : 0);
     // CaFooter (fixed bottom-0, bg-black/90) uses py-3 sm:py-4 and z-50, so it
     // stacks above the gobbler canvas (z-40 / z-46). If footerOverlay is too
     // small, the bottom lip and its curve are drawn behind the footer and look
     // flat. Lift the bot jaw by enough padding to keep the lip visible.
-    const footerOverlay = () => (mobile() ? 52 : 84);
+    const footerOverlay = () => (mobile() ? 38 : 60);
 
     // Desktop only: both jaws share the same parabolic bow (u²) so top and
     // bottom lip curvature matches.
