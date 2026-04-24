@@ -1302,8 +1302,8 @@ export default function Home() {
       </div>
       {/* end gobble fade wrapper */}
 
-      {/* Fixed footer — contract address (z-[50] sits above auction z-10; disable hit-testing during claim so the CTA isn’t covered) */}
-      <CaFooter pointerThrough={claimBlockingActive} />
+      {/* Fixed footer — contract address (z-[50] sits above auction z-10; disable hit-testing during claim so the CTA isn’t covered). Hidden during gobble so the overlay isn’t interrupted. */}
+      {gobbling ? null : <CaFooter pointerThrough={claimBlockingActive} />}
     </main>
   );
 }

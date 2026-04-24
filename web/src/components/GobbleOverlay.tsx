@@ -65,27 +65,10 @@ export default function GobbleOverlay({
       eyeAT = 0;
     let cancelled = false;
 
-    // Chest/reward state
-    let chestAlpha = 0,
-      chestAlphaT = 0;
-    let chestOpen = 0,
-      chestOpenT = 0;
-    let glowAlpha = 0,
-      glowAlphaT = 0;
+    // Payout text fade state
     let textAlpha = 0,
       textAlphaT = 0;
 
-    // Sparkle particles for reward reveal
-    const sparkles: {
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      life: number;
-      maxLife: number;
-      size: number;
-      hue: number;
-    }[] = [];
 
     function lerp(a: number, b: number, t: number) {
       return a + (b - a) * t;
@@ -179,7 +162,7 @@ export default function GobbleOverlay({
       bgCx!.fillStyle = "rgba(0,0,0,0)";
       bgCx!.clearRect(0, 0, W, H);
       if (dark > 0.001) {
-        bgCx!.fillStyle = `rgba(4,4,4,${dark})`;
+        bgCx!.fillStyle = `rgba(19,17,28,${dark})`;
         bgCx!.fillRect(0, 0, W, H);
       }
     }
@@ -315,90 +298,8 @@ export default function GobbleOverlay({
         }
       }
 
-      // --- Chest ---
-      drawChest(tx!, W / 2, H / 2 + 30, Math.min(W / 500, 1.3));
-      drawPayoutText(tx!, W / 2, H / 2 + 30);
-      drawSparkles(tx!);
-    }
-
-    // ---- Chest images ----
-    const chestClosedImg = new Image();
-    chestClosedImg.src = "/chest-closed.png";
-    const chestOpenImg = new Image();
-    chestOpenImg.src = "/chest-open.png";
-
-    function drawChest(
-      ctx: CanvasRenderingContext2D,
-      centerX: number,
-      centerY: number,
-      scale: number
-    ) {
-      if (chestAlpha < 0.005) return;
-
-      const imgW = 280 * scale;
-      const imgH = (280 / 693) * 360 * scale; // match 693:360 aspect ratio
-      const dx = centerX - imgW / 2;
-      const dy = centerY - imgH / 2;
-
-      // Golden glow behind chest
-      if (glowAlpha > 0.01) {
-        ctx.save();
-        ctx.globalAlpha = chestAlpha;
-        const glow = ctx.createRadialGradient(centerX, centerY - 20 * scale, 10, centerX, centerY - 20 * scale, 200 * scale);
-        glow.addColorStop(0, `rgba(255, 215, 50, ${0.6 * glowAlpha})`);
-        glow.addColorStop(0.3, `rgba(255, 180, 0, ${0.25 * glowAlpha})`);
-        glow.addColorStop(0.6, `rgba(200, 120, 0, ${0.08 * glowAlpha})`);
-        glow.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY - 20 * scale, 200 * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // Light rays when open
-      if (glowAlpha > 0.05) {
-        const rayCount = 8;
-        for (let i = 0; i < rayCount; i++) {
-          const angle =
-            -Math.PI * 0.15 + (Math.PI * -0.7 * i) / (rayCount - 1);
-          const flicker = 0.7 + 0.3 * Math.sin(time * 0.05 + i * 2.1);
-          const rayLen = (140 + 40 * flicker) * scale;
-          ctx.save();
-          ctx.translate(centerX, centerY - 40 * scale);
-          ctx.rotate(angle);
-          ctx.globalAlpha = chestAlpha * glowAlpha * 0.35 * flicker;
-          const rayGrad = ctx.createLinearGradient(0, 0, 0, -rayLen);
-          rayGrad.addColorStop(0, "rgba(255, 215, 50, 0.8)");
-          rayGrad.addColorStop(0.5, "rgba(255, 180, 0, 0.3)");
-          rayGrad.addColorStop(1, "rgba(255, 180, 0, 0)");
-          ctx.fillStyle = rayGrad;
-          ctx.beginPath();
-          ctx.moveTo(-6 * scale, 0);
-          ctx.lineTo(-2 * scale, -rayLen);
-          ctx.lineTo(2 * scale, -rayLen);
-          ctx.lineTo(6 * scale, 0);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-        }
-      }
-
-      // Draw closed chest (fades out as chestOpen approaches 1)
-      if (chestOpen < 0.99 && chestClosedImg.complete && chestClosedImg.naturalWidth > 0) {
-        ctx.save();
-        ctx.globalAlpha = chestAlpha * (1 - chestOpen);
-        ctx.drawImage(chestClosedImg, dx, dy, imgW, imgH);
-        ctx.restore();
-      }
-
-      // Draw open chest (fades in as chestOpen approaches 1)
-      if (chestOpen > 0.01 && chestOpenImg.complete && chestOpenImg.naturalWidth > 0) {
-        ctx.save();
-        ctx.globalAlpha = chestAlpha * chestOpen;
-        ctx.drawImage(chestOpenImg, dx, dy, imgW, imgH);
-        ctx.restore();
-      }
+      // Payout reveal (no chest) — just the amount text, centered.
+      drawPayoutText(tx!, W / 2, H / 2);
     }
 
     function drawPayoutText(
@@ -438,74 +339,38 @@ export default function GobbleOverlay({
       const usdText =
         payoutUsd === null ? "--" : `${formatUsd(Math.max(0, payoutUsd))}`;
       const bobY = Math.sin(time * 0.03) * 3;
-      const textY = centerY - 160 + bobY;
+      const textY = centerY + bobY;
 
-      ctx.font = "bold 48px 'EB Garamond', Georgia, serif";
+      // Responsive: clamp big number font so it always fits the viewport
+      // with a comfortable margin, and shrink further if the composed text
+      // would overflow.
+      const maxBigPx = Math.max(22, Math.min(52, W * 0.1));
+      const maxSubPx = Math.max(12, Math.min(22, W * 0.045));
+      const horizontalBudget = Math.max(160, W - 32);
+      const composed = `${formattedTokenAmount} ${tokenLabel}`;
+
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
+      let bigPx = maxBigPx;
+      ctx.font = `bold ${bigPx}px 'EB Garamond', Georgia, serif`;
+      let measured = ctx.measureText(composed).width;
+      if (measured > horizontalBudget) {
+        bigPx = Math.max(14, bigPx * (horizontalBudget / measured));
+        ctx.font = `bold ${bigPx}px 'EB Garamond', Georgia, serif`;
+      }
+
       ctx.shadowColor = "rgba(255, 215, 50, 0.8)";
-      ctx.shadowBlur = 30;
+      ctx.shadowBlur = 24;
       ctx.fillStyle = "#FFD700";
-      ctx.fillText(
-        `${formattedTokenAmount} ${tokenLabel}`,
-        centerX,
-        textY,
-      );
+      ctx.fillText(composed, centerX, textY);
       ctx.shadowBlur = 0;
 
-      ctx.font = "400 22px 'EB Garamond', Georgia, serif";
+      ctx.font = `400 ${maxSubPx}px 'EB Garamond', Georgia, serif`;
       ctx.fillStyle = `rgba(200,200,200, ${0.9 * textAlpha})`;
-      ctx.fillText(`~$${usdText}`, centerX, textY + 55);
+      ctx.fillText(`~$${usdText}`, centerX, textY + bigPx * 0.85);
 
       ctx.restore();
-    }
-
-    const MAX_SPARKLES = 200;
-    function spawnSparkles(centerX: number, centerY: number) {
-      if (sparkles.length >= MAX_SPARKLES) return;
-      for (let i = 0; i < 6; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 0.5 + Math.random() * 2;
-        sparkles.push({
-          x: centerX + (Math.random() - 0.5) * 100,
-          y: centerY - 80 + (Math.random() - 0.5) * 60,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 0.8,
-          life: 1,
-          maxLife: 60 + Math.random() * 60,
-          size: 2 + Math.random() * 3,
-          hue: 40 + Math.random() * 20,
-        });
-      }
-    }
-
-    function drawSparkles(ctx: CanvasRenderingContext2D) {
-      for (let i = sparkles.length - 1; i >= 0; i--) {
-        const s = sparkles[i];
-        s.x += s.vx;
-        s.y += s.vy;
-        s.vy += 0.01;
-        s.life -= 1 / s.maxLife;
-        if (s.life <= 0) {
-          sparkles.splice(i, 1);
-          continue;
-        }
-        ctx.save();
-        ctx.globalAlpha = s.life * 0.8;
-        ctx.fillStyle = `hsl(${s.hue}, 90%, 65%)`;
-        ctx.shadowColor = `hsl(${s.hue}, 90%, 65%)`;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        const r = s.size * s.life;
-        ctx.moveTo(s.x, s.y - r * 2);
-        ctx.lineTo(s.x + r * 0.5, s.y);
-        ctx.lineTo(s.x, s.y + r * 2);
-        ctx.lineTo(s.x - r * 0.5, s.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
     }
 
     // ---- Update ----
@@ -513,33 +378,28 @@ export default function GobbleOverlay({
       time++;
       pTopY = topY;
       pBotY = botY;
-      const chestCX = W / 2;
-      const chestCY = H / 2 + 30;
 
       const jSpd =
         phase <= 2
-          ? 0.008
+          ? 0.04
           : phase >= 3 && phase <= 5
-            ? 0.07
+            ? 0.12
             : phase === 9
-              ? 0.03
-              : 0.02;
+              ? 0.05
+              : 0.04;
       topY = lerp(topY, topT, jSpd);
       botY = lerp(botY, botT, jSpd);
       dark = lerp(dark, darkT, 0.018);
       eyeA = lerp(eyeA, eyeAT, 0.012);
-      chestAlpha = lerp(chestAlpha, chestAlphaT, 0.025);
-      chestOpen = lerp(chestOpen, chestOpenT, 0.02);
-      glowAlpha = lerp(glowAlpha, glowAlphaT, 0.03);
-      textAlpha = lerp(textAlpha, textAlphaT, 0.025);
+      textAlpha = lerp(textAlpha, textAlphaT, 0.06);
       pt++;
 
       if (phase === 1) {
-        darkT = 0.5;
+        darkT = 0.25;
         eyeAT = 1;
         topT = -5;
         botT = H + 5;
-        if (pt > 300) {
+        if (pt > 90) {
           phase = 2;
           pt = 0;
         }
@@ -547,7 +407,7 @@ export default function GobbleOverlay({
       if (phase === 2) {
         topT = MID - 3;
         botT = MID + 3;
-        darkT = 0.75;
+        darkT = 0.3;
         if (botY - topY < 18) {
           phase = 3;
           pt = 0;
@@ -556,7 +416,7 @@ export default function GobbleOverlay({
       if (phase === 3) {
         topT = MID + 14;
         botT = MID - 14;
-        darkT = 0.97;
+        darkT = 0.4;
         eyeAT = 1;
         if (pt > 90) {
           phase = 4;
@@ -564,17 +424,17 @@ export default function GobbleOverlay({
         }
       }
       if (phase === 4) {
-        const cyc = pt % 90;
-        if (cyc < 50) {
+        const cyc = pt % 60;
+        if (cyc < 30) {
           topT = MID - 35;
           botT = MID + 35;
         } else {
           topT = MID + 10;
           botT = MID - 10;
         }
-        darkT = 0.88;
+        darkT = 0.35;
         eyeAT = 1;
-        if (pt > 270) {
+        if (pt > 150) {
           phase = 5;
           pt = 0;
         }
@@ -582,40 +442,22 @@ export default function GobbleOverlay({
       if (phase === 5) {
         topT = MID + 12;
         botT = MID - 12;
-        darkT = 0.97;
+        darkT = 0.45;
         eyeAT = 1;
-        if (pt > 120) {
+        if (pt > 50) {
           phase = 6;
           pt = 0;
           onChestReveal?.();
         }
       }
       if (phase === 6) {
+        // Jaws open and hold; payout text fades in after a short beat.
         topT = MID - 180;
         botT = MID + 180;
-        darkT = 0.92;
+        darkT = 0.4;
         eyeAT = 0;
-        // Wait for jaws to open before showing chest
-        if (pt > 60) chestAlphaT = 1;
-        if (pt > 160) {
-          phase = 7;
-          pt = 0;
-        }
-      }
-      if (phase === 7) {
-        chestOpenT = 1;
-        glowAlphaT = 1;
-        darkT = 0.85;
-        if (pt > 60) textAlphaT = 1;
-        if (pt > 30 && pt % 3 === 0) spawnSparkles(chestCX, chestCY);
-        if (pt > 180) {
-          phase = 8;
-          pt = 0;
-        }
-      }
-      if (phase === 8) {
-        if (pt % 8 === 0) spawnSparkles(chestCX, chestCY);
-        if (pt > 180) {
+        if (pt > 30) textAlphaT = 1;
+        if (pt > 220) {
           phase = 9;
           pt = 0;
         }
@@ -624,11 +466,9 @@ export default function GobbleOverlay({
         topT = -350;
         botT = H + 350;
         darkT = 0;
-        chestAlphaT = 0;
-        glowAlphaT = 0;
         textAlphaT = 0;
         if (topY < -100) eyeAT = 0;
-        if (topY < -280 && dark < 0.03 && chestAlpha < 0.02) {
+        if (topY < -280 && dark < 0.03 && textAlpha < 0.02) {
           cancelled = true;
           onDone();
         }
@@ -652,7 +492,7 @@ export default function GobbleOverlay({
   }, [onDone, onChestReveal, payout, payoutSymbol, payoutUsd]);
 
   return (
-    <div className="fixed inset-0 z-50" style={{ width: "100vw", height: "100vh" }}>
+    <div className="fixed inset-0 z-[60]" style={{ width: "100vw", height: "100vh" }}>
       {/* SVG goo filter */}
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <defs>

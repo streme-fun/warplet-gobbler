@@ -75,10 +75,13 @@ export default function AuctionWinnerClaimGate({
         />
 
         <div className="text-center mb-6 sm:mb-8">
-          <p className="text-2xl sm:text-3xl md:text-4xl font-semibold tracking-tight text-base-content leading-tight">
-            Congratulations
+          <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-base-content/50">
+            You rescued a Warplet
           </p>
-          <div className="flex justify-center mt-3 sm:mt-4">
+          <h2 className="font-creepster gobble-title-shadow mt-1 text-4xl leading-[0.95] sm:text-6xl sm:leading-none font-normal tracking-wide uppercase text-secondary">
+            Congratulations
+          </h2>
+          <div className="flex justify-center mt-4 sm:mt-5">
             <div className="inline-flex max-w-full">
               <BidderAvatarName
                 address={winnerAddress}
@@ -91,13 +94,16 @@ export default function AuctionWinnerClaimGate({
               />
             </div>
           </div>
-          <p className="mt-4 sm:mt-5 text-lg sm:text-xl md:text-2xl text-base-content/90 font-medium leading-snug">
-            You rescued Warplet{" "}
-            <span className="text-secondary">#{tokenId}</span>
+          <p className="mt-4 sm:mt-5 text-base sm:text-lg text-base-content/80 font-medium leading-snug">
+            Warplet{" "}
+            <span className="font-mono tabular-nums text-secondary">
+              #{tokenId}
+            </span>{" "}
+            is yours
           </p>
-          <p className="mt-3 text-sm sm:text-base text-base-content/75 font-mono tabular-nums leading-snug">
-            with a {winAmountLabel}{" "}
-            <span className="text-base-content/60">{bidSymbol}</span> bid
+          <p className="mt-2 text-xs sm:text-sm text-base-content/55 font-mono tabular-nums leading-snug">
+            winning bid · {winAmountLabel}{" "}
+            <span className="text-secondary/80">${bidSymbol}</span>
           </p>
         </div>
 
@@ -140,10 +146,10 @@ export default function AuctionWinnerClaimGate({
               type="button"
               onClick={claim.onClaim}
               disabled={claimBusy || claimDone}
-              className="btn btn-success mb-8 sm:mb-4 min-w-[min(100%,240px)] uppercase tracking-wider text-sm shadow-md shadow-success/15"
+              className="gobble-btn-ghost-purple-invert mx-auto mb-8 flex w-full max-w-sm items-center justify-center gap-2 !text-xl !tracking-[2px] sm:mb-4 sm:!text-2xl"
             >
               {claimBusy ? (
-                <span className="loading loading-spinner loading-sm mr-2" />
+                <span className="loading loading-spinner loading-sm" />
               ) : null}
               {rescueStageCtaLabel(claim.stage)}
             </button>

@@ -945,6 +945,43 @@ body {
   }
 }
 
+/* ============ 02c · GHOST OUTLINE (PURPLE, INVERTED) ============ */
+.gobble-btn-ghost-purple-invert {
+  background: #150a2a;
+  color: #c7b3ff;
+  border: 2px solid #c7b3ff;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-family: var(--font-creepster), cursive;
+  font-size: 16px;
+  letter-spacing: 2px;
+  line-height: 1.1;
+  cursor: pointer;
+  box-shadow:
+    0 0 16px rgba(199, 179, 255, 0.22),
+    inset 0 0 12px rgba(199, 179, 255, 0.08);
+  transition: all 0.2s;
+}
+.gobble-btn-ghost-purple-invert:hover:not(:disabled) {
+  background: #241644;
+  color: #ddceff;
+  border-color: #ddceff;
+  box-shadow:
+    0 0 28px rgba(199, 179, 255, 0.4),
+    inset 0 0 18px rgba(199, 179, 255, 0.15);
+}
+.gobble-btn-ghost-purple-invert:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+@media (max-width: 640px) {
+  .gobble-btn-ghost-purple-invert {
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    padding: 8px 14px;
+  }
+}
+
 /* ============ 03 · TORN CURTAIN ============ */
 .gobble-btn-torn {
   background: linear-gradient(180deg, #5ff5f5 0%, #1ba8a8 100%);

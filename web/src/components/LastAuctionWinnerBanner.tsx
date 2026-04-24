@@ -54,7 +54,7 @@ export function rescueStageCtaLabel(stage: RescueStage): string {
     case "success":
       return "Rescued!";
     default:
-      return "Claim warplet";
+      return "Claim Warplets";
   }
 }
 

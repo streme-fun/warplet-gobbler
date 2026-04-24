@@ -768,21 +768,6 @@ export default function AuctionLiveHero({
               </p>
             </div>
 
-            {showExtendSuccessBanner && !idleNoChainAuction && !sold ? (
-              <div
-                className="w-full rounded-lg border border-primary/35 bg-primary/10 px-3 py-2.5 text-center shadow-[0_0_24px_-8px_rgba(0,245,255,0.35)] animate-fade-up shrink-0"
-                role="status"
-              >
-                <p className="text-sm font-medium text-primary/95">
-                  Listing extended
-                </p>
-                <p className="text-xs text-base-content/60 mt-1 leading-relaxed">
-                  The chain has opened a fresh window — bidding picks up from
-                  the updated countdown.
-                </p>
-              </div>
-            ) : null}
-
             <div
               ref={renewFlashRef}
               className="flex min-h-0 w-full flex-1 flex-col items-center justify-center overflow-y-auto transition-[box-shadow] duration-500"
@@ -843,9 +828,19 @@ export default function AuctionLiveHero({
                           )}
                           {auctionExpiredOnChain ? (
                             <p className="mx-auto max-w-sm text-[10px] sm:text-[11px] text-warning/85 mt-1.5 leading-snug">
-                              {!hasNextAuctionToken
-                                ? "Auction ended - settle to claim your NFT"
-                                : "Auction ended - start next auction to claim your NFT"}
+                              {(() => {
+                                const viewerIsWinner =
+                                  topBidder != null &&
+                                  viewerAddress != null &&
+                                  !isAddressEqual(topBidder, zeroAddress) &&
+                                  isAddressEqual(topBidder, viewerAddress);
+                                if (viewerIsWinner) {
+                                  return !hasNextAuctionToken
+                                    ? "Auction ended — settle to claim your NFT"
+                                    : "Auction ended — start next auction to claim your NFT";
+                                }
+                                return "Auction ended — awaiting settlement";
+                              })()}
                             </p>
                           ) : null}
                         </div>
