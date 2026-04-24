@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   other: {
     "fc:miniapp": JSON.stringify({
       version: "1",
-      imageUrl: `https://frm.lol/api/gobbler/frimg/mini/auction.png`,
+      imageUrl: `https://api.warpletgobbler.xyz/api/gobbler/frimg/mini/auction.png`,
       button: {
         title: "Launch",
         action: {

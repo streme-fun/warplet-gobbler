@@ -12,7 +12,7 @@
     "name": "Warplet Gobbler",
     "iconUrl": "https://warpletgobbler.xyz/icon.jpeg",
     "homeUrl": "https://warpletgobbler.xyz/",
-    "imageUrl": "https://frm.lol/api/gobbler/frimg/mini/auction.png",
+    "imageUrl": "https://api.warpletgobbler.xyz/api/gobbler/frimg/mini/auction.png",
     "buttonTitle": "Launch",
     "splashImageUrl": "https://warpletgobbler.xyz/splash.png",
     "splashBackgroundColor": "#13111C",
