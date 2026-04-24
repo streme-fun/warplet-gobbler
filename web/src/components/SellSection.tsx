@@ -10,7 +10,7 @@ type PickerWarplet = {
   imageSrc: string;
 };
 
-const WARPLET_PICKER_SKELETON_COUNT = 8;
+const WARPLET_PICKER_SKELETON_COUNT = 3;
 
 type SellSectionProps = {
   claimBlocking: boolean;
@@ -36,6 +36,7 @@ type SellSectionProps = {
   isSelling: boolean;
   isWriting: boolean;
   sellError: string | null;
+  onConnectWallet: () => void;
   onSelectFid: (fid: number | null) => void;
   onSell: () => void;
   registerCardRef: (fid: number, el: HTMLButtonElement | null) => void;
@@ -62,6 +63,7 @@ export default function SellSection({
   isSelling,
   isWriting,
   sellError,
+  onConnectWallet,
   onSelectFid,
   onSell,
   registerCardRef,
@@ -72,9 +74,9 @@ export default function SellSection({
   };
 
   const buttonDisabled =
-    !!flyingFid || !selectedFid || !isConnected || isSelling || isWriting;
+    !!flyingFid || isSelling || isWriting || (isConnected && !selectedFid);
   const buttonLabel = !isConnected
-    ? "Connect wallet to sell"
+    ? "Connect Wallet to Sell"
     : ownedWarpletsLoading
       ? "downloading your warplets... "
       : isSelling || isWriting
@@ -266,9 +268,15 @@ export default function SellSection({
 
         <div className="mx-auto mt-8 sm:mt-10 flex justify-center">
           <button
-            className="gobble-btn-ghost"
+            className={`gobble-btn-ghost ${
+              !isConnected
+                ? "!font-sans !tracking-normal !text-xs !font-semibold sm:!text-sm"
+                : ""
+            }`}
             disabled={buttonDisabled}
-            onClick={selectedFid ? onSell : undefined}
+            onClick={
+              !isConnected ? onConnectWallet : selectedFid ? onSell : undefined
+            }
           >
             {buttonLabel}
           </button>

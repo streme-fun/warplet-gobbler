@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
-import { ConnectKitButton } from "connectkit";
+import { ConnectKitButton, useModal } from "connectkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits, type Address } from "viem";
 import { useMiniApp } from "@/hooks/useMiniApp";
@@ -591,6 +591,7 @@ function GobblerBootOverlay({
 export default function Home() {
   const { isLoaded, context, isMiniApp } = useMiniApp();
   const { isConnected } = useAccount();
+  const { setOpen: setConnectModalOpen } = useModal();
   const publicClient = usePublicClient();
   const [gobbling, setGobbling] = useState(false);
   const [warpletVisible, setWarpletVisible] = useState(true);
@@ -708,6 +709,9 @@ export default function Home() {
   const [claimBlocking, setClaimBlocking] = useState<boolean | null>(null);
   const claimBlockingResolved = claimBlocking !== null;
   const claimBlockingActive = claimBlocking ?? false;
+  const handleConnectWallet = useCallback(() => {
+    setConnectModalOpen(true);
+  }, [setConnectModalOpen]);
   const [initialViewResolved, setInitialViewResolved] = useState(false);
   const [bootDone, setBootDone] = useState(false);
   /** Hysteresis for jump-link label — avoids flip-flopping when scroll sits near 50% blend. */
@@ -1141,7 +1145,7 @@ export default function Home() {
       <button
         type="button"
         onClick={() => toggleView(activeView === "buy" ? "sell" : "buy")}
-        className={`group fixed left-0 bottom-0 z-[55] flex items-center gap-1.5 pl-[max(1rem,env(safe-area-inset-left))] py-3 sm:py-4 text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
+        className={`group fixed right-0 bottom-0 z-[55] flex items-center gap-1.5 pr-[max(1rem,env(safe-area-inset-right))] py-3 sm:py-4 text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
           gobbling || buyingFid || claimBlockingActive || !bootDone
             ? "pointer-events-none opacity-0 scale-[0.98]"
             : "opacity-100 scale-100"
@@ -1152,7 +1156,7 @@ export default function Home() {
             : "Scroll to buy section"
         }
       >
-        <span className="relative inline-grid place-items-start">
+        <span className="relative inline-grid place-items-end">
           <span
             className={`col-start-1 row-start-1 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out ${
               activeView === "buy"
@@ -1161,7 +1165,7 @@ export default function Home() {
             }`}
             aria-hidden={activeView !== "buy"}
           >
-            sell
+            bid
           </span>
           <span
             className={`col-start-1 row-start-1 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out ${
@@ -1171,44 +1175,22 @@ export default function Home() {
             }`}
             aria-hidden={activeView !== "sell"}
           >
-            buy
+            sell
           </span>
         </span>
-        <span
-          className="relative inline-flex h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 items-center justify-center"
+        <svg
+          className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
           aria-hidden
         >
-          <svg
-            className={`absolute transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out ${
-              activeView === "buy"
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 translate-y-2 scale-90"
-            }`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-          <svg
-            className={`absolute transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out ${
-              activeView === "sell"
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 -translate-y-2 scale-90"
-            }`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m18 15-6-6-6 6" />
-          </svg>
-        </span>
+          <path d="M7 4v16m0 0l-3-3m3 3l3-3" />
+          <path d="M17 20V4m0 0l-3 3m3-3l3 3" />
+        </svg>
       </button>
 
       <div
@@ -1262,10 +1244,10 @@ export default function Home() {
         {/* Claim gate: pt ≈ GobblePeek jaw + ~2rem breathing room + safe-area */}
         <section
           id="auction"
-          className={`relative z-10 flex flex-col items-center px-4 sm:px-6 ${
+          className={`relative z-10 flex flex-col items-center px-2 sm:px-6 ${
             claimBlockingActive
               ? "pt-[calc(env(safe-area-inset-top)+8.0625rem)] sm:pt-[calc(env(safe-area-inset-top)+11.625rem)] pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-16"
-              : "pt-36 sm:pt-56 pb-12 sm:pb-20"
+              : "pt-32 sm:pt-56 pb-12 sm:pb-20"
           }`}
         >
           <GobblerAuctionSection
@@ -1305,6 +1287,7 @@ export default function Home() {
           isSelling={isSelling}
           isWriting={isWriting}
           sellError={sellError}
+          onConnectWallet={handleConnectWallet}
           onSelectFid={setSelectedFid}
           onSell={() => void handleSell()}
           registerCardRef={(fid, el) => {
@@ -1351,7 +1334,7 @@ function CaFooter({ pointerThrough = false }: { pointerThrough?: boolean }) {
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm py-3 sm:py-4 pr-4 pl-[calc(5rem+env(safe-area-inset-left))] text-right select-all ${
+      className={`fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm py-3 sm:py-4 pl-4 pr-[calc(5rem+env(safe-area-inset-right))] text-left select-all ${
         pointerThrough ? "pointer-events-none cursor-default" : "cursor-pointer"
       }`}
       onClick={pointerThrough ? undefined : handleCopy}

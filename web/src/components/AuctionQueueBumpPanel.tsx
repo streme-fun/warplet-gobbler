@@ -1,5 +1,8 @@
 "use client";
 
+import { useModal } from "connectkit";
+import { useAccount } from "wagmi";
+
 export default function AuctionQueueBumpPanel({
   bidSymbol,
   hasQueueSelection,
@@ -21,22 +24,40 @@ export default function AuctionQueueBumpPanel({
   onBump: () => void;
   isBumping: boolean;
 }) {
+  const { isConnected } = useAccount();
+  const { setOpen: setConnectModalOpen } = useModal();
+  const walletDisconnected = !isConnected;
   const buttonDisabled =
     !hasQueueSelection ||
     alreadyFirst ||
-    bumpDisabled ||
     isBumping ||
-    !bumpLiveReady;
+    !bumpLiveReady ||
+    (!walletDisconnected && bumpDisabled);
   const tokenLabel = bidSymbol.startsWith("$") ? bidSymbol : `$${bidSymbol}`;
   /** Filled CTA only when a real skip is available (not e.g. dev CTA unplugged). */
   const filledSecondary =
-    hasQueueSelection && !alreadyFirst && bumpLiveReady && !bumpDisabled;
+    hasQueueSelection &&
+    !alreadyFirst &&
+    bumpLiveReady &&
+    (walletDisconnected || !bumpDisabled);
 
-  const buttonLabel = isBumping
-    ? "Confirm…"
-    : alreadyFirst
-      ? "Already #1 in line"
-      : "Skip the line";
+  const buttonLabel = isBumping ? (
+    "Confirm…"
+  ) : walletDisconnected && hasQueueSelection && !alreadyFirst ? (
+    "Connect Wallet to Skip the Line"
+  ) : alreadyFirst ? (
+    "Already #1 in line"
+  ) : hasQueueSelection ? (
+    <span className="inline-flex items-center gap-1.5">
+      <span>Skip the line</span>
+      <span className="text-secondary/60">·</span>
+      <span className="font-semibold tabular-nums text-secondary/90">
+        1M {tokenLabel}
+      </span>
+    </span>
+  ) : (
+    "Pick a Warplet to skip the line"
+  );
 
   return (
     <div className="w-full flex flex-col items-center gap-2 text-center">
@@ -45,34 +66,21 @@ export default function AuctionQueueBumpPanel({
           {bumpHint}
         </p>
       ) : null}
-      <div className="flex min-h-[3rem] w-full max-w-sm flex-col items-center justify-center px-1">
-        {alreadyFirst ? (
-          <p className="text-sm leading-snug text-base-content/55">
-            This Warplet is already at the front of the queue. Pick one behind
-            them to skip the line.
-          </p>
-        ) : hasQueueSelection ? (
-          <p className="text-sm leading-snug text-base-content/70">
-            Pay 1M{" "}
-            <span className="font-semibold tabular-nums text-secondary/95">
-              {tokenLabel}
-            </span>
-          </p>
-        ) : (
-          <p className="text-sm leading-snug text-base-content/70">
-            Pick a Warplet to skip the line
-          </p>
-        )}
-      </div>
+      {alreadyFirst ? (
+        <p className="max-w-sm text-xs leading-snug text-base-content/55">
+          This Warplet is already at the front of the queue. Pick one behind
+          them to skip the line.
+        </p>
+      ) : null}
       <button
         type="button"
-        className={`btn w-full max-w-sm mx-auto mt-1 transition-shadow ${
+        className={`btn btn-sm w-full max-w-sm mx-auto text-sm font-medium normal-case tracking-normal transition-colors ${
           filledSecondary
-            ? "btn-secondary hover:shadow-lg hover:shadow-secondary/25"
-            : "border border-secondary/30 text-secondary/50 hover:border-secondary/50 hover:text-secondary/70"
+            ? "btn-outline btn-secondary hover:bg-secondary/15"
+            : "btn-ghost border border-base-content/15 text-base-content/55 hover:bg-base-content/5"
         }`}
         disabled={buttonDisabled}
-        onClick={onBump}
+        onClick={walletDisconnected ? () => setConnectModalOpen(true) : onBump}
       >
         {buttonLabel}
       </button>

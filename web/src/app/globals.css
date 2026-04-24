@@ -42,6 +42,27 @@ body {
     0 0 56px rgba(95, 245, 245, 0.35);
 }
 
+.auction-title-jagged {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.36rem 0.85rem 0.44rem;
+  background: linear-gradient(180deg, #3a2a68 0%, #21163f 100%);
+  color: #8b73ff;
+  clip-path: polygon(
+    0% 16%, 6% 6%, 12% 18%, 18% 5%, 24% 14%, 30% 7%, 36% 17%,
+    42% 5%, 48% 16%, 54% 7%, 60% 18%, 66% 4%, 72% 15%, 78% 7%,
+    84% 17%, 90% 6%, 96% 14%, 100% 5%,
+    100% 86%, 94% 95%, 88% 82%, 82% 96%, 76% 85%, 70% 94%,
+    64% 84%, 58% 96%, 52% 83%, 46% 95%, 40% 84%, 34% 96%,
+    28% 85%, 22% 94%, 16% 82%, 10% 95%, 4% 86%, 0% 96%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  filter: drop-shadow(0 0 14px rgba(95, 245, 245, 0.34));
+  text-shadow:
+    1px 1px 0 rgba(0, 0, 0, 0.45),
+    0 0 12px rgba(139, 115, 255, 0.55);
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -886,6 +907,41 @@ body {
     font-size: 18px;
     letter-spacing: 2px;
     padding: 12px 28px;
+  }
+}
+
+/* ============ 02b · GHOST OUTLINE (PURPLE) ============ */
+.gobble-btn-ghost-purple {
+  background: #a78bff;
+  color: #150a2a;
+  border: 2px solid #150a2a;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-family: var(--font-creepster), cursive;
+  font-size: 16px;
+  letter-spacing: 2px;
+  line-height: 1.1;
+  cursor: pointer;
+  box-shadow:
+    0 0 16px rgba(123, 97, 255, 0.35),
+    inset 0 0 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+.gobble-btn-ghost-purple:hover:not(:disabled) {
+  background: #bea3ff;
+  box-shadow:
+    0 0 28px rgba(123, 97, 255, 0.55),
+    inset 0 0 18px rgba(0, 0, 0, 0.15);
+}
+.gobble-btn-ghost-purple:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+@media (max-width: 640px) {
+  .gobble-btn-ghost-purple {
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    padding: 8px 14px;
   }
 }
 

@@ -20,14 +20,14 @@ export default function AuctionLiveHeroSkeleton({
 
   return (
     <div className="auction-warplet-aura rounded-xl">
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(272px,2.4fr)_minmax(17rem,2fr)] sm:items-stretch gap-0 overflow-hidden rounded-[0.82rem] border border-secondary/25 bg-base-100/25 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
+      <div className="mx-auto grid w-full max-w-96 grid-cols-[minmax(8.75rem,0.9fr)_minmax(0,1fr)] gap-0 overflow-hidden rounded-[0.82rem] border border-secondary/25 bg-base-100/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_18px_48px_-30px_rgba(0,0,0,0.9)] sm:max-w-none sm:grid-cols-[minmax(272px,2.4fr)_minmax(17rem,2fr)] sm:items-stretch sm:bg-base-100/25">
         <div className="relative flex w-full flex-col bg-gradient-to-br from-base-200/45 to-base-300/25 sm:min-h-0 sm:h-full">
-          <div className="relative aspect-square w-full min-h-0 overflow-hidden rounded-none sm:aspect-auto sm:flex-1 sm:rounded-l-[0.78rem]">
+          <div className="relative h-full min-h-[10.5rem] w-full overflow-hidden rounded-l-[0.78rem] sm:min-h-0 sm:flex-1">
             <div className="skeleton absolute inset-0 min-h-0 w-full" />
           </div>
         </div>
 
-        <div className="flex min-h-0 min-w-0 max-w-[min(100%,26rem)] flex-col gap-3 border-t border-base-content/10 bg-base-100/20 px-3 py-3 text-center sm:h-full sm:border-l sm:border-t-0 sm:px-3.5 sm:py-3.5 lg:max-w-[28rem]">
+        <div className="flex min-h-0 min-w-0 flex-col gap-2 border-l border-base-content/10 bg-base-100/35 px-2.5 py-2 text-center sm:h-full sm:max-w-[26rem] sm:gap-3 sm:bg-base-100/20 sm:px-3.5 sm:py-3.5 lg:max-w-[28rem]">
           <div className="shrink-0 space-y-2 border-b border-base-content/10 pb-2">
             <div className="skeleton mx-auto h-7 w-[min(100%,19rem)] rounded-md sm:h-8" />
             <div className="skeleton mx-auto h-3 w-full max-w-md rounded-md" />

@@ -1121,7 +1121,7 @@ export default function GobblerAuctionSection({
           }
         : showExpiredPostAuction && !hasChainBid && !auctionPaused
           ? {
-              label: "Restart Auction",
+              label: "Start Next Auction",
               hint: "",
               onSubmit: handleExtendAuction,
               loading: settlePending,
@@ -1131,14 +1131,7 @@ export default function GobblerAuctionSection({
             }
           : null;
 
-  const bidInviteCopy =
-    onChainMode &&
-    liveAuction &&
-    !auctionExpired &&
-    showNoBids &&
-    !auctionReadError
-      ? "Want this Warplet? Place a bid."
-      : null;
+  const bidInviteCopy = null;
 
   const onChainLiveQueueEmpty =
     queueReadsEnabled && liveAuction && chainQueuedIds.length === 0;
@@ -1146,7 +1139,7 @@ export default function GobblerAuctionSection({
   const settledFooterCopy =
     !auctionSettled || startAuctionQueueEmpty
       ? null
-      : "Auction settled. Start the next auction.";
+      : "Auction ended. Start the next auction.";
 
   if (claimBlocking && claimFocusRecord && claimAction != null) {
     return (
@@ -1329,21 +1322,12 @@ export default function GobblerAuctionSection({
                       queueStripOverflow ? "" : "mx-auto"
                     }`}
                   >
-                    <div className="sticky left-0 z-20 shrink-0 self-start isolate">
-                      <div className="rounded-xl bg-base-100/95 shadow-[8px_0_20px_-6px_rgba(19,17,28,0.85)] ring-1 ring-base-content/[0.08] backdrop-blur-sm supports-[backdrop-filter]:bg-base-100/80">
-                        {showQueueStripSkeleton ? (
-                          <QueueStripCellChrome
-                            shuffleVersion={0}
-                            slotIndex={0}
-                            className="shrink-0"
-                          >
-                            <AuctionQueueHeadSlot
-                              bumpPhase="idle"
-                              selectionPreviewFid={null}
-                              bumpPreviewFid={null}
-                            />
-                          </QueueStripCellChrome>
-                        ) : (
+                    {!showQueueStripSkeleton &&
+                    (bumpVisualPhase !== "idle" ||
+                      (selectedInQueueFid != null && selectedQueueIdx > 0) ||
+                      bumpAnimatingFid != null) ? (
+                      <div className="sticky left-0 z-20 shrink-0 self-start isolate">
+                        <div className="rounded-xl bg-base-100/95 shadow-[8px_0_20px_-6px_rgba(19,17,28,0.85)] ring-1 ring-base-content/[0.08] backdrop-blur-sm supports-[backdrop-filter]:bg-base-100/80">
                           <QueueStripCellChrome
                             shuffleVersion={queueShuffleVersion}
                             slotIndex={0}
@@ -1361,9 +1345,9 @@ export default function GobblerAuctionSection({
                               bumpPreviewFid={bumpAnimatingFid}
                             />
                           </QueueStripCellChrome>
-                        )}
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                     {showQueueStripSkeleton
                       ? Array.from(
                           { length: QUEUE_STRIP_SKELETON_COUNT },
