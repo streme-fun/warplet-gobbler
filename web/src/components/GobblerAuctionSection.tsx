@@ -1302,10 +1302,10 @@ export default function GobblerAuctionSection({
           <div className="w-full flex flex-col items-center">
             <div className="w-full pb-2 pt-1 px-1">
               {/*
-                One scroll row: [next-slot empty / head][#2][#3]…
-                - Empty slot is always the flex item before the first queued Warplet (place #2).
+                One scroll row: [On Deck][#2][#3]…
+                - The first queued Warplet owns the left-most visible slot.
                 - Short queue: whole row is mx-auto (cluster sits in the middle, gap-2 next to #2).
-                - Long queue: row hugs the left; horizontal scroll keeps the head sticky on the left.
+                - Long queue: row hugs the left; horizontal scroll keeps the active bump preview sticky.
               */}
               <div className="relative w-full min-h-[7rem] sm:min-h-[9rem]">
                 <QueueBumpCutStrip
@@ -1323,9 +1323,7 @@ export default function GobblerAuctionSection({
                     }`}
                   >
                     {!showQueueStripSkeleton &&
-                    (bumpVisualPhase !== "idle" ||
-                      (selectedInQueueFid != null && selectedQueueIdx > 0) ||
-                      bumpAnimatingFid != null) ? (
+                    (bumpVisualPhase !== "idle" || bumpAnimatingFid != null) ? (
                       <div className="sticky left-0 z-20 shrink-0 self-start isolate">
                         <div className="rounded-xl bg-base-100/95 shadow-[8px_0_20px_-6px_rgba(19,17,28,0.85)] ring-1 ring-base-content/[0.08] backdrop-blur-sm supports-[backdrop-filter]:bg-base-100/80">
                           <QueueStripCellChrome
@@ -1335,13 +1333,7 @@ export default function GobblerAuctionSection({
                           >
                             <AuctionQueueHeadSlot
                               bumpPhase={bumpVisualPhase}
-                              selectionPreviewFid={
-                                bumpVisualPhase === "idle" &&
-                                selectedInQueueFid != null &&
-                                selectedQueueIdx > 0
-                                  ? selectedInQueueFid
-                                  : null
-                              }
+                              selectionPreviewFid={null}
                               bumpPreviewFid={bumpAnimatingFid}
                             />
                           </QueueStripCellChrome>
