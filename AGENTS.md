@@ -4,9 +4,10 @@
 
 WarpletGobbler is a PunkStrategy-style flywheel for [Warplets](https://opensea.io/collection/the-warplets-farcaster) NFTs on Base, using Superfluid streaming. Three-part system:
 
-1. **DutchAuction ("The Gobbler")** — USDCx streams in via Superfluid; deposit a Warplet NFT to drain the pot
-2. **AuctionSell** — Gobbled Warplets auctioned for the bid token (`NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL`; stub, adapted from DegenDogs)
-3. **StratStaking** — Reuses existing streme.fun staking contract
+1. **FeeHandler** — Collects WETH LP fees, swaps to the streaming SuperToken ($WARPGOBB, launched via Streme), opens the Superfluid stream into the Gobbler
+2. **DutchAuction ("The Gobbler")** — $WARPGOBB streams in via Superfluid; deposit a Warplet NFT to drain the pot
+3. **AuctionSell** — Gobbled Warplets auctioned for the bid token (`NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL`); adapted from DegenDogs
+4. **StratStaking** — Reuses existing streme.fun staking contract; auction proceeds flow to stakers
 
 ## Monorepo Structure
 
@@ -60,7 +61,7 @@ forge fmt             # format Solidity
   - `FlyingWarplet.tsx` — fly-to-center transition animation
 - **Mock data** (`src/lib/mock-data.ts`) — all mock constants (prices, auctions, user warplets)
 - **Providers** (`src/app/providers.tsx`) — wagmi + ConnectKit + React Query, configured for Base chain only
-- **Contract addresses** (`src/lib/contracts.ts`) — placeholder zeros, update after deployment
+- **Contract addresses** (`src/lib/contracts.ts`) — read from `NEXT_PUBLIC_*` env vars, fall back to `ZERO_ADDRESS` if unset
 - **ABIs** go in `src/abi/` (copied from `contracts/out/`)
 - **Hooks** go in `src/hooks/` (wagmi hooks for contract interactions)
 - **Styling** — Tailwind CSS 3 + daisyUI with a custom `warplet` dark theme. All custom animations (breathing glow, parallax, abyss tendrils, void particles) are in `globals.css`
@@ -71,12 +72,15 @@ forge fmt             # format Solidity
 ### Contracts (`contracts/`)
 
 - Solidity 0.8.26 with optimizer (200 runs)
-- `DutchAuction.sol` — functional, receives Superfluid USDCx stream, allows Warplet deposit to drain pot
-- `AuctionSell.sol` — stub (all functions revert "not implemented")
+- `FeeHandler.sol` — functional, claims WETH LP fees, swaps to $WARPGOBB via StremeZapUniversal, streams to Gobbler via Superfluid CFA
+- `DutchAuction.sol` — functional, receives Superfluid stream, allows Warplet deposit to drain pot
+- `AuctionSell.sol` — functional, FIFO queue + bid token auction for gobbled Warplets, proceeds route to staking
+- `GobbledWarplets.sol` — functional, receipt NFT minted when a Warplet is gobbled
+- `GobbleSniper.sol` — functional, arbitrage helper for gobble-then-relist
 - `StratStaking.sol` — placeholder, reuses existing streme.fun contract
 - Interfaces in `src/interfaces/`
-- Fork testing configured against Base mainnet (`BASE_RPC_URL` in `.env`)
-- No tests or deploy scripts exist yet
+- Unit tests in `test/`, fork tests in `test/fork/` (Base mainnet via `BASE_RPC_URL` in `.env`)
+- Deploy scripts in `script/` for all functional contracts
 
 ### Design System
 

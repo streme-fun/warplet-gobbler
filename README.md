@@ -25,7 +25,7 @@ LP Fees (WETH) ──▸ FeeHandler ──swap──▸ $WARPGOBB (SuperToken; s
 
 2. **The Gobbler** (`DutchAuction`) — Receives the Superfluid stream. The pot grows over time. Anyone can deposit a Warplet NFT and drain the full balance. Arbitrageurs buy Warplets on OpenSea when the pot exceeds floor price, deposit them, and profit the difference. Gobbled NFTs are sent to the `nftReserve` address.
 
-3. **Auction Sell** — Gobbled Warplets are auctioned to the highest bidder, denominated in the auction bid token (`NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL`, defaulting to the payment symbol). *(stub — not yet implemented)*
+3. **Auction Sell** — Gobbled Warplets are auctioned to the highest bidder, denominated in the auction bid token (`NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL`, defaulting to the payment symbol).
 
 4. **Staking** — Auction proceeds flow to stakers, closing the flywheel. *(reuses existing streme.fun staking contract)*
 
@@ -35,14 +35,18 @@ LP Fees (WETH) ──▸ FeeHandler ──swap──▸ $WARPGOBB (SuperToken; s
 |---|---|---|
 | `FeeHandler.sol` | **functional** | Claims LP fees (WETH), swaps to the streaming token via StremeZapUniversal, streams to auction via Superfluid CFA. Role-based access (`DEFAULT_ADMIN_ROLE`, `REBALANCER_ROLE`). |
 | `DutchAuction.sol` | **functional** | Receives the token stream; deposit a Warplet to drain the pot. |
-| `AuctionSell.sol` | stub | All functions revert "not implemented". |
-| `StratStaking.sol` | placeholder | Reuses existing streme.fun contract. |
+| `AuctionSell.sol` | **functional** | FIFO queue of gobbled Warplets; highest bid in the auction bid token wins, proceeds route to staking. Adapted from DegenDogs. |
+| `StratStaking.sol` | placeholder | Reuses existing streme.fun staking contract. |
 
 ### Test Coverage
 
 - `test/FeeHandler.t.sol` — Unit tests with mocked Superfluid host, CFA, GDA, LP factory, and zap contracts
 - `test/fork/FeeHandlerFork.t.sol` — Fork tests against Base mainnet (real SuperToken, noop LP/zap stubs)
 - `test/DutchAuction.t.sol` — Unit tests for gobble mechanics and constructor
+- `test/DutchAuctionV2.t.sol` — Fork tests for the live auction
+- `test/AuctionSell.t.sol` — Unit tests for the sell-side auction (bid queue, fills, cancellations)
+- `test/GobbledWarplets.t.sol` — Unit tests for the receipt NFT
+- `test/GobbleSniper.t.sol` — Tests for the arbitrage helper contract
 
 ## Monorepo Structure
 

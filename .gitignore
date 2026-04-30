@@ -33,3 +33,7 @@ dist/
 .next/
 *.tsbuildinfo
 .vercel
+
+#AI
+.claude/launch.json
+.claude/local
