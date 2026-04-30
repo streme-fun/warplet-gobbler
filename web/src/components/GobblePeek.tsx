@@ -18,14 +18,24 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     const ex = eyeCv.getContext("2d");
     if (!gx || !bx || !ex) return;
 
+    // Each canvas overhangs the viewport by EDGE_BLEED px on left/right so the
+    // blur(6px) + contrast(20) fringe that softens the canvas edge sits
+    // off-screen instead of bleeding the page background through the multiply
+    // blend at the visible viewport edges.
+    const EDGE_BLEED = 30;
     let W = window.innerWidth;
     let H = window.innerHeight;
-    gooCv.width = W;
-    gooCv.height = H;
-    backdropCv.width = W;
-    backdropCv.height = H;
-    eyeCv.width = W;
-    eyeCv.height = H;
+    // Render at native pixel density so orb edges (especially the eyes) stay
+    // crisp on retina screens instead of being upscaled by the browser.
+    const setupCanvas = (cv: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      cv.width = (W + EDGE_BLEED * 2) * dpr;
+      cv.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, EDGE_BLEED * dpr, 0);
+    };
+    setupCanvas(gooCv, gx);
+    setupCanvas(backdropCv, bx);
+    setupCanvas(eyeCv, ex);
 
     let cancelled = false;
     let time = 0;
@@ -145,58 +155,34 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
     regenerateBumps();
 
     function drawEyes(topJawY: number) {
-      ex!.clearRect(0, 0, W, H);
+      ex!.clearRect(-EDGE_BLEED, 0, W + EDGE_BLEED * 2, H);
 
       // Lerp eye reaction toward target
       eyeReact += (eyeReactTarget - eyeReact) * 0.08;
 
       const m = mobile();
-      const baseGlowR = m ? 60 : 120;
       const baseOrbR = m ? 16 : 30;
       const eyeOffset = m ? 35 : 65;
 
-      // React: eyes widen + glow intensifies
+      // React: eyes widen
       const r = eyeReact;
-      const glowR = baseGlowR + r * (m ? 30 : 60);
       const orbR = baseOrbR + r * (m ? 6 : 12);
-      const glowIntensity = 0.1 + r * 0.35;
-      const glowMid = 0.04 + r * 0.15;
-      // Shift color toward secondary purple (#7B61FF) when reacting
-      const glowColor =
-        r > 0.01
-          ? `rgba(${Math.round(220 - r * 97)},${Math.round(200 - r * 103)},255,${glowIntensity})`
-          : `rgba(220,200,255,${glowIntensity})`;
-      const glowMidColor =
-        r > 0.01
-          ? `rgba(${Math.round(160 - r * 37)},${Math.round(120 - r * 23)},${Math.round(220 + r * 35)},${glowMid})`
-          : `rgba(160,120,220,${glowMid})`;
 
       const t = time * 0.01;
       // Eye y follows the curved jaw edge at each eye's x position so the
       // eyes sit just above the jaw on both flat (mobile) and bowed (desktop).
       const eyeXs = [W * 0.34, W * 0.66];
+      const orbColor =
+        r > 0.01
+          ? `rgba(${Math.round(255 - r * 132)},${Math.round(245 - r * 148)},255,1)`
+          : "rgba(255,245,255,1)";
       for (const eyeX of eyeXs) {
         const ey =
           topJawY + edgeOffsetTop(eyeX) - eyeOffset + Math.sin(t * 0.6) * 2;
-        ex!.save();
-        // Ambient glow
-        const g1 = ex!.createRadialGradient(eyeX, ey, 0, eyeX, ey, glowR);
-        g1.addColorStop(0, glowColor);
-        g1.addColorStop(0.3, glowMidColor);
-        g1.addColorStop(1, "rgba(0,0,0,0)");
-        ex!.fillStyle = g1;
-        ex!.beginPath();
-        ex!.arc(eyeX, ey, glowR, 0, Math.PI * 2);
-        ex!.fill();
-        // Eye orb
         ex!.beginPath();
         ex!.arc(eyeX, ey, orbR, 0, Math.PI * 2);
-        ex!.fillStyle =
-          r > 0.01
-            ? `rgba(${Math.round(255 - r * 132)},${Math.round(245 - r * 148)},255,1)`
-            : "rgba(255,245,255,1)";
+        ex!.fillStyle = orbColor;
         ex!.fill();
-        ex!.restore();
       }
     }
 
@@ -215,7 +201,7 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       topY = restTop() + breath;
       botY = H - footerOverlay() - restBot() - breath;
 
-      gx!.clearRect(0, 0, W, H);
+      gx!.clearRect(-EDGE_BLEED, 0, W + EDGE_BLEED * 2, H);
 
       const t = time * 0.007;
       gx!.fillStyle = VC;
@@ -262,14 +248,14 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
         botY - edgeOffsetBot(x) - 4 - botWaveMax;
 
       // Solid black below the goo band (no blur) — avoids losing the lip curve.
-      bx!.clearRect(0, 0, W, H);
+      bx!.clearRect(-EDGE_BLEED, 0, W + EDGE_BLEED * 2, H);
       bx!.fillStyle = VC;
       const bandBottomY = bottomLipY(W * 0.5) + BOTTOM_JAW_GOOPY_DEPTH;
       if (bandBottomY < H) {
         bx!.fillRect(
-          0,
+          -EDGE_BLEED,
           bandBottomY - JAW_BACKDROP_OVERLAP,
-          W,
+          W + EDGE_BLEED * 2,
           H - bandBottomY + JAW_BACKDROP_OVERLAP
         );
       }
@@ -315,12 +301,9 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       if (!gooCv || !backdropCv || !eyeCv) return;
       W = window.innerWidth;
       H = window.innerHeight;
-      gooCv.width = W;
-      gooCv.height = H;
-      backdropCv.width = W;
-      backdropCv.height = H;
-      eyeCv.width = W;
-      eyeCv.height = H;
+      setupCanvas(gooCv, gx);
+      setupCanvas(backdropCv, bx);
+      setupCanvas(eyeCv, ex);
       topY = restTop();
       botY = H - footerOverlay() - restBot();
       regenerateBumps();
@@ -340,9 +323,10 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       {/* Unfiltered fill below the bottom goo band (see BOTTOM_JAW_GOOPY_DEPTH) */}
       <canvas
         ref={jawBackdropRef}
-        className="fixed inset-0 pointer-events-none transition-opacity duration-500"
+        className="fixed top-0 pointer-events-none transition-opacity duration-500"
         style={{
-          width: "100vw",
+          left: "-30px",
+          width: "calc(100vw + 60px)",
           height: "100vh",
           zIndex: 38,
           opacity: hidden ? 0 : 1,
@@ -356,9 +340,10 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
           filter: url() was CPU-rasterized full-viewport every frame in WebKit,
           which tanked ambient framerate. This stack is GPU-composited. */}
       <div
-        className="fixed inset-0 pointer-events-none transition-opacity duration-500"
+        className="fixed top-0 pointer-events-none transition-opacity duration-500"
         style={{
-          width: "100vw",
+          left: "-30px",
+          width: "calc(100vw + 60px)",
           height: "100vh",
           zIndex: 40,
           background: "#fff",
@@ -376,9 +361,10 @@ export default function GobblePeek({ hidden = false }: { hidden?: boolean }) {
       {/* Crisp eye canvas (no goo filter) */}
       <canvas
         ref={eyeRef}
-        className="fixed inset-0 pointer-events-none transition-opacity duration-500"
+        className="fixed top-0 pointer-events-none transition-opacity duration-500"
         style={{
-          width: "100vw",
+          left: "-30px",
+          width: "calc(100vw + 60px)",
           height: "100vh",
           zIndex: 46,
           opacity: hidden ? 0 : 1,

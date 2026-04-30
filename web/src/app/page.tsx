@@ -25,6 +25,7 @@ import BuyOverlay from "@/components/BuyOverlay";
 import GobblerAuctionSection from "@/components/GobblerAuctionSection";
 import FlyingWarplet from "@/components/FlyingWarplet";
 import SellSection from "@/components/SellSection";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import { warpletImageSrc } from "@/lib/warplet-image-src";
 import {
   GOBBLE_TRANSACTION_REVERTED_FRIENDLY,
@@ -1134,18 +1135,30 @@ export default function Home() {
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
-            d="M0,0 L0,16 Q80,18 160,10 Q240,2 320,6 Q400,14 480,8 Q540,2 600,2 Q660,2 720,8 Q800,14 880,6 Q960,2 1040,10 Q1120,18 1200,16 L1200,0 Z"
+            d="M0,0 L0,20 Q40,20 60,18 Q120,15 160,10 Q240,2 320,6 Q400,14 480,8 Q540,2 600,2 Q660,2 720,8 Q800,14 880,6 Q960,2 1040,10 Q1080,15 1140,18 Q1160,20 1200,20 L1200,0 Z"
             fill="#000000"
             fillOpacity="1"
           />
         </svg>
       </nav>
 
-      {/* Buy ↔ Sell — text jump link, bottom-left on the same line as the CA footer */}
+      {/* Mobile bottom nav — replaces the corner toggle on phones */}
+      <MobileBottomNav
+        activeView={activeView}
+        onSelect={toggleView}
+        hidden={
+          gobbling ||
+          buyingFid != null ||
+          claimBlockingActive ||
+          !bootDone
+        }
+      />
+
+      {/* Buy ↔ Sell — text jump link, bottom-right (desktop only; mobile uses MobileBottomNav) */}
       <button
         type="button"
         onClick={() => toggleView(activeView === "buy" ? "sell" : "buy")}
-        className={`group fixed right-0 bottom-0 z-[55] flex items-center gap-1.5 pr-[max(1rem,env(safe-area-inset-right))] py-3 sm:py-4 text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
+        className={`group fixed right-0 bottom-0 z-[55] hidden sm:flex items-center gap-1.5 pr-[max(1rem,env(safe-area-inset-right))] py-3 sm:py-4 text-xs sm:text-sm font-medium tracking-[0.12em] uppercase text-white/80 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-200 motion-reduce:ease-out hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-safe:hover:scale-[1.02] ${
           gobbling || buyingFid || claimBlockingActive || !bootDone
             ? "pointer-events-none opacity-0 scale-[0.98]"
             : "opacity-100 scale-100"
@@ -1334,7 +1347,7 @@ function CaFooter({ pointerThrough = false }: { pointerThrough?: boolean }) {
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-[50] bg-black/90 backdrop-blur-sm py-3 sm:py-4 pl-4 pr-[calc(5rem+env(safe-area-inset-right))] text-left select-all ${
+      className={`fixed bottom-0 left-0 right-0 z-[50] hidden sm:block bg-black/90 backdrop-blur-sm py-3 sm:py-4 pl-4 pr-[calc(5rem+env(safe-area-inset-right))] text-left select-all ${
         pointerThrough ? "pointer-events-none cursor-default" : "cursor-pointer"
       }`}
       onClick={pointerThrough ? undefined : handleCopy}

@@ -97,7 +97,7 @@ export default function SellSection({
   return (
     <section
       id="sell-section"
-      className="relative z-10 min-h-screen flex flex-col items-center justify-center px-2 sm:px-6 pt-16 sm:pt-20 sm:pb-8"
+      className="relative z-10 min-h-screen flex flex-col items-center justify-center px-2 sm:px-6 pt-16 sm:pt-20 pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:pb-8"
     >
       <div className="text-center animate-fade-up-delay-1 mt-8 sm:mt-16">
         <h2 className="text-lg sm:text-2xl tracking-wide">
