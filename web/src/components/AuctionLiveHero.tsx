@@ -217,10 +217,15 @@ function StartNewAuctionPanel({
 }: {
   cfg: AuctionLiveHeroStartNewAuction;
 }) {
-  const { isConnected } = useAccount();
+  const { isDisconnected, isReconnecting, isConnecting } = useAccount();
   const { setOpen: setConnectModalOpen } = useModal();
   const [pressPulse, setPressPulse] = useState(false);
-  const walletDisconnected = !isConnected;
+  // While wagmi is restoring a session from storage, address is already known but
+  // isConnected hasn't flipped yet. Don't show "Connect Wallet" or open the modal
+  // in that window — opening the modal mid-reconnect collides with the in-flight
+  // WalletConnect session and surfaces as "Connection Failed".
+  const walletDisconnected = isDisconnected;
+  const walletReconnecting = isReconnecting || isConnecting;
 
   return (
     <>
@@ -230,6 +235,7 @@ function StartNewAuctionPanel({
           e.preventDefault();
           e.stopPropagation();
           if (cfg.loading) return;
+          if (walletReconnecting) return;
           if (walletDisconnected) {
             setConnectModalOpen(true);
             return;
@@ -239,7 +245,11 @@ function StartNewAuctionPanel({
           window.setTimeout(() => setPressPulse(false), 220);
           cfg.onStart();
         }}
-        disabled={cfg.loading || (!walletDisconnected && cfg.disabled)}
+        disabled={
+          cfg.loading ||
+          walletReconnecting ||
+          (!walletDisconnected && cfg.disabled)
+        }
         className={`gobble-btn-ghost-purple mx-auto !mt-3 flex w-full max-w-full items-center justify-center active:scale-[0.97] sm:!mt-5 sm:w-max ${
           walletDisconnected
             ? "!font-sans !tracking-normal !text-xs !font-semibold sm:!text-sm"
@@ -365,7 +375,7 @@ export default function AuctionLiveHero({
   const bidTopAmountRef = useRef<HTMLParagraphElement>(null);
   const renewFlashRef = useRef<HTMLDivElement>(null);
   const userSelectedPaymentModeRef = useRef(false);
-  const { isConnected } = useAccount();
+  const { isDisconnected, isReconnecting, isConnecting } = useAccount();
   const { setOpen: setConnectModalOpen } = useModal();
   const [bidAmountRaw, setBidAmountRaw] = useState("");
   const [ethAmountDisplayRaw, setEthAmountDisplayRaw] = useState("");
@@ -717,8 +727,14 @@ export default function AuctionLiveHero({
   const settleStage = settlementTransition?.active
     ? settlementTransition.stage
     : null;
-  const walletDisconnected = !isConnected;
-  const openConnectWallet = () => setConnectModalOpen(true);
+  // See StartNewAuctionPanel: gate on isDisconnected (terminal state) so we
+  // don't flash "Connect Wallet" or open the modal during wagmi rehydration.
+  const walletDisconnected = isDisconnected;
+  const walletReconnecting = isReconnecting || isConnecting;
+  const openConnectWallet = () => {
+    if (walletReconnecting) return;
+    setConnectModalOpen(true);
+  };
 
   return (
     <div
