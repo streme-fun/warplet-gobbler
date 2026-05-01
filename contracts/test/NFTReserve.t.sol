@@ -55,7 +55,7 @@ contract NFTReserveTest is Test {
     function setUp() public {
         vm.startPrank(owner);
         nft = new MockAuctionNFT();
-        reserve = new NFTReserve(IERC721(address(nft)), owner, address(0));
+        reserve = new NFTReserve(IERC721(address(nft)), owner);
         gobbled = new GobbledWarplets("Gobbled Test", "GTEST", address(reserve), setter);
         reserve.setGobbledWarplets(gobbled);
         vm.stopPrank();
@@ -284,7 +284,7 @@ contract NFTReserveTest is Test {
 
     function test_setAuction_reverts_until_gobbled_configured() public {
         vm.startPrank(owner);
-        NFTReserve r2 = new NFTReserve(IERC721(address(nft)), owner, address(0));
+        NFTReserve r2 = new NFTReserve(IERC721(address(nft)), owner);
         MockAlternateAuctionRunner alt = new MockAlternateAuctionRunner(INFTReserve(address(r2)));
         vm.expectRevert();
         r2.setAuction(address(alt));
@@ -358,7 +358,7 @@ contract NFTReserveTest is Test {
 
     function test_setGobbledWarplets_once_and_sets_approval() public {
         vm.startPrank(owner);
-        NFTReserve r2 = new NFTReserve(IERC721(address(nft)), owner, address(0));
+        NFTReserve r2 = new NFTReserve(IERC721(address(nft)), owner);
         GobbledWarplets g2 = new GobbledWarplets("G2", "G2", address(r2), setter);
 
         vm.expectEmit(true, true, true, true);

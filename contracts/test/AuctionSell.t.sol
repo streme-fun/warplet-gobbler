@@ -61,7 +61,7 @@ contract AuctionSellTest is Test {
         nft = new MockAuctionNFT();
         bidToken = new MockBidToken();
         gobbledSetter = vm.addr(GOBBLED_SETTER_PK);
-        reserve = new NFTReserve(IERC721(address(nft)), owner, address(0));
+        reserve = new NFTReserve(IERC721(address(nft)), owner);
         gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", address(reserve), gobbledSetter);
         reserve.setGobbledWarplets(gobbled);
         sell = new AuctionSell(

@@ -37,7 +37,7 @@ contract NFTReserve is Ownable, IERC721Receiver, INFTReserve {
         return _nextToken[tokenId] != 0 || tail == tokenId;
     }
 
-    constructor(IERC721 _nft, address initialOwner, address initialAuction) Ownable(initialOwner) {
+    constructor(IERC721 _nft, address initialOwner) Ownable(initialOwner) {
         require(address(_nft) != address(0), "NFTReserve: zero nft");
         nft = _nft;
     }

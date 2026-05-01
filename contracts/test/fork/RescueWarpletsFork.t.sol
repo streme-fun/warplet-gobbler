@@ -88,7 +88,7 @@ contract RescueWarpletsForkTest is Test {
 
         vm.startPrank(owner);
         bidToken = new MockBidToken();
-        reserve = new NFTReserve(warplets, owner, address(0));
+        reserve = new NFTReserve(warplets, owner);
         gobbled = new GobbledWarplets(GOBBLED_NAME, GOBBLED_SYMBOL, address(reserve), setter);
         reserve.setGobbledWarplets(gobbled);
         sell = new AuctionSell(

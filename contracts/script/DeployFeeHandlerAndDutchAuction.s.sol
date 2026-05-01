@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Script, console2} from "forge-std/Script.sol";
+import {console2} from "forge-std/Script.sol";
 import {FeeHandler} from "../src/FeeHandler.sol";
 import {DutchAuction} from "../src/DutchAuction.sol";
+import {DeployHelpers} from "./DeployHelpers.sol";
 
-/// @notice Deploy `FeeHandler` then `DutchAuction` (approves fee handler), wire via `setAuction` + `startStream`.
+/// @notice Deploy `FeeHandler` then `DutchAuction`, wire via `setAuction` + `startStream`.
 /// @dev Requires: WETH_ADDRESS, STREME_TOKEN_ADDRESS, LP_FACTORY_V4_ADDRESS, STREME_ZAP_ADDRESS,
-///      TARGET_DURATION_SECONDS, ADMIN_ADDRESS, WARPLETS_NFT_ADDRESS, DUTCH_AUCTION_NFT_RESERVE_ADDRESS,
-///      PRIVATE_KEY (deployer). Optional: REBALANCER_ADDRESS (zero = skip role).
-contract DeployFeeHandlerAndDutchAuction is Script {
+///      TARGET_DURATION_SECONDS, ADMIN_ADDRESS, WARPLETS_NFT_ADDRESS, DUTCH_AUCTION_NFT_RESERVE_ADDRESS (**NFTReserve**),
+///      exactly one of `PRIVATE_KEY` / `DEPLOYER_PRIVATE_KEY`. Optional: REBALANCER_ADDRESS (zero = skip role).
+contract DeployFeeHandlerAndDutchAuction is DeployHelpers {
     address internal constant PLACEHOLDER_AUCTION = 0x000000000000000000000000000000000000dEaD;
 
     function run() external {
-        uint256 pk = vm.envUint("PRIVATE_KEY");
+        uint256 pk = _loadPrivateKey();
         address deployer = vm.addr(pk);
 
         address weth = vm.envAddress("WETH_ADDRESS");
@@ -41,8 +42,7 @@ contract DeployFeeHandlerAndDutchAuction is Script {
 
         if (admin != deployer) {
             console2.log("Deployer is not admin; call setAuction(start) as admin:");
-            console2.log("  handler.setAuction(", address(auction), ")");
-            console2.log("  handler.startStream()");
+            console2.log("setAuction + startStream - FeeHandler docs");
             return;
         }
 

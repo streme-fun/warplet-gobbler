@@ -9,11 +9,11 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {DeployHelpers} from "./DeployHelpers.sol";
 
-/// @notice Deploy `NFTReserve`, then `GobbledWarplets`, then `AuctionSell`.
-///         Wire reserve→gobbled via `setGobbledWarplets`; **owner** must call `NFTReserve.setAuction(address(sell))` after
-///         deploy to authorize `sell` on the queue and sync `GobbledWarplets.auction`.
-/// @dev Auction deploys **paused**; unpause via `AuctionSell.unpause()` when ready.
-///      **Every** parameter is read from env; missing keys make the script revert.
+/// @notice Deploy `NFTReserve`, `GobbledWarplets`, and `AuctionSell`.
+/// @dev `NFTReserve` is owned by the **broadcast signer** until optional `FINAL_NFT_RESERVE_OWNER` transfers it.
+///      `reserve.setAuction(address(sell))` runs inside the broadcast so Gobbled receipts + reserve queue ACL wire
+///      in one submission (requires `nft.setApprovalForAll` / `onlyOwner` to succeed — key must deploy + own reserve).
+///      `AuctionSell` deploys paused; unpause via `AuctionSell.unpause()` or `AuctionSellUnpause.s.sol`.
 ///
 /// Broadcast + verify on Base (Forge loads `contracts/.env`):
 /// ```
@@ -26,18 +26,20 @@ import {DeployHelpers} from "./DeployHelpers.sol";
 ///   `AUCTION_SELL_OWNER`, `AUCTION_RESERVE_PRICE_WEI`, `AUCTION_TIME_BUFFER_SECONDS`,
 ///   `AUCTION_MIN_BID_INCREMENT_PERCENT`, `AUCTION_DURATION_SECONDS`,
 ///   `GOBBLED_WARPLETS_NAME`, `GOBBLED_WARPLETS_SYMBOL`
-///   Optional: `GOBBLED_WARPLETS_TOKEN_URI_SETTER` (defaults to deployer) — signer for `GobbledWarplets.rescueWarplet` signatures.
-///   Optional: `AUCTION_SELL_STREME_ZAP` — `StremeZapUniversal` for ETH bids; omit or `address(0)` for pull-only `bid()`.
+///
+/// Optional: `GOBBLED_WARPLETS_TOKEN_URI_SETTER` (defaults to deployer).
+/// Optional: `AUCTION_SELL_STREME_ZAP` — omit or zero for ERC20 bids only.
+/// Optional: `FINAL_NFT_RESERVE_OWNER`, `FINAL_GOBBLED_WARPLETS_OWNER` — Ownable transfer after wiring (omit to keep deployer-owned).
 contract DeployAuctionSell is DeployHelpers {
     function run() external {
         uint256 pk = _loadPrivateKey();
+        address deployer = vm.addr(pk);
 
         vm.startBroadcast(pk);
 
-        address deployer = vm.addr(pk);
         address tokenURISetter = vm.envOr("GOBBLED_WARPLETS_TOKEN_URI_SETTER", deployer);
 
-        NFTReserve reserve = new NFTReserve(IERC721(vm.envAddress("WARPLETS_NFT_ADDRESS")), vm.envAddress("AUCTION_SELL_OWNER"), address(0));
+        NFTReserve reserve = new NFTReserve(IERC721(vm.envAddress("WARPLETS_NFT_ADDRESS")), deployer);
 
         GobbledWarplets gobbled = new GobbledWarplets(
             vm.envString("GOBBLED_WARPLETS_NAME"),
@@ -48,18 +50,25 @@ contract DeployAuctionSell is DeployHelpers {
         reserve.setGobbledWarplets(gobbled);
 
         AuctionSell sell = _newAuctionSell(gobbled);
+        reserve.setAuction(address(sell));
 
-        /// @dev `reserve.auction` and `gobbled.auction` stay unset here because this script finishes before a runner
-        ///      exists. As `AUCTION_SELL_OWNER`, call once on-chain (after this broadcast completes):
-        ///      `NFTReserve(reserve).setAuction(address(sell))` — that wires queue ACL and forwards to
-        ///      `GobbledWarplets.setAuction` so settlement can `createReceipt`.
+        address finalReserve = vm.envOr("FINAL_NFT_RESERVE_OWNER", address(0));
+        if (finalReserve != address(0) && finalReserve != deployer) {
+            reserve.transferOwnership(finalReserve);
+        }
+
+        address finalGobbled = vm.envOr("FINAL_GOBBLED_WARPLETS_OWNER", address(0));
+        if (finalGobbled != address(0) && finalGobbled != deployer) {
+            gobbled.transferOwnership(finalGobbled);
+        }
 
         vm.stopBroadcast();
 
         console2.log("GobbledWarplets:", address(gobbled));
         console2.log("NFTReserve:", address(reserve));
         console2.log("AuctionSell:", address(sell));
-        console2.log("GobbledWarplets owner (URI / admin):", gobbled.owner());
+        console2.log("AuctionSell owner:", sell.owner());
+        console2.log("AuctionSell.paused:", sell.paused());
     }
 
     function _newAuctionSell(GobbledWarplets gobbled) internal returns (AuctionSell sell) {

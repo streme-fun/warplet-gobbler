@@ -72,7 +72,7 @@ contract AuctionSellForkTest is Test {
 
         vm.startPrank(owner);
         nft = new MockAuctionNFT();
-        reserve = new NFTReserve(nft, owner, address(0));
+        reserve = new NFTReserve(nft, owner);
         gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", address(reserve), owner);
         reserve.setGobbledWarplets(gobbled);
         sell = new AuctionSell(
