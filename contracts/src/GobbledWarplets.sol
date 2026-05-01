@@ -9,9 +9,10 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
+import {INFTReserve} from "./interfaces/INFTReserve.sol";
 
 /// @title GobbledWarplets
-/// @notice ERC721 receipt collection for gobbled Warplets. The authorized minter reserves receipts; the
+/// @notice ERC721 receipt collection for gobbled Warplets. The authorized NFT reserve reserves receipts; the
 ///         designated recipient later either walks away with just the underlying Warplet via
 ///         {rescueWarplet}, or claims the receipt with signed metadata AND the underlying Warplet in one
 ///         tx via the overloaded {rescueWarplet} (EIP-712 from `tokenURISetter`) so the receipt mint
@@ -23,17 +24,11 @@ import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 ///      The metadata-rescuing overload uses {_mint} (not {_safeMint}) so completion cannot be bricked by a
 ///      receiver that reverts in `onERC721Received`. No post-mint receiver callback — avoids re-entrancy issues.
 ///
-///      {reserve}: only {minter} (typically `AuctionSell`) assigns `tokenId` → recipient; emits {Reserved}.
-///      The reservation also gates {rescueWarplet}, which reads the underlying Warplet ERC721 from
-///      `minter.nft()` and pulls it directly via `IERC721.transferFrom(minter, to, warpletId)` —
-///      authorized by the `setApprovalForAll` AuctionSell grants this contract in its constructor.
-///      The metadata-bearing overload additionally mints the receipt and sets its `tokenURI` from a
-///      `Mint` EIP-712 signature by `tokenURISetter`.
-/// @dev Minimal view of the AuctionSell minter that GobbledWarplets needs to pull held Warplets out of
-///      the auction. AuctionSell pre-approves this contract via `setApprovalForAll` in its constructor.
-interface IGobbledWarpletsMinter {
-    function nft() external view returns (IERC721);
-}
+///      {createReceipt}: only {auction} (e.g. `AuctionSell`) reserves `tokenId` → recipient; emits {Reserved}.
+///      {rescueWarplet} reads the underlying Warplet ERC721 from `nftReserve.nft()` and pulls it via
+///      `IERC721.transferFrom(nftReserve, to, warpletId)` — authorized by the `setApprovalForAll` the
+///      reserve grants this contract. The metadata-bearing overload additionally mints the receipt and sets its
+///      `tokenURI` from a `Mint` EIP-712 signature by `tokenURISetter`.
 
 contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712, IGobbledWarplets {
     bytes32 private constant _MINT_TYPEHASH = keccak256("Mint(uint256 tokenId,string uri,uint256 deadline)");
@@ -42,9 +37,11 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
     ///      Underlying Warplet ERC-721 ids must be `< padding` (same bound used in `%` / `/` decode).
     uint256 public constant WARPLET_ID_PADDING = 100_000_000;
 
-    address public minter;
+    address public immutable nftReserve;
+    address public auction;
 
     address public tokenURISetter;
+    IERC721 public immutable warplets;
 
     mapping(uint256 warpletId => uint256 count) private _gobbles;
 
@@ -58,8 +55,6 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
     ///         transfer if the bare overload was called first.
     mapping(uint256 tokenId => bool) public warpletRescued;
 
-    event MinterChanged(address indexed newMinter);
-
     event TokenURISetterChanged(address indexed newTokenURISetter);
 
     event Reserved(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
@@ -71,28 +66,29 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
     /// @notice Emitted when a winner mints the receipt with signed metadata AND pulls the underlying Warplet.
     event Minted(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
 
-    modifier onlyMinter() {
-        require(msg.sender == minter, "GobbledWarplets: not minter");
+    event AuctionUpdated(address indexed newAuction);
+
+    modifier onlyAuction() {
+        require(msg.sender == auction, "GobbledWarplets: not auction");
         _;
     }
 
-    constructor(string memory name_, string memory symbol_, address initialMinter, address initialTokenURISetter)
+    modifier onlyReserve() {
+        require(msg.sender == nftReserve, "GobbledWarplets: not reserve");
+        _;
+    }
+
+    constructor(string memory name_, string memory symbol_, address _nftReserve, address initialTokenURISetter)
         ERC721(name_, symbol_)
         Ownable(msg.sender)
         EIP712(name_, "1")
     {
-        require(initialMinter != address(0), "GobbledWarplets: zero minter");
+        require(_nftReserve != address(0), "GobbledWarplets: zero reserve");
         require(initialTokenURISetter != address(0), "GobbledWarplets: zero token URI setter");
-        minter = initialMinter;
+        nftReserve = _nftReserve;
+        warplets = INFTReserve(_nftReserve).nft();
         tokenURISetter = initialTokenURISetter;
-        emit MinterChanged(initialMinter);
         emit TokenURISetterChanged(initialTokenURISetter);
-    }
-
-    function setMinter(address newMinter) external onlyOwner {
-        require(newMinter != address(0), "GobbledWarplets: zero minter");
-        minter = newMinter;
-        emit MinterChanged(newMinter);
     }
 
     function setTokenURISetter(address newTokenURISetter) external onlyOwner {
@@ -101,8 +97,17 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
         emit TokenURISetterChanged(newTokenURISetter);
     }
 
+    function setAuction(address newAuction) external onlyReserve {
+        auction = newAuction;
+        emit AuctionUpdated(newAuction);
+    }
+
     /// @inheritdoc IGobbledWarplets
-    function reserve(address to, uint256 warpletId) external onlyMinter returns (uint256 tokenId) {
+    function createReceipt(address to, uint256 warpletId) external override onlyAuction returns (uint256 tokenId) {
+        return _createReceipt(to, warpletId);
+    }
+
+    function _createReceipt(address to, uint256 warpletId) internal returns (uint256 tokenId) {
         require(warpletId < WARPLET_ID_PADDING, "GobbledWarplets: warpletId too large");
         uint256 gobbleIndex = _gobbles[warpletId];
         tokenId = _encodeTokenId(warpletId, gobbleIndex);
@@ -126,8 +131,7 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
         warpletRescued[tokenId] = true;
 
         (uint256 wid, uint256 idx) = _decodeTokenId(tokenId);
-        IERC721 warplets = IGobbledWarpletsMinter(minter).nft();
-        warplets.transferFrom(minter, to, wid);
+        warplets.transferFrom(nftReserve, to, wid);
         emit WarpletRescued(to, wid, tokenId, idx);
     }
 
@@ -158,8 +162,7 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
         (uint256 wid, uint256 idx) = _decodeTokenId(tokenId);
         if (!warpletRescued[tokenId]) {
             warpletRescued[tokenId] = true;
-            IERC721 warplets = IGobbledWarpletsMinter(minter).nft();
-            warplets.transferFrom(minter, to, wid);
+            warplets.transferFrom(nftReserve, to, wid);
         }
         emit Minted(to, wid, tokenId, idx);
     }

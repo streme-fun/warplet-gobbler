@@ -10,10 +10,9 @@ import {IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions
 import {IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
-/// @notice Stand-in for `AuctionSell` in unit tests. Holds the underlying Warplet ERC721 the way the
-///         live auction would, exposes the `nft()` getter `GobbledWarplets` reads via its minter
-///         interface, and pre-approves a target operator (the `GobbledWarplets` contract) for all token
-///         transfers — mirroring the `setApprovalForAll` that `AuctionSell` performs in its constructor.
+/// @notice Stand-in for `NFTReserve` in unit tests. Holds the underlying Warplet ERC721 the way the
+///         live reserve would, exposes `nft()` for `INFTReserve` / `GobbledWarplets`, and pre-approves a target operator (the `GobbledWarplets` contract) for all token
+///         transfers — mirroring the `setApprovalForAll` that `NFTReserve` performs.
 contract MockGobbledMinter is IERC721Receiver {
     IERC721 public nft;
 
@@ -51,6 +50,8 @@ contract GobbledWarpletsTest is Test {
     uint256 internal constant SETTER_PK = 0xC0FFEE;
     address internal setter;
 
+    address internal auctionAddr = makeAddr("auction");
+
     string internal constant IPFS_URI = "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
 
     function setUp() public {
@@ -61,6 +62,9 @@ contract GobbledWarpletsTest is Test {
 
         vm.prank(owner);
         g = new GobbledWarplets(NAME, SYMBOL, address(minterContract), setter);
+
+        vm.prank(address(minterContract));
+        g.setAuction(auctionAddr);
 
         // Mirror `AuctionSell` constructor: minter pre-approves the gobbled contract as operator.
         minterContract.approveOperator(address(g));
@@ -118,14 +122,14 @@ contract GobbledWarpletsTest is Test {
 
     /* ========== constructor / admin ========== */
 
-    function test_constructor_sets_minter_and_setter() public view {
-        assertEq(g.minter(), address(minterContract));
+    function test_constructor_sets_reserve_and_setter() public view {
+        assertEq(g.nftReserve(), address(minterContract));
         assertEq(g.tokenURISetter(), setter);
         assertEq(g.owner(), owner);
     }
 
-    function test_constructor_reverts_zero_minter() public {
-        vm.expectRevert("GobbledWarplets: zero minter");
+    function test_constructor_reverts_zero_reserve() public {
+        vm.expectRevert("GobbledWarplets: zero reserve");
         vm.prank(owner);
         new GobbledWarplets(NAME, SYMBOL, address(0), setter);
     }
@@ -136,17 +140,19 @@ contract GobbledWarpletsTest is Test {
         new GobbledWarplets(NAME, SYMBOL, address(minterContract), address(0));
     }
 
-    function test_setMinter_onlyOwner() public {
-        // The new minter must be a contract exposing `nft()`, otherwise rescue paths break — but
-        // `setMinter` itself only checks non-zero. Use a fresh mock minter so the assertion sticks.
-        MockGobbledMinter newM = new MockGobbledMinter(IERC721(address(warplets)));
-        vm.prank(alice);
-        vm.expectRevert();
-        g.setMinter(address(newM));
+    function test_reserve_is_immutable() public view {
+        assertEq(g.nftReserve(), address(minterContract));
+    }
 
-        vm.prank(owner);
-        g.setMinter(address(newM));
-        assertEq(g.minter(), address(newM));
+    function test_setAuction_only_reserve() public {
+        address next = makeAddr("nextAuction");
+        vm.prank(alice);
+        vm.expectRevert("GobbledWarplets: not reserve");
+        g.setAuction(next);
+
+        vm.prank(address(minterContract));
+        g.setAuction(next);
+        assertEq(g.auction(), next);
     }
 
     /// @dev `tokenURISetter` is the EIP-712 signer for `rescueWarplet`, not an on-chain URI setter.
@@ -160,17 +166,17 @@ contract GobbledWarpletsTest is Test {
         assertEq(g.tokenURISetter(), address(minterContract));
     }
 
-    /* ========== reserve ========== */
+    /* ========== createReceipt (auction-only) ========== */
 
-    function test_reserve_onlyMinter() public {
+    function test_createReceipt_reverts_not_auction() public {
         uint256 wid = _seedHeldWarplet();
 
         vm.prank(alice);
-        vm.expectRevert("GobbledWarplets: not minter");
-        g.reserve(alice, wid);
+        vm.expectRevert("GobbledWarplets: not auction");
+        g.createReceipt(alice, wid);
 
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid = g.createReceipt(alice, wid);
         assertEq(tid, wid);
 
         vm.expectRevert();
@@ -184,19 +190,19 @@ contract GobbledWarpletsTest is Test {
 
     function test_reserve_reverts_warplet_id_too_large() public {
         uint256 wid = g.WARPLET_ID_PADDING();
-        vm.prank(address(minterContract));
+        vm.prank(auctionAddr);
         vm.expectRevert("GobbledWarplets: warpletId too large");
-        g.reserve(alice, wid);
+        g.createReceipt(alice, wid);
     }
 
     function test_second_gobble_increments_index_and_tokenId() public {
         // Warplet id 100 must be unused on the mock NFT — `mint()` starts at 1, so 100 is free.
         _seedHeldWarpletSpecific(100);
 
-        vm.startPrank(address(minterContract));
-        uint256 t0 = g.reserve(alice, 100);
+        vm.startPrank(auctionAddr);
+        uint256 t0 = g.createReceipt(alice, 100);
         address bob = makeAddr("bob");
-        uint256 t1 = g.reserve(bob, 100);
+        uint256 t1 = g.createReceipt(bob, 100);
         vm.stopPrank();
         assertEq(t0, 100);
         assertEq(t1, 100_000_100);
@@ -218,8 +224,8 @@ contract GobbledWarpletsTest is Test {
         uint256 warpletId = _seedHeldWarplet();
         uint256 tokenId = _expectedTokenId(warpletId);
 
-        vm.prank(address(minterContract));
-        g.reserve(alice, warpletId);
+        vm.prank(auctionAddr);
+        g.createReceipt(alice, warpletId);
 
         vm.expectRevert();
         g.tokenURI(tokenId);
@@ -235,8 +241,8 @@ contract GobbledWarpletsTest is Test {
         uint256 tokenId = _expectedTokenId(warpletId);
         uint256 deadline = block.timestamp + 1 hours;
 
-        vm.prank(address(minterContract));
-        g.reserve(alice, warpletId);
+        vm.prank(auctionAddr);
+        g.createReceipt(alice, warpletId);
 
         bytes memory sig = _signMint(tokenId, IPFS_URI, deadline);
         vm.prank(alice);
@@ -253,8 +259,8 @@ contract GobbledWarpletsTest is Test {
         uint256 tid = _expectedTokenId(warpletId);
         uint256 deadline = block.timestamp + 1;
 
-        vm.prank(address(minterContract));
-        g.reserve(alice, warpletId);
+        vm.prank(auctionAddr);
+        g.createReceipt(alice, warpletId);
 
         bytes memory sig = _signMint(tid, IPFS_URI, deadline);
         vm.warp(block.timestamp + 2);
@@ -269,8 +275,8 @@ contract GobbledWarpletsTest is Test {
         uint256 tid = _expectedTokenId(warpletId);
         uint256 deadline = block.timestamp + 1 hours;
 
-        vm.prank(address(minterContract));
-        g.reserve(alice, warpletId);
+        vm.prank(auctionAddr);
+        g.createReceipt(alice, warpletId);
 
         uint256 wrongPk = 0xBEEF;
         bytes32 digest = _mintDigest(tid, IPFS_URI, deadline);
@@ -287,8 +293,8 @@ contract GobbledWarpletsTest is Test {
         uint256 tid = _expectedTokenId(warpletId);
         uint256 deadline = block.timestamp + 1 hours;
 
-        vm.prank(address(minterContract));
-        g.reserve(alice, warpletId);
+        vm.prank(auctionAddr);
+        g.createReceipt(alice, warpletId);
 
         bytes memory sig = _signMint(tid, IPFS_URI, deadline);
 
@@ -312,8 +318,8 @@ contract GobbledWarpletsTest is Test {
 
     function test_rescue_with_sig_cannot_run_twice_after_completion() public {
         uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid = g.createReceipt(alice, wid);
         _rescueWithSig(alice, tid, IPFS_URI);
 
         uint256 deadline = block.timestamp + 1 hours;
@@ -325,8 +331,8 @@ contract GobbledWarpletsTest is Test {
 
     function test_rescue_with_sig_reverts_stranger_not_recipient() public {
         uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid = g.createReceipt(alice, wid);
 
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory sig = _signMint(tid, IPFS_URI, deadline);
@@ -340,8 +346,8 @@ contract GobbledWarpletsTest is Test {
 
     function test_bare_rescue_pulls_warplet_without_minting_receipt() public {
         uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid = g.createReceipt(alice, wid);
 
         assertFalse(g.warpletRescued(tid));
 
@@ -358,8 +364,8 @@ contract GobbledWarpletsTest is Test {
 
     function test_bare_rescue_reverts_stranger() public {
         uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid = g.createReceipt(alice, wid);
 
         vm.prank(makeAddr("stranger"));
         vm.expectRevert("GobbledWarplets: not recipient");
@@ -374,8 +380,8 @@ contract GobbledWarpletsTest is Test {
 
     function test_bare_rescue_reverts_on_replay() public {
         uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid = g.createReceipt(alice, wid);
 
         vm.prank(alice);
         g.rescueWarplet(tid);
@@ -389,8 +395,8 @@ contract GobbledWarpletsTest is Test {
 
     function test_signed_rescue_after_bare_rescue_mints_receipt_skips_transfer() public {
         uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid = g.createReceipt(alice, wid);
 
         // Bare rescue first: warplet is alice's, receipt unminted.
         vm.prank(alice);
@@ -412,8 +418,8 @@ contract GobbledWarpletsTest is Test {
 
     function test_bare_rescue_after_signed_rescue_reverts() public {
         uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid = g.createReceipt(alice, wid);
 
         _rescueWithSig(alice, tid, IPFS_URI);
 
@@ -426,8 +432,8 @@ contract GobbledWarpletsTest is Test {
 
     function test_warpletOf_and_gobbleIndexOf() public {
         uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid = g.createReceipt(alice, wid);
         _rescueWithSig(alice, tid, IPFS_URI);
         assertEq(g.warpletOf(tid), wid);
         assertEq(g.gobbleIndexOf(tid), 0);
@@ -435,8 +441,8 @@ contract GobbledWarpletsTest is Test {
         // Second gobble of same warplet — alice transfers it back to the minter to "re-deposit".
         vm.prank(alice);
         warplets.safeTransferFrom(alice, address(minterContract), wid);
-        vm.prank(address(minterContract));
-        uint256 tid2 = g.reserve(alice, wid);
+        vm.prank(auctionAddr);
+        uint256 tid2 = g.createReceipt(alice, wid);
         _rescueWithSig(alice, tid2, IPFS_URI);
         assertEq(g.warpletOf(tid2), wid);
         assertEq(g.gobbleIndexOf(tid2), 1);

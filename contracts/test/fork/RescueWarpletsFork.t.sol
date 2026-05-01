@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {AuctionSell} from "../../src/AuctionSell.sol";
 import {GobbledWarplets} from "../../src/GobbledWarplets.sol";
+import {NFTReserve} from "../../src/NFTReserve.sol";
 import {MockBidToken} from "../mocks/MockBidToken.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -48,6 +49,7 @@ contract RescueWarpletsForkTest is Test {
     MockBidToken internal bidToken;
     AuctionSell internal sell;
     GobbledWarplets internal gobbled;
+    NFTReserve internal reserve;
 
     uint256 internal warpletId;
     address internal originalHolder;
@@ -86,7 +88,9 @@ contract RescueWarpletsForkTest is Test {
 
         vm.startPrank(owner);
         bidToken = new MockBidToken();
-        gobbled = new GobbledWarplets(GOBBLED_NAME, GOBBLED_SYMBOL, owner, setter);
+        reserve = new NFTReserve(warplets, owner, address(0));
+        gobbled = new GobbledWarplets(GOBBLED_NAME, GOBBLED_SYMBOL, address(reserve), setter);
+        reserve.setGobbledWarplets(gobbled);
         sell = new AuctionSell(
             warplets,
             bidToken,
@@ -100,12 +104,12 @@ contract RescueWarpletsForkTest is Test {
             // No zap — this fork test only exercises the rescue flow, not native ETH bidding.
             address(0)
         );
-        gobbled.setMinter(address(sell));
+        reserve.setAuction(address(sell));
         vm.stopPrank();
 
         // "Borrow" the warplet from its current owner and deposit into the auction queue.
         vm.prank(originalHolder);
-        warplets.safeTransferFrom(originalHolder, address(sell), warpletId);
+        warplets.safeTransferFrom(originalHolder, address(reserve), warpletId);
 
         vm.prank(owner);
         sell.unpause();
@@ -129,8 +133,8 @@ contract RescueWarpletsForkTest is Test {
         vm.warp(block.timestamp + DURATION + 1);
         sell.settleCurrentAndCreateNewAuction();
 
-        // Settlement reserves the receipt but the underlying Warplet is still in the auction.
-        assertEq(warplets.ownerOf(warpletId), address(sell));
+        // Settlement creates the receipt while the underlying Warplet remains in reserve custody.
+        assertEq(warplets.ownerOf(warpletId), address(reserve));
     }
 
     function _domainSeparator() internal view returns (bytes32) {

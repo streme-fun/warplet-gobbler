@@ -22,7 +22,7 @@ const nftReserveAbi = [
 ] as const;
 
 /**
- * Warplets in the flywheel are held by DutchAuction’s `nftReserve` (deploy: AuctionSell) while
+ * Warplets in the flywheel are held by DutchAuction’s `nftReserve` (`NFTReserve`) while
  * queued / on auction / awaiting rescue. Accept either address so preview APIs match on-chain
  * reality even if env `NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS` / `nftReserve` is misaligned.
  */

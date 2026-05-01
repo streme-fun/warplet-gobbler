@@ -4,11 +4,14 @@ pragma solidity ^0.8.26;
 import {console2} from "forge-std/Script.sol";
 import {AuctionSell} from "../src/AuctionSell.sol";
 import {GobbledWarplets} from "../src/GobbledWarplets.sol";
+import {NFTReserve} from "../src/NFTReserve.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {DeployHelpers} from "./DeployHelpers.sol";
 
-/// @notice Deploy `GobbledWarplets` then `AuctionSell`, then set gobbled minter to the auction.
+/// @notice Deploy `NFTReserve`, then `GobbledWarplets`, then `AuctionSell`.
+///         Wire reserve→gobbled via `setGobbledWarplets`; **owner** must call `NFTReserve.setAuction(address(sell))` after
+///         deploy to authorize `sell` on the queue and sync `GobbledWarplets.auction`.
 /// @dev Auction deploys **paused**; unpause via `AuctionSell.unpause()` when ready.
 ///      **Every** parameter is read from env; missing keys make the script revert.
 ///
@@ -34,20 +37,27 @@ contract DeployAuctionSell is DeployHelpers {
         address deployer = vm.addr(pk);
         address tokenURISetter = vm.envOr("GOBBLED_WARPLETS_TOKEN_URI_SETTER", deployer);
 
+        NFTReserve reserve = new NFTReserve(IERC721(vm.envAddress("WARPLETS_NFT_ADDRESS")), vm.envAddress("AUCTION_SELL_OWNER"), address(0));
+
         GobbledWarplets gobbled = new GobbledWarplets(
             vm.envString("GOBBLED_WARPLETS_NAME"),
             vm.envString("GOBBLED_WARPLETS_SYMBOL"),
-            deployer,
+            address(reserve),
             tokenURISetter
         );
+        reserve.setGobbledWarplets(gobbled);
 
         AuctionSell sell = _newAuctionSell(gobbled);
 
-        gobbled.setMinter(address(sell));
+        /// @dev `reserve.auction` and `gobbled.auction` stay unset here because this script finishes before a runner
+        ///      exists. As `AUCTION_SELL_OWNER`, call once on-chain (after this broadcast completes):
+        ///      `NFTReserve(reserve).setAuction(address(sell))` — that wires queue ACL and forwards to
+        ///      `GobbledWarplets.setAuction` so settlement can `createReceipt`.
 
         vm.stopBroadcast();
 
         console2.log("GobbledWarplets:", address(gobbled));
+        console2.log("NFTReserve:", address(reserve));
         console2.log("AuctionSell:", address(sell));
         console2.log("GobbledWarplets owner (URI / admin):", gobbled.owner());
     }

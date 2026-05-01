@@ -357,6 +357,7 @@ export default function GobblerAuctionSection({
     isLoading: queueIsLoading,
   } = useAuctionSellQueue({
     enabled: queueReadsEnabled,
+    excludeTokenId: liveAuction && chainLot != null ? chainLot.tokenId : undefined,
   });
 
   const chainQueueFingerprint = useMemo(

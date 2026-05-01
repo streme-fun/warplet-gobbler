@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {AuctionSell, IStremeZapUniversal} from "../../src/AuctionSell.sol";
 import {GobbledWarplets} from "../../src/GobbledWarplets.sol";
+import {NFTReserve} from "../../src/NFTReserve.sol";
 import {MockAuctionNFT} from "../mocks/MockAuctionNFT.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -27,6 +28,7 @@ contract AuctionSellNativeBidForkTest is Test {
 
     AuctionSell internal sell;
     GobbledWarplets internal gobbled;
+    NFTReserve internal reserve;
     MockAuctionNFT internal nft;
 
     address internal owner;
@@ -57,7 +59,9 @@ contract AuctionSellNativeBidForkTest is Test {
         nft = new MockAuctionNFT();
         // The 4th constructor arg is `tokenURISetter` (EIP-712 signer for `rescueWarplet` metadata).
         // This fork test only exercises the bid path; the URI setter is irrelevant here, so reuse `owner`.
-        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", owner, owner);
+        reserve = new NFTReserve(nft, owner, address(0));
+        gobbled = new GobbledWarplets("Gobbled Warplets", "GOBBLED", address(reserve), owner);
+        reserve.setGobbledWarplets(gobbled);
         sell = new AuctionSell(
             nft,
             IERC20(STREME_SUPERTOKEN),
@@ -70,10 +74,10 @@ contract AuctionSellNativeBidForkTest is Test {
             owner,
             stremeZapAddr
         );
-        gobbled.setMinter(address(sell));
+        reserve.setAuction(address(sell));
 
         uint256 tid = nft.mint(owner);
-        nft.safeTransferFrom(owner, address(sell), tid);
+        nft.safeTransferFrom(owner, address(reserve), tid);
         sell.unpause();
         vm.stopPrank();
     }
