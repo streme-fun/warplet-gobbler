@@ -10,7 +10,7 @@ import {DeployHelpers} from "./DeployHelpers.sol";
 /// @dev Required env:
 /// - `WARPLETS_NFT_ADDRESS`
 /// - `DUTCH_AUCTION_PAYMENT_TOKEN_ADDRESS`
-/// - `DUTCH_AUCTION_NFT_RESERVE_ADDRESS` (typically AuctionSell)
+/// - `DUTCH_AUCTION_NFT_RESERVE_ADDRESS` (**NFTReserve** FIFO custody shared with AuctionSell ingest)
 /// - `FEE_HANDLER_ADDRESS`
 /// - Exactly one of `PRIVATE_KEY` or `DEPLOYER_PRIVATE_KEY`
 contract MigrateToNewDutchAuctionV2 is DeployHelpers {
