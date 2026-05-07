@@ -26,6 +26,7 @@ import GobblerAuctionSection from "@/components/GobblerAuctionSection";
 import FlyingWarplet from "@/components/FlyingWarplet";
 import SellSection from "@/components/SellSection";
 import MobileBottomNav from "@/components/MobileBottomNav";
+import HowItWorks from "@/components/HowItWorks";
 import { warpletImageSrc } from "@/lib/warplet-image-src";
 import {
   GOBBLE_TRANSACTION_REVERTED_FRIENDLY,
@@ -1102,28 +1103,33 @@ export default function Home() {
             draggable={false}
           />
           {/* Right — status + wallet */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <div className="order-2 sm:order-none">
+              <HowItWorks />
+            </div>
             <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full border border-[#0052FF]/50">
               <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF] animate-pulse" />
               <span className="text-xs text-[#4C82FB]">Base</span>
             </div>
-            {isMiniApp ? (
-              <MiniAppWalletButton />
-            ) : (
-              <ConnectKitButton.Custom>
-                {({ isConnected, show, address, ensName }) => (
-                  <button
-                    onClick={show}
-                    className="text-xs px-3 py-1.5 rounded-full border border-base-content/20 text-base-content/70 hover:border-base-content/40 hover:text-base-content transition-colors"
-                  >
-                    {isConnected
-                      ? (ensName ??
-                        `${address?.slice(0, 4)}…${address?.slice(-3)}`)
-                      : "Connect"}
-                  </button>
-                )}
-              </ConnectKitButton.Custom>
-            )}
+            <div className="order-1 sm:order-none">
+              {isMiniApp ? (
+                <MiniAppWalletButton />
+              ) : (
+                <ConnectKitButton.Custom>
+                  {({ isConnected, show, address, ensName }) => (
+                    <button
+                      onClick={show}
+                      className="text-xs px-3 py-1.5 rounded-full border border-base-content/20 text-base-content/70 hover:border-base-content/40 hover:text-base-content transition-colors"
+                    >
+                      {isConnected
+                        ? (ensName ??
+                          `${address?.slice(0, 4)}…${address?.slice(-3)}`)
+                        : "Connect"}
+                    </button>
+                  )}
+                </ConnectKitButton.Custom>
+              )}
+            </div>
           </div>
         </div>
         {/* Gobbler lip border */}
