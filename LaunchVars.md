@@ -8,12 +8,12 @@ Token
 - Symbol: `WARPGOBB`
 - Name: `Warplet Gobbler`
 - LP type: `Uni v4`
-- Fee: `10%`
+- Fee: `5%`
 - Staking Supply: `10B`
 - Staking rewards duration: `365 days`
-- Staking lock period: `30 days`
+- Staking lock period: `7 days`
 - Vault allocations: `None` (if anyone has a case for team/airdrop/rewards/other allocations, now is the time to present it!)
-- Reward split: `50/50` (note: the streme default is 40/60, with 40% going to 'deployer' and 60 to streme team. for gobbler, deployer is the amount that will get streamed to DutchAuction, and thus affect how quickly the balance rises towards the warplet floor. the remainder is what is avaiulable for 'profit'. Unlike the above vars, this one CAN BE CHANGED post launch) 
+- Reward split: `80/20` (note: 80% for streamed fees to DutchAuction, 20% for team. Unlike the above vars, this one CAN BE CHANGED post launch. Actually, this needs to be adjust immediately after token deployement) 
 
 BUY
 ==============
@@ -23,7 +23,7 @@ BUY
 Fee Handler
 ==============
 
-- Target Stream Duration: `7 days`
+- Target Stream Duration: `1 day`
 
 AuctionSell (these can be changed later)
 ==============
