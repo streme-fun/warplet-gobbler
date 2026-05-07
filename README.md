@@ -1,6 +1,6 @@
 # WarpletGobbler
 
-A PunkStrategy-style flywheel for [Warplets](https://opensea.io/collection/the-warplets-farcaster) using Superfluid streaming.
+A flywheel for [Warplets](https://opensea.io/collection/the-warplets-farcaster) using Superfluid streaming.
 
 ## How It Works
 
@@ -27,16 +27,16 @@ LP Fees (WETH) ──▸ FeeHandler ──swap──▸ $WARPGOBB (SuperToken; s
 
 3. **Auction Sell** — Gobbled Warplets are auctioned to the highest bidder, denominated in the auction bid token (`NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL`, defaulting to the payment symbol).
 
-4. **Staking** — Auction proceeds flow to stakers, closing the flywheel. *(reuses existing streme.fun staking contract)*
+4. **Staking** — Auction proceeds flow to stakers, closing the flywheel. _(reuses existing streme.fun staking contract)_
 
 ## Contracts
 
-| Contract | Status | Description |
-|---|---|---|
-| `FeeHandler.sol` | **functional** | Claims LP fees (WETH), swaps to the streaming token via StremeZapUniversal, streams to auction via Superfluid CFA. Role-based access (`DEFAULT_ADMIN_ROLE`, `REBALANCER_ROLE`). |
-| `DutchAuction.sol` | **functional** | Receives the token stream; deposit a Warplet to drain the pot. |
-| `AuctionSell.sol` | **functional** | FIFO queue of gobbled Warplets; highest bid in the auction bid token wins, proceeds route to staking. Adapted from DegenDogs. |
-| `StratStaking.sol` | placeholder | Reuses existing streme.fun staking contract. |
+| Contract           | Status         | Description                                                                                                                                                                     |
+| ------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FeeHandler.sol`   | **functional** | Claims LP fees (WETH), swaps to the streaming token via StremeZapUniversal, streams to auction via Superfluid CFA. Role-based access (`DEFAULT_ADMIN_ROLE`, `REBALANCER_ROLE`). |
+| `DutchAuction.sol` | **functional** | Receives the token stream; deposit a Warplet to drain the pot.                                                                                                                  |
+| `AuctionSell.sol`  | **functional** | FIFO queue of gobbled Warplets; highest bid in the auction bid token wins, proceeds route to staking. Adapted from DegenDogs.                                                   |
+| `StratStaking.sol` | placeholder    | Reuses existing streme.fun staking contract.                                                                                                                                    |
 
 ### Test Coverage
 
