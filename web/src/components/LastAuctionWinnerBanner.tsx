@@ -4,6 +4,10 @@
 
 import type { Address } from "viem";
 import { isAddressEqual, zeroAddress } from "viem";
+import type {
+  SettlementRecord,
+  StoredWinnerHighlight,
+} from "@/lib/settlement-records";
 import AuctionWarpletImage from "./AuctionWarpletImage";
 import BidderAvatarName from "./BidderAvatarName";
 import type { RescueStage } from "@/hooks/useGobbledRescue";
@@ -18,29 +22,11 @@ const DISMISSED_FPS_KEY = "wg:auction-winners-dismissed";
 const MAX_HISTORY = 40;
 export const SETTLEMENT_DISPLAY_LIMIT = 5;
 
-export type SettlementRecord = {
-  fp: string;
-  tokenId: number;
-  bidder: Address;
-  amountWei: string;
-  recordedAt: number;
-};
-
-/** Snapshot shape before persisting (caller adds `recordedAt`). */
-export type StoredWinnerHighlight = {
-  fp: string;
-  tokenId: number;
-  bidder: Address;
-  amountWei: string;
-};
-
-export function getWinnerFingerprint(
-  tokenId: bigint,
-  bidder: Address,
-  amountWei: bigint,
-): string {
-  return `${tokenId}-${bidder}-${amountWei}`;
-}
+export { getWinnerFingerprint } from "@/lib/settlement-records";
+export type {
+  SettlementRecord,
+  StoredWinnerHighlight,
+} from "@/lib/settlement-records";
 
 /** Shared CTA copy for rescue / claim flows. */
 export function rescueStageCtaLabel(stage: RescueStage): string {
@@ -87,6 +73,7 @@ function isSettlementRecord(o: unknown): o is SettlementRecord {
   return (
     typeof r.fp === "string" &&
     typeof r.tokenId === "number" &&
+    (r.gobbledTokenId === undefined || typeof r.gobbledTokenId === "string") &&
     typeof r.bidder === "string" &&
     typeof r.amountWei === "string" &&
     typeof r.recordedAt === "number"
@@ -129,6 +116,10 @@ function migrateLegacyStorageOnce() {
         const rec: SettlementRecord = {
           fp: o.fp,
           tokenId: o.tokenId,
+          gobbledTokenId:
+            typeof o.gobbledTokenId === "string"
+              ? o.gobbledTokenId
+              : undefined,
           bidder: o.bidder as Address,
           amountWei: o.amountWei,
           recordedAt: Date.now(),

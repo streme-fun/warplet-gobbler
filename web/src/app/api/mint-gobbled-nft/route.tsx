@@ -7,6 +7,11 @@ import { ensureGobbledImage } from "@/lib/generate-gobbled-image";
 import { uploadToPinata } from "@/app/utils/pinata";
 import { CONTRACTS } from "@/lib/contracts";
 import { gobbledWarpletsAbi } from "@/abi/gobbledWarplets";
+import {
+  parseOptionalGobbledTokenId,
+  resolveReceiptTokenId,
+} from "@/lib/gobbled-token-id";
+import { mintErrorForClient } from "@/lib/mint-error";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -17,7 +22,8 @@ export const maxDuration = 60;
  *  2. Fetch the raw PNG bytes from the Vercel Blob URL
  *  3. Upload the raw PNG to Pinata → image URL
  *  4. Build ERC-721 metadata JSON, upload that to Pinata → `tokenURI`
- *  5. Read the receipt id encoding from chain (`gobbleCount` × `WARPLET_ID_PADDING`)
+ *  5. Use the reserved receipt id from `AuctionSettled.gobbledTokenId` when provided;
+ *     fall back to the latest receipt id encoding (`gobbleCount` × `WARPLET_ID_PADDING`)
  *  6. Sign EIP-712 `Mint(uint256 tokenId,string uri,uint256 deadline)` with the
  *     `tokenURISetter` private key
  *  7. Return `{ tokenId, warpletId, uri, deadline, signature }`
@@ -59,26 +65,29 @@ async function getDomainName(contract: Address): Promise<string> {
 async function readReceiptTokenId(
   contract: Address,
   warpletId: bigint,
-): Promise<bigint> {
-  const [gobbleCount, padding] = await Promise.all([
+  requestedGobbledTokenId?: bigint,
+): Promise<{ receiptTokenId: bigint; padding: bigint }> {
+  const [padding, gobbleCount] = await Promise.all([
+    publicClient.readContract({
+      address: contract,
+      abi: gobbledWarpletsAbi,
+      functionName: "WARPLET_ID_PADDING",
+    }),
     publicClient.readContract({
       address: contract,
       abi: gobbledWarpletsAbi,
       functionName: "gobbleCount",
       args: [warpletId],
     }),
-    publicClient.readContract({
-      address: contract,
-      abi: gobbledWarpletsAbi,
-      functionName: "WARPLET_ID_PADDING",
-    }),
   ]);
-  if (gobbleCount === 0n) {
-    throw new Error(
-      "No reservation exists for this warplet — has the auction settled?",
-    );
-  }
-  return (gobbleCount - 1n) * padding + warpletId;
+
+  const receiptTokenId = resolveReceiptTokenId({
+    warpletId,
+    padding,
+    gobbleCount,
+    requestedGobbledTokenId,
+  });
+  return { receiptTokenId, padding };
 }
 
 export async function POST(request: NextRequest) {
@@ -103,6 +112,9 @@ export async function POST(request: NextRequest) {
     }
 
     const warpletId = BigInt(warpletIdNum);
+    const requestedGobbledTokenId = parseOptionalGobbledTokenId(
+      body.gobbledTokenId,
+    );
 
     // 1. Generate (or reuse) the gobbled image (Vercel Blob URL).
     const { url: gobbledUrl } = await ensureGobbledImage(warpletIdNum);
@@ -125,12 +137,11 @@ export async function POST(request: NextRequest) {
     const imageUrl = await uploadToPinata(imageFile);
 
     // 4. Read receipt id from chain so the metadata + signature line up with what the contract expects.
-    const receiptTokenId = await readReceiptTokenId(gobbledContract, warpletId);
-    const padding = await publicClient.readContract({
-      address: gobbledContract,
-      abi: gobbledWarpletsAbi,
-      functionName: "WARPLET_ID_PADDING",
-    });
+    const { receiptTokenId, padding } = await readReceiptTokenId(
+      gobbledContract,
+      warpletId,
+      requestedGobbledTokenId,
+    );
     const gobbleIndex = receiptTokenId / padding;
 
     // 5. Build & upload ERC-721 metadata JSON.
@@ -142,6 +153,7 @@ export async function POST(request: NextRequest) {
       attributes: [
         { trait_type: "Warplet ID", value: warpletIdNum },
         { trait_type: "Gobble Index", value: Number(gobbleIndex) },
+        { trait_type: "Gobbled Token ID", value: receiptTokenId.toString() },
       ],
     };
     const metadataFile = new File(
@@ -202,23 +214,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Map internal failures to actionable copy; keep generic fallback for unknowns. */
-function mintErrorForClient(message: string): string {
-  if (message.includes("No reservation exists"))
-    return "This Warplet isn’t ready to claim yet. Give it a moment and try again.";
-  if (message.includes("Source warplet image not found"))
-    return "We couldn’t generate the claim artwork for this Warplet yet. Please try again shortly.";
-  if (/pinata|PINATA|JWT/i.test(message))
-    return "We couldn’t prepare the claim assets right now. Please try again shortly.";
-  if (/GEMINI|genai|GoogleGenerativeAI/i.test(message))
-    return "We couldn’t prepare the claim artwork right now. Please try again shortly.";
-  if (/blob|BLOB|vercel.*storage/i.test(message) && /token|auth|401|403/i.test(message))
-    return "We couldn’t save the claim assets right now. Please try again shortly.";
-  if (
-    /HTTP request failed|fetch failed|Fetch failed|ECONNRESET|ETIMEDOUT|timeout|429|503|502/i.test(
-      message,
-    )
-  )
-    return "The claim service is having trouble reaching Base right now. Please try again shortly.";
-  return "Could not prepare your claim right now. Please try again later.";
-}

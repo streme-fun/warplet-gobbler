@@ -22,18 +22,37 @@ export type RescueStage =
 
 type SignedRescuePayload = {
   warpletId: number;
-  tokenId: string; // bigint as decimal string
+  tokenId: string; // reserved GobbledWarplets receipt id as decimal string
   uri: string;
   deadline: string; // bigint as decimal string
   signature: Hex;
 };
 
-async function fetchSignedPayload(warpletId: number): Promise<SignedRescuePayload> {
-  const res = await fetch("/api/mint-gobbled-nft", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ warpletId }),
-  });
+async function fetchSignedPayload(
+  warpletId: number,
+  gobbledTokenId?: string,
+): Promise<SignedRescuePayload> {
+  // Cap below the route's 60s maxDuration so a stalled serverless invocation
+  // surfaces as an error instead of hanging "preparing…". Manual AbortController
+  // rather than AbortSignal.timeout for Safari < 16.4 support.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55_000);
+  let res: Response;
+  try {
+    res = await fetch("/api/mint-gobbled-nft", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ warpletId, gobbledTokenId }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("Preparing your claim timed out. Please try again.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
   const json = (await res.json()) as
     | (SignedRescuePayload & { success: true })
     | { success: false; error?: string };
@@ -69,7 +88,7 @@ export function useGobbledRescue() {
   }, []);
 
   const claim = useCallback(
-    async (warpletId: number) => {
+    async (warpletId: number, gobbledTokenId?: string) => {
       if (!ready) {
         setError("Claiming isn’t available right now. Please try again later.");
         setStage("error");
@@ -84,7 +103,7 @@ export function useGobbledRescue() {
       setTxHash(null);
       setStage("preparing");
       try {
-        const payload = await fetchSignedPayload(warpletId);
+        const payload = await fetchSignedPayload(warpletId, gobbledTokenId);
 
         setStage("awaiting-wallet");
         const hash = await writeContractAsync({
