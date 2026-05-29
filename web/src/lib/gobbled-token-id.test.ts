@@ -45,6 +45,21 @@ describe("parseOptionalGobbledTokenId", () => {
     );
   });
 
+  it("rejects non-primitive inputs (array/object) that would stringify past the regex", () => {
+    expect(() => parseOptionalGobbledTokenId([5])).toThrow(
+      "Invalid gobbledTokenId",
+    );
+    expect(() => parseOptionalGobbledTokenId([5, 6])).toThrow(
+      "Invalid gobbledTokenId",
+    );
+    expect(() => parseOptionalGobbledTokenId({ toString: () => "5" })).toThrow(
+      "Invalid gobbledTokenId",
+    );
+    expect(() => parseOptionalGobbledTokenId(true)).toThrow(
+      "Invalid gobbledTokenId",
+    );
+  });
+
   it("rejects unsafe / fractional numbers", () => {
     expect(() => parseOptionalGobbledTokenId(1.5)).toThrow(
       "Invalid gobbledTokenId",

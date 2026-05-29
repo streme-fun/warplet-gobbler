@@ -32,21 +32,26 @@ async function fetchSignedPayload(
   warpletId: number,
   gobbledTokenId?: string,
 ): Promise<SignedRescuePayload> {
+  // Cap below the route's 60s maxDuration so a stalled serverless invocation
+  // surfaces as an error instead of hanging "preparing…". Manual AbortController
+  // rather than AbortSignal.timeout for Safari < 16.4 support.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55_000);
   let res: Response;
   try {
     res = await fetch("/api/mint-gobbled-nft", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ warpletId, gobbledTokenId }),
-      // Cap below the route's 60s maxDuration so a stalled serverless
-      // invocation surfaces as an error instead of hanging "preparing…".
-      signal: AbortSignal.timeout(55_000),
+      signal: controller.signal,
     });
   } catch (e) {
-    if (e instanceof DOMException && e.name === "TimeoutError") {
+    if (e instanceof DOMException && e.name === "AbortError") {
       throw new Error("Preparing your claim timed out. Please try again.");
     }
     throw e;
+  } finally {
+    clearTimeout(timeout);
   }
   const json = (await res.json()) as
     | (SignedRescuePayload & { success: true })

@@ -55,6 +55,11 @@ import {
 } from "@/lib/settlement-records";
 import { attachGobbledTokenId } from "@/lib/auction-settled";
 import { computeLogScanWindows } from "@/lib/log-scan";
+import {
+  boundScanRecords,
+  readScanCache,
+  writeScanCache,
+} from "@/lib/settlement-cache";
 import { CONTRACTS } from "@/lib/contracts";
 import { defaultAuctionBidPaymentMethod } from "@/lib/defaultAuctionBidPayment";
 import { formatUserFacingTxError } from "@/lib/format-tx-error";
@@ -108,7 +113,6 @@ const erc20BalanceOfAbi = [
 /** Snapshot before finalize — `settleCurrentAndCreateNewAuction` replaces `auction` with the next lot. */
 function settledLotSnapshot(
   lot: AuctionSellLot | null,
-  gobbledTokenId?: bigint | string | null,
 ): StoredWinnerHighlight | null {
   if (
     lot == null ||
@@ -118,16 +122,11 @@ function settledLotSnapshot(
   ) {
     return null;
   }
+  // The exact gobbledTokenId is attached afterwards via attachGobbledTokenId
+  // (from the settle receipt) — this base snapshot carries only the lot id.
   return {
-    fp: getWinnerFingerprint(
-      lot.tokenId,
-      lot.bidder,
-      lot.amount,
-      gobbledTokenId,
-    ),
+    fp: getWinnerFingerprint(lot.tokenId, lot.bidder, lot.amount),
     tokenId: Number(lot.tokenId),
-    gobbledTokenId:
-      gobbledTokenId == null ? undefined : gobbledTokenId.toString(),
     bidder: lot.bidder,
     amountWei: lot.amount.toString(),
   };
@@ -270,11 +269,29 @@ export default function GobblerAuctionSection({
     let cancelled = false;
     void (async () => {
       try {
+        // Seed instantly from the last persisted scan, then only scan the
+        // blocks since — avoids re-issuing ~100 getLogs calls every mount.
+        const cached = readScanCache(base.id, CONTRACTS.auctionSell);
+        const cachedRecords = cached?.records ?? [];
+        if (cachedRecords.length > 0) {
+          setChainSettlementRecords(cachedRecords);
+        }
+
         const latest = await publicClient.getBlockNumber();
+        if (cancelled) return;
         const nowMs = Date.now();
+        // Delta since the last scan (capped at the full lookback); a full
+        // lookback when there's no usable cache.
+        const lookback = !cached
+          ? AUCTION_SETTLED_LOOKBACK_BLOCKS
+          : latest > cached.lastBlock
+            ? latest - cached.lastBlock < AUCTION_SETTLED_LOOKBACK_BLOCKS
+              ? latest - cached.lastBlock
+              : AUCTION_SETTLED_LOOKBACK_BLOCKS
+            : 0n;
         const windows = computeLogScanWindows(
           latest,
-          AUCTION_SETTLED_LOOKBACK_BLOCKS,
+          lookback,
           AUCTION_SETTLED_LOG_CHUNK_BLOCKS,
         );
 
@@ -342,9 +359,15 @@ export default function GobblerAuctionSection({
 
         if (cancelled) return;
         // Don't blank previously-fetched records when a transient failure
-        // turned up nothing — keep whatever the banner is already showing.
+        // turned up nothing — keep the cache seed / prior scan on screen.
         if (scanFailed && records.length === 0) return;
-        setChainSettlementRecords(records);
+        // Merge the delta over the cached set (exact-id records dedupe by
+        // fingerprint), bound it, display, and persist for the next visit.
+        const merged = boundScanRecords(
+          mergeSettlementRecords([...cachedRecords, ...records]),
+        );
+        setChainSettlementRecords(merged);
+        writeScanCache(base.id, CONTRACTS.auctionSell, latest, merged);
       } catch (error) {
         if (!cancelled) {
           console.warn("[auction-settled-logs] failed", {

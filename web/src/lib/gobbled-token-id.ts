@@ -12,6 +12,11 @@
 /** Parse an optional client-supplied gobbled token id into a bigint. */
 export function parseOptionalGobbledTokenId(raw: unknown): bigint | undefined {
   if (raw == null || raw === "") return undefined;
+  // Reject non-primitives up front so e.g. `[5]` (String([5]) === "5") can't
+  // slip through the digit check below.
+  if (typeof raw !== "string" && typeof raw !== "number") {
+    throw new Error("Invalid gobbledTokenId");
+  }
   if (typeof raw === "number" && !Number.isSafeInteger(raw)) {
     throw new Error("Invalid gobbledTokenId");
   }
