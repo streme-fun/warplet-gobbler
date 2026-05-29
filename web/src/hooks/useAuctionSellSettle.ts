@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import type { TransactionReceipt } from "viem";
 import { usePublicClient, useWriteContract } from "wagmi";
+import { base } from "wagmi/chains";
 import { auctionSellAbi } from "@/abi/auctionSell";
 import { CONTRACTS } from "@/lib/contracts";
 
@@ -15,7 +16,7 @@ export function useAuctionSellSettleActions(opts: {
   const { refetchAuction, refetchQueue } = opts;
   const { writeContractAsync, isPending: wagmiMutationPending } =
     useWriteContract();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: base.id });
 
   const [txPhase, setTxPhase] = useState<"idle" | AuctionSettleTxStage>("idle");
 

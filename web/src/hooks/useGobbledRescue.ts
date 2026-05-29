@@ -32,11 +32,22 @@ async function fetchSignedPayload(
   warpletId: number,
   gobbledTokenId?: string,
 ): Promise<SignedRescuePayload> {
-  const res = await fetch("/api/mint-gobbled-nft", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ warpletId, gobbledTokenId }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/mint-gobbled-nft", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ warpletId, gobbledTokenId }),
+      // Cap below the route's 60s maxDuration so a stalled serverless
+      // invocation surfaces as an error instead of hanging "preparing…".
+      signal: AbortSignal.timeout(55_000),
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new Error("Preparing your claim timed out. Please try again.");
+    }
+    throw e;
+  }
   const json = (await res.json()) as
     | (SignedRescuePayload & { success: true })
     | { success: false; error?: string };

@@ -127,4 +127,25 @@ describe("resolveReceiptTokenId — fallback path (no requested id)", () => {
       resolveReceiptTokenId({ warpletId: 7n, padding: PADDING, gobbleCount: 0n }),
     ).toThrow("No reservation exists for this warplet");
   });
+
+  it("returns the index-0 encoding for warpletId 0 on the fallback path", () => {
+    expect(
+      resolveReceiptTokenId({ warpletId: 0n, padding: PADDING, gobbleCount: 1n }),
+    ).toBe(0n);
+  });
+
+  it("throws a distinct error (not a RangeError) when padding is 0", () => {
+    expect(() =>
+      resolveReceiptTokenId({ warpletId: 42n, padding: 0n, gobbleCount: 3n }),
+    ).toThrow("WARPLET_ID_PADDING");
+    // also on the requested-id path
+    expect(() =>
+      resolveReceiptTokenId({
+        warpletId: 42n,
+        padding: 0n,
+        gobbleCount: 3n,
+        requestedGobbledTokenId: 42n,
+      }),
+    ).toThrow("WARPLET_ID_PADDING");
+  });
 });

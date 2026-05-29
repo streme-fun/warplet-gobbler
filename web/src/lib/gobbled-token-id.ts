@@ -38,6 +38,13 @@ export function resolveReceiptTokenId(input: {
 }): bigint {
   const { warpletId, padding, gobbleCount, requestedGobbledTokenId } = input;
 
+  // padding comes from a chain read; a 0 here means a misconfigured/wrong
+  // contract, not a bad client request. Throw a distinct (generic-mapped)
+  // error instead of letting `% 0n` raise an opaque RangeError.
+  if (padding <= 0n) {
+    throw new Error("Invalid WARPLET_ID_PADDING from chain");
+  }
+
   if (requestedGobbledTokenId != null) {
     if (requestedGobbledTokenId < 0n) {
       throw new Error("Invalid gobbledTokenId");

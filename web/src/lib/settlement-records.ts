@@ -39,7 +39,16 @@ export function getWinnerFingerprint(
   return `${id}-${bidder}-${amountWei}`;
 }
 
-/** Identity ignoring the receipt id — used to drop weaker duplicates. */
+/**
+ * Identity ignoring the receipt id — used to drop weaker duplicates.
+ *
+ * Assumption: a `(tokenId, bidder, amountWei)` triple identifies a single lot.
+ * If the same warplet were ever re-auctioned to the same bidder at the exact
+ * same wei price, two genuinely distinct gobbles would share this key and the
+ * legacy record for the earlier one would be dropped. That collision is
+ * vanishingly unlikely for a descending-price auction; fold `gobbledTokenId`
+ * into the key if that ever stops holding.
+ */
 function lotKey(r: SettlementRecord): string {
   return `${r.tokenId}-${r.bidder.toLowerCase()}-${r.amountWei}`;
 }

@@ -11,6 +11,7 @@ import {
   parseOptionalGobbledTokenId,
   resolveReceiptTokenId,
 } from "@/lib/gobbled-token-id";
+import { mintErrorForClient } from "@/lib/mint-error";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -65,7 +66,7 @@ async function readReceiptTokenId(
   contract: Address,
   warpletId: bigint,
   requestedGobbledTokenId?: bigint,
-): Promise<bigint> {
+): Promise<{ receiptTokenId: bigint; padding: bigint }> {
   const [padding, gobbleCount] = await Promise.all([
     publicClient.readContract({
       address: contract,
@@ -80,12 +81,13 @@ async function readReceiptTokenId(
     }),
   ]);
 
-  return resolveReceiptTokenId({
+  const receiptTokenId = resolveReceiptTokenId({
     warpletId,
     padding,
     gobbleCount,
     requestedGobbledTokenId,
   });
+  return { receiptTokenId, padding };
 }
 
 export async function POST(request: NextRequest) {
@@ -111,7 +113,7 @@ export async function POST(request: NextRequest) {
 
     const warpletId = BigInt(warpletIdNum);
     const requestedGobbledTokenId = parseOptionalGobbledTokenId(
-      body.gobbledTokenId ?? body.receiptTokenId,
+      body.gobbledTokenId,
     );
 
     // 1. Generate (or reuse) the gobbled image (Vercel Blob URL).
@@ -135,16 +137,11 @@ export async function POST(request: NextRequest) {
     const imageUrl = await uploadToPinata(imageFile);
 
     // 4. Read receipt id from chain so the metadata + signature line up with what the contract expects.
-    const receiptTokenId = await readReceiptTokenId(
+    const { receiptTokenId, padding } = await readReceiptTokenId(
       gobbledContract,
       warpletId,
       requestedGobbledTokenId,
     );
-    const padding = await publicClient.readContract({
-      address: gobbledContract,
-      abi: gobbledWarpletsAbi,
-      functionName: "WARPLET_ID_PADDING",
-    });
     const gobbleIndex = receiptTokenId / padding;
 
     // 5. Build & upload ERC-721 metadata JSON.
@@ -217,25 +214,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Map internal failures to actionable copy; keep generic fallback for unknowns. */
-function mintErrorForClient(message: string): string {
-  if (/Invalid gobbledTokenId|does not match warpletId/i.test(message))
-    return "This claim is not valid for that Warplet.";
-  if (message.includes("No reservation exists"))
-    return "This Warplet isn’t ready to claim yet. Give it a moment and try again.";
-  if (message.includes("Source warplet image not found"))
-    return "We couldn’t generate the claim artwork for this Warplet yet. Please try again shortly.";
-  if (/pinata|PINATA|JWT/i.test(message))
-    return "We couldn’t prepare the claim assets right now. Please try again shortly.";
-  if (/GEMINI|genai|GoogleGenerativeAI/i.test(message))
-    return "We couldn’t prepare the claim artwork right now. Please try again shortly.";
-  if (/blob|BLOB|vercel.*storage/i.test(message) && /token|auth|401|403/i.test(message))
-    return "We couldn’t save the claim assets right now. Please try again shortly.";
-  if (
-    /HTTP request failed|fetch failed|Fetch failed|ECONNRESET|ETIMEDOUT|timeout|429|503|502/i.test(
-      message,
-    )
-  )
-    return "The claim service is having trouble reaching Base right now. Please try again shortly.";
-  return "Could not prepare your claim right now. Please try again later.";
-}

@@ -1,13 +1,7 @@
 "use client";
 
-import type { Address, TransactionReceipt } from "viem";
-import {
-  formatUnits,
-  isAddressEqual,
-  parseAbiItem,
-  parseEventLogs,
-  zeroAddress,
-} from "viem";
+import type { Address } from "viem";
+import { formatUnits, isAddressEqual, parseAbiItem, zeroAddress } from "viem";
 import {
   useCallback,
   useEffect,
@@ -23,7 +17,6 @@ import AuctionWinnerClaimGate from "./AuctionWinnerClaimGate";
 import {
   addDismissedFp,
   appendSettlementRecord,
-  getWinnerFingerprint,
   LastAuctionSettlementStack,
   pickDisplaySettlementRows,
   readDismissedFpArray,
@@ -31,8 +24,6 @@ import {
   SETTLEMENT_DISPLAY_LIMIT,
   sortSettlementsForDisplay,
   type ClaimAction,
-  type SettlementRecord,
-  type StoredWinnerHighlight,
 } from "./LastAuctionWinnerBanner";
 import AuctionQueueCard from "./AuctionQueueCard";
 import AuctionQueueCardSkeleton from "./AuctionQueueCardSkeleton";
@@ -56,8 +47,13 @@ import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
 import { useGobbledRescue } from "@/hooks/useGobbledRescue";
 import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
 import { useReadContract } from "wagmi";
-import { auctionSellAbi } from "@/abi/auctionSell";
-import { mergeSettlementRecords } from "@/lib/settlement-records";
+import {
+  getWinnerFingerprint,
+  mergeSettlementRecords,
+  type SettlementRecord,
+  type StoredWinnerHighlight,
+} from "@/lib/settlement-records";
+import { attachGobbledTokenId } from "@/lib/auction-settled";
 import { computeLogScanWindows } from "@/lib/log-scan";
 import { CONTRACTS } from "@/lib/contracts";
 import { defaultAuctionBidPaymentMethod } from "@/lib/defaultAuctionBidPayment";
@@ -93,6 +89,9 @@ const MAX_PREWARM_SENT_KEYS = 200;
 const AUCTION_SETTLED_LOOKBACK_BLOCKS = 1_000_000n;
 /** Per-call window — wide single `getLogs` ranges are rejected by capped RPCs. */
 const AUCTION_SETTLED_LOG_CHUNK_BLOCKS = 10_000n;
+/** Base block time (~2s) — used to estimate a ms timestamp from a block number
+ *  so backfilled records sort on the same scale as `Date.now()`-stamped ones. */
+const BASE_BLOCK_MS = 2_000;
 const auctionSettledEvent = parseAbiItem(
   "event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId)",
 );
@@ -134,58 +133,6 @@ function settledLotSnapshot(
   };
 }
 
-function auctionSettledGobbledTokenId(
-  receipt: TransactionReceipt | null,
-  snap: StoredWinnerHighlight | null,
-): string | undefined {
-  if (!receipt || !snap) return undefined;
-
-  try {
-    const logs = parseEventLogs({
-      abi: auctionSellAbi,
-      eventName: "AuctionSettled",
-      logs: receipt.logs,
-    });
-    const match = logs.find((log) => {
-      const args = log.args as {
-        tokenId?: bigint;
-        winner?: Address;
-        amount?: bigint;
-        gobbledTokenId?: bigint;
-      };
-      return (
-        args.tokenId === BigInt(snap.tokenId) &&
-        args.winner != null &&
-        isAddressEqual(args.winner, snap.bidder) &&
-        args.amount === BigInt(snap.amountWei)
-      );
-    });
-    const args = match?.args as { gobbledTokenId?: bigint } | undefined;
-    return args?.gobbledTokenId?.toString();
-  } catch {
-    return undefined;
-  }
-}
-
-function attachGobbledTokenId(
-  snap: StoredWinnerHighlight | null,
-  receipt: TransactionReceipt | null,
-): StoredWinnerHighlight | null {
-  const gobbledTokenId = auctionSettledGobbledTokenId(receipt, snap);
-  if (!snap || gobbledTokenId == null) return snap;
-
-  return {
-    ...snap,
-    fp: getWinnerFingerprint(
-      BigInt(snap.tokenId),
-      snap.bidder,
-      BigInt(snap.amountWei),
-      gobbledTokenId,
-    ),
-    gobbledTokenId,
-  };
-}
-
 export default function GobblerAuctionSection({
   auctionBidPlacedFids,
   onBid,
@@ -209,7 +156,7 @@ export default function GobblerAuctionSection({
   viewerPfpUrl?: string | null;
 }) {
   const { address: viewerAddress, isConnected } = useAccount();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: base.id });
   const live = MOCK_AUCTIONS[0];
   const [selectedQueueFid, setSelectedQueueFid] = useState<number | null>(null);
   const [bumpError, setBumpError] = useState<string | null>(null);
@@ -311,15 +258,20 @@ export default function GobblerAuctionSection({
   const onChainMode = auctionSellConfigured;
 
   useEffect(() => {
-    if (!onChainMode || auctionReadError || !publicClient) {
+    // Only clear on a real "off" transition — not when publicClient merely
+    // changes identity (wagmi reconnect/chain switch), which would blank
+    // already-fetched winners mid-rescan.
+    if (!onChainMode || auctionReadError) {
       setChainSettlementRecords([]);
       return;
     }
+    if (!publicClient) return;
 
     let cancelled = false;
     void (async () => {
       try {
         const latest = await publicClient.getBlockNumber();
+        const nowMs = Date.now();
         const windows = computeLogScanWindows(
           latest,
           AUCTION_SETTLED_LOOKBACK_BLOCKS,
@@ -368,7 +320,13 @@ export default function GobblerAuctionSection({
                 gobbledTokenId: gobbledTokenId.toString(),
                 bidder: winner,
                 amountWei: amount.toString(),
-                recordedAt: Number(log.blockNumber ?? latest),
+                // Estimate a ms-scale timestamp from the block number so these
+                // sort alongside Date.now()/endTime-stamped records instead of
+                // always ranking oldest (block numbers are ~1e7, ms are ~1e12).
+                recordedAt:
+                  nowMs -
+                  Math.max(0, Number(latest - (log.blockNumber ?? latest))) *
+                    BASE_BLOCK_MS,
               });
             }
           } catch (error) {
