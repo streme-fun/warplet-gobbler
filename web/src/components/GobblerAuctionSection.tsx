@@ -1,7 +1,13 @@
 "use client";
 
-import type { Address } from "viem";
-import { formatUnits, isAddressEqual, zeroAddress } from "viem";
+import type { Address, TransactionReceipt } from "viem";
+import {
+  formatUnits,
+  isAddressEqual,
+  parseAbiItem,
+  parseEventLogs,
+  zeroAddress,
+} from "viem";
 import {
   useCallback,
   useEffect,
@@ -50,6 +56,9 @@ import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
 import { useGobbledRescue } from "@/hooks/useGobbledRescue";
 import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
 import { useReadContract } from "wagmi";
+import { auctionSellAbi } from "@/abi/auctionSell";
+import { mergeSettlementRecords } from "@/lib/settlement-records";
+import { computeLogScanWindows } from "@/lib/log-scan";
 import { CONTRACTS } from "@/lib/contracts";
 import { defaultAuctionBidPaymentMethod } from "@/lib/defaultAuctionBidPayment";
 import { formatUserFacingTxError } from "@/lib/format-tx-error";
@@ -81,6 +90,12 @@ const BUMP_FADE_SOURCE_MS = Math.round(420 * 1.2 * 1.2 * 0.9);
 const BUMP_HEAD_PREVIEW_MS = Math.round(680 * 1.2 * 1.2 * 0.9);
 const BUMP_FINALIZE_MS = Math.round(540 * 1.2 * 1.2 * 0.9);
 const MAX_PREWARM_SENT_KEYS = 200;
+const AUCTION_SETTLED_LOOKBACK_BLOCKS = 1_000_000n;
+/** Per-call window — wide single `getLogs` ranges are rejected by capped RPCs. */
+const AUCTION_SETTLED_LOG_CHUNK_BLOCKS = 10_000n;
+const auctionSettledEvent = parseAbiItem(
+  "event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId)",
+);
 const erc20BalanceOfAbi = [
   {
     type: "function",
@@ -94,6 +109,7 @@ const erc20BalanceOfAbi = [
 /** Snapshot before finalize — `settleCurrentAndCreateNewAuction` replaces `auction` with the next lot. */
 function settledLotSnapshot(
   lot: AuctionSellLot | null,
+  gobbledTokenId?: bigint | string | null,
 ): StoredWinnerHighlight | null {
   if (
     lot == null ||
@@ -104,10 +120,69 @@ function settledLotSnapshot(
     return null;
   }
   return {
-    fp: getWinnerFingerprint(lot.tokenId, lot.bidder, lot.amount),
+    fp: getWinnerFingerprint(
+      lot.tokenId,
+      lot.bidder,
+      lot.amount,
+      gobbledTokenId,
+    ),
     tokenId: Number(lot.tokenId),
+    gobbledTokenId:
+      gobbledTokenId == null ? undefined : gobbledTokenId.toString(),
     bidder: lot.bidder,
     amountWei: lot.amount.toString(),
+  };
+}
+
+function auctionSettledGobbledTokenId(
+  receipt: TransactionReceipt | null,
+  snap: StoredWinnerHighlight | null,
+): string | undefined {
+  if (!receipt || !snap) return undefined;
+
+  try {
+    const logs = parseEventLogs({
+      abi: auctionSellAbi,
+      eventName: "AuctionSettled",
+      logs: receipt.logs,
+    });
+    const match = logs.find((log) => {
+      const args = log.args as {
+        tokenId?: bigint;
+        winner?: Address;
+        amount?: bigint;
+        gobbledTokenId?: bigint;
+      };
+      return (
+        args.tokenId === BigInt(snap.tokenId) &&
+        args.winner != null &&
+        isAddressEqual(args.winner, snap.bidder) &&
+        args.amount === BigInt(snap.amountWei)
+      );
+    });
+    const args = match?.args as { gobbledTokenId?: bigint } | undefined;
+    return args?.gobbledTokenId?.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function attachGobbledTokenId(
+  snap: StoredWinnerHighlight | null,
+  receipt: TransactionReceipt | null,
+): StoredWinnerHighlight | null {
+  const gobbledTokenId = auctionSettledGobbledTokenId(receipt, snap);
+  if (!snap || gobbledTokenId == null) return snap;
+
+  return {
+    ...snap,
+    fp: getWinnerFingerprint(
+      BigInt(snap.tokenId),
+      snap.bidder,
+      BigInt(snap.amountWei),
+      gobbledTokenId,
+    ),
+    gobbledTokenId,
   };
 }
 
@@ -180,6 +255,9 @@ export default function GobblerAuctionSection({
   const [settlementHistory, setSettlementHistory] = useState<
     SettlementRecord[]
   >([]);
+  const [chainSettlementRecords, setChainSettlementRecords] = useState<
+    SettlementRecord[]
+  >([]);
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
   const prewarmSentKeysRef = useRef<Set<string>>(new Set());
 
@@ -231,6 +309,97 @@ export default function GobblerAuctionSection({
   }, [bidTokenAddress, warpgobbSpotUsd]);
 
   const onChainMode = auctionSellConfigured;
+
+  useEffect(() => {
+    if (!onChainMode || auctionReadError || !publicClient) {
+      setChainSettlementRecords([]);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const latest = await publicClient.getBlockNumber();
+        const windows = computeLogScanWindows(
+          latest,
+          AUCTION_SETTLED_LOOKBACK_BLOCKS,
+          AUCTION_SETTLED_LOG_CHUNK_BLOCKS,
+        );
+
+        const records: SettlementRecord[] = [];
+        let scanFailed = false;
+
+        // Walk newest → oldest in provider-safe windows: a capped RPC can't
+        // reject one giant range, and a mid-scan failure still yields the most
+        // recent winners (which is what the banner + claim flow care about).
+        for (const { fromBlock, toBlock } of windows) {
+          try {
+            const logs = await publicClient.getLogs({
+              address: CONTRACTS.auctionSell,
+              event: auctionSettledEvent,
+              fromBlock,
+              toBlock,
+            });
+            if (cancelled) return;
+
+            for (const log of logs) {
+              const { tokenId, winner, amount, gobbledTokenId } = log.args as {
+                tokenId?: bigint;
+                winner?: Address;
+                amount?: bigint;
+                gobbledTokenId?: bigint;
+              };
+              if (
+                tokenId == null ||
+                winner == null ||
+                amount == null ||
+                gobbledTokenId == null
+              ) {
+                continue;
+              }
+              records.push({
+                fp: getWinnerFingerprint(
+                  tokenId,
+                  winner,
+                  amount,
+                  gobbledTokenId,
+                ),
+                tokenId: Number(tokenId),
+                gobbledTokenId: gobbledTokenId.toString(),
+                bidder: winner,
+                amountWei: amount.toString(),
+                recordedAt: Number(log.blockNumber ?? latest),
+              });
+            }
+          } catch (error) {
+            scanFailed = true;
+            console.warn("[auction-settled-logs] chunk failed", {
+              fromBlock: fromBlock.toString(),
+              toBlock: toBlock.toString(),
+              error: error instanceof Error ? error.message : String(error),
+            });
+            break;
+          }
+        }
+
+        if (cancelled) return;
+        // Don't blank previously-fetched records when a transient failure
+        // turned up nothing — keep whatever the banner is already showing.
+        if (scanFailed && records.length === 0) return;
+        setChainSettlementRecords(records);
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("[auction-settled-logs] failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onChainMode, auctionReadError, publicClient]);
 
   const hasParsedLot =
     auctionSellConfigured && !auctionReadError && chainLot != null;
@@ -594,22 +763,15 @@ export default function GobblerAuctionSection({
     return { ...chainSettledWinnerSnap, recordedAt };
   }, [onChainMode, chainSettledWinnerSnap, chainLot]);
 
-  const mergedSettlementRecords = useMemo((): SettlementRecord[] => {
-    const byFp = new Map<string, SettlementRecord>();
-    for (const r of settlementHistory) {
-      byFp.set(r.fp, r);
-    }
-    if (chainSettlementRecord) {
-      const prev = byFp.get(chainSettlementRecord.fp);
-      byFp.set(chainSettlementRecord.fp, {
-        ...chainSettlementRecord,
-        recordedAt: prev
-          ? Math.max(prev.recordedAt, chainSettlementRecord.recordedAt)
-          : chainSettlementRecord.recordedAt,
-      });
-    }
-    return [...byFp.values()];
-  }, [settlementHistory, chainSettlementRecord]);
+  const mergedSettlementRecords = useMemo(
+    (): SettlementRecord[] =>
+      mergeSettlementRecords([
+        ...chainSettlementRecords,
+        ...settlementHistory,
+        ...(chainSettlementRecord ? [chainSettlementRecord] : []),
+      ]),
+    [chainSettlementRecords, settlementHistory, chainSettlementRecord],
+  );
 
   const dismissedFpSet = useMemo(
     () => new Set(dismissedWinnerFps),
@@ -722,7 +884,10 @@ export default function GobblerAuctionSection({
 
   const handleClaimWarplet = useCallback(() => {
     if (!claimFocusRecord) return;
-    void rescue.claim(claimFocusRecord.tokenId);
+    void rescue.claim(
+      claimFocusRecord.tokenId,
+      claimFocusRecord.gobbledTokenId,
+    );
   }, [rescue, claimFocusRecord]);
 
   const claimAction: ClaimAction | undefined =
@@ -761,7 +926,7 @@ export default function GobblerAuctionSection({
         visible: true,
         stage: rescue.stage,
         error: rescue.error,
-        onClaim: () => void rescue.claim(row.tokenId),
+        onClaim: () => void rescue.claim(row.tokenId, row.gobbledTokenId),
       };
     },
     [claimFocusRecord, viewerAddress, rescue],
@@ -1026,10 +1191,11 @@ export default function GobblerAuctionSection({
     expectNewLotAfterSettleRef.current = false;
     const snap = settledLotSnapshot(chainLot);
     try {
-      await settleWhenPaused();
-      if (snap) {
+      const receipt = await settleWhenPaused();
+      const settledSnap = attachGobbledTokenId(snap, receipt);
+      if (settledSnap) {
         const next = appendSettlementRecord({
-          ...snap,
+          ...settledSnap,
           recordedAt: Date.now(),
         });
         setSettlementHistory(next);
@@ -1044,10 +1210,11 @@ export default function GobblerAuctionSection({
     const snap = settledLotSnapshot(chainLot);
     expectNewLotAfterSettleRef.current = true;
     try {
-      await settleAndStartNext();
-      if (snap) {
+      const receipt = await settleAndStartNext();
+      const settledSnap = attachGobbledTokenId(snap, receipt);
+      if (settledSnap) {
         const next = appendSettlementRecord({
-          ...snap,
+          ...settledSnap,
           recordedAt: Date.now(),
         });
         setSettlementHistory(next);

@@ -22,17 +22,20 @@ export type RescueStage =
 
 type SignedRescuePayload = {
   warpletId: number;
-  tokenId: string; // bigint as decimal string
+  tokenId: string; // reserved GobbledWarplets receipt id as decimal string
   uri: string;
   deadline: string; // bigint as decimal string
   signature: Hex;
 };
 
-async function fetchSignedPayload(warpletId: number): Promise<SignedRescuePayload> {
+async function fetchSignedPayload(
+  warpletId: number,
+  gobbledTokenId?: string,
+): Promise<SignedRescuePayload> {
   const res = await fetch("/api/mint-gobbled-nft", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ warpletId }),
+    body: JSON.stringify({ warpletId, gobbledTokenId }),
   });
   const json = (await res.json()) as
     | (SignedRescuePayload & { success: true })
@@ -69,7 +72,7 @@ export function useGobbledRescue() {
   }, []);
 
   const claim = useCallback(
-    async (warpletId: number) => {
+    async (warpletId: number, gobbledTokenId?: string) => {
       if (!ready) {
         setError("Claiming isn’t available right now. Please try again later.");
         setStage("error");
@@ -84,7 +87,7 @@ export function useGobbledRescue() {
       setTxHash(null);
       setStage("preparing");
       try {
-        const payload = await fetchSignedPayload(warpletId);
+        const payload = await fetchSignedPayload(warpletId, gobbledTokenId);
 
         setStage("awaiting-wallet");
         const hash = await writeContractAsync({

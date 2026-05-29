@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import type { TransactionReceipt } from "viem";
 import { usePublicClient, useWriteContract } from "wagmi";
 import { auctionSellAbi } from "@/abi/auctionSell";
 import { CONTRACTS } from "@/lib/contracts";
@@ -27,15 +28,19 @@ export function useAuctionSellSettleActions(opts: {
   }, [refetchAuction, refetchQueue]);
 
   const runWithStages = useCallback(
-    async (write: () => Promise<`0x${string}`>) => {
+    async (
+      write: () => Promise<`0x${string}`>,
+    ): Promise<TransactionReceipt | null> => {
       setTxPhase("signing");
       try {
         const hash = await write();
         setTxPhase("confirming");
+        let receipt: TransactionReceipt | null = null;
         if (publicClient) {
-          await publicClient.waitForTransactionReceipt({ hash });
+          receipt = await publicClient.waitForTransactionReceipt({ hash });
         }
         await afterReceipt();
+        return receipt;
       } finally {
         setTxPhase("idle");
       }
@@ -45,7 +50,7 @@ export function useAuctionSellSettleActions(opts: {
 
   /** When contract is paused — completes settlement, transfers NFT to winner, pays proceeds. */
   const settleWhenPaused = useCallback(async () => {
-    await runWithStages(() =>
+    return runWithStages(() =>
       writeContractAsync({
         abi: auctionSellAbi,
         address: CONTRACTS.auctionSell,
@@ -56,7 +61,7 @@ export function useAuctionSellSettleActions(opts: {
 
   /** When not paused — settle then pull next token from queue into a new auction (if any). */
   const settleAndStartNext = useCallback(async () => {
-    await runWithStages(() =>
+    return runWithStages(() =>
       writeContractAsync({
         abi: auctionSellAbi,
         address: CONTRACTS.auctionSell,
