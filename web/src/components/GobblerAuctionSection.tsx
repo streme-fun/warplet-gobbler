@@ -794,7 +794,9 @@ export default function GobblerAuctionSection({
     if (rescuedReads) {
       reconcileGobbledIds.forEach((id, i) => {
         const r = rescuedReads[i];
-        if (r?.status === "success" && r.result === true) set.add(id);
+        // `warpletRescued(uint256)` returns bool; wagmi widens the result type
+        // across the `.map()`-built contracts array, so coerce explicitly.
+        if (r?.status === "success" && Boolean(r.result)) set.add(id);
       });
     }
     return set;
