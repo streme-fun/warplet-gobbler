@@ -46,13 +46,18 @@ import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
 import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
 import { useGobbledRescue } from "@/hooks/useGobbledRescue";
 import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
-import { useReadContract } from "wagmi";
+import { useReadContract, useReadContracts } from "wagmi";
 import {
   getWinnerFingerprint,
   mergeSettlementRecords,
   type SettlementRecord,
   type StoredWinnerHighlight,
 } from "@/lib/settlement-records";
+import {
+  dropRescuedRecords,
+  gobbledTokenIdsToReconcile,
+} from "@/lib/claimable-records";
+import { gobbledWarpletsAbi } from "@/abi/gobbledWarplets";
 import { attachGobbledTokenId } from "@/lib/auction-settled";
 import { computeLogScanWindows } from "@/lib/log-scan";
 import {
@@ -759,13 +764,50 @@ export default function GobblerAuctionSection({
     [dismissedWinnerFps],
   );
 
+  // Reconcile against on-chain `warpletRescued`: a lot whose receipt the winner
+  // already pulled out of the auction must stop counting as claimable. Without
+  // this, an already-claimed higher-bid lot hijacks `claimFocusRecord` from a
+  // genuinely-unclaimed lower-bid lot (and renders a stale CTA that reverts).
+  const reconcileGobbledIds = useMemo(
+    () => gobbledTokenIdsToReconcile(mergedSettlementRecords),
+    [mergedSettlementRecords],
+  );
+
+  const { data: rescuedReads } = useReadContracts({
+    contracts: reconcileGobbledIds.map((id) => ({
+      address: CONTRACTS.gobbledWarplets,
+      abi: gobbledWarpletsAbi,
+      functionName: "warpletRescued",
+      args: [BigInt(id)],
+      chainId: base.id,
+    })),
+    query: {
+      enabled:
+        onChainMode &&
+        reconcileGobbledIds.length > 0 &&
+        !isAddressEqual(CONTRACTS.gobbledWarplets, zeroAddress),
+    },
+  });
+
+  const rescuedGobbledIdSet = useMemo(() => {
+    const set = new Set<string>();
+    if (rescuedReads) {
+      reconcileGobbledIds.forEach((id, i) => {
+        const r = rescuedReads[i];
+        if (r?.status === "success" && r.result === true) set.add(id);
+      });
+    }
+    return set;
+  }, [rescuedReads, reconcileGobbledIds]);
+
   const sortedOpenSettlements = useMemo(() => {
     if (!onChainMode) return [];
     const open = mergedSettlementRecords.filter(
       (r) => !dismissedFpSet.has(r.fp),
     );
-    return sortSettlementsForDisplay(open);
-  }, [onChainMode, mergedSettlementRecords, dismissedFpSet]);
+    const unclaimed = dropRescuedRecords(open, rescuedGobbledIdSet);
+    return sortSettlementsForDisplay(unclaimed);
+  }, [onChainMode, mergedSettlementRecords, dismissedFpSet, rescuedGobbledIdSet]);
 
   /** Which won lot the connected wallet should rescue first (chain-won ties over history). */
   const claimFocusRecord = useMemo((): SettlementRecord | null => {
