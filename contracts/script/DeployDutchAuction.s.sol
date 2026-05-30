@@ -5,7 +5,7 @@ import {console2} from "forge-std/Script.sol";
 import {DutchAuction} from "../src/DutchAuction.sol";
 import {DeployHelpers} from "./DeployHelpers.sol";
 
-/// @notice Deploy a new `DutchAuction` (“The Gobbler”) with `nftReserve` pointing at your `AuctionSell` queue.
+/// @notice Deploy a new `DutchAuction` (“The Gobbler”) with `nftReserve` pointing at your `NFTReserve` (or compatible queue).
 /// @dev Constructor approves `FEE_HANDLER_ADDRESS` on the payment token so `FeeHandler.setAuction` can later
 ///      `transferFrom` the old auction’s balance during migration.
 ///
@@ -18,7 +18,7 @@ import {DeployHelpers} from "./DeployHelpers.sol";
 /// - `PRIVATE_KEY` xor `DEPLOYER_PRIVATE_KEY`
 /// - `WARPLETS_NFT_ADDRESS` — Warplets ERC721
 /// - `DUTCH_AUCTION_PAYMENT_TOKEN_ADDRESS` — $WARPGOBB / Streme ERC20 the gobbler pays out (same token the stream funds)
-/// - `DUTCH_AUCTION_NFT_RESERVE_ADDRESS` — **`AuctionSell`** (gobbled Warplets are `safeTransferFrom`’d here)
+/// - `DUTCH_AUCTION_NFT_RESERVE_ADDRESS` — **`NFTReserve`** (Warplets are `safeTransferFrom`’d here; auction runner is separate)
 /// - `FEE_HANDLER_ADDRESS` — existing `FeeHandler` (receives `type(uint256).max` allowance from this auction)
 ///
 /// ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ contract DeployDutchAuction is DeployHelpers {
         console2.log("DutchAuction:", address(auction));
         console2.log("warplets:", warplets);
         console2.log("paymentToken:", payment);
-        console2.log("nftReserve (AuctionSell):", nftReserve);
+        console2.log("nftReserve:", nftReserve);
         console2.log("feeHandler (allowance spender):", feeHandler);
     }
 }

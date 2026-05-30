@@ -210,7 +210,7 @@ contract GobbleSniper is IERC777Recipient, IERC721Receiver {
         (bool ok,) = seaport.call{value: ethForNft}(seaportCalldata_);
         require(ok, "Seaport buy failed");
 
-        // 4. Deliver to nftReserve (safeTransferFrom so AuctionSell enqueues it)
+        // 4. Deliver to nftReserve (`NFTReserve.onERC721Received` enqueues)
         warplets.safeTransferFrom(address(this), nftReserve, tokenId);
     }
 

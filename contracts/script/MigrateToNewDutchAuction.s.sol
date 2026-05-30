@@ -7,15 +7,16 @@ import {FeeHandler} from "../src/FeeHandler.sol";
 import {DeployHelpers} from "./DeployHelpers.sol";
 
 /// @notice One transaction sequence: deploy `DutchAuction` → `FeeHandler.setAuction` → `FeeHandler.startStream`.
-/// @dev Requires old DutchAuction pot drained so `setAuction`’s `transferFrom` path is skipped. Caller must be
+/// @dev Requires old DutchAuction pot drained so `setAuction`'s `transferFrom` path is skipped. Caller must be
 ///      `FeeHandler` `DEFAULT_ADMIN_ROLE`. Uses the same env as `DeployDutchAuction.s.sol` plus no extra keys.
 ///
 /// ```
 /// forge script script/MigrateToNewDutchAuction.s.sol:MigrateToNewDutchAuction --rpc-url base --broadcast --verify -vvv
 /// ```
 ///
-/// Required env: `WARPLETS_NFT_ADDRESS`, `DUTCH_AUCTION_PAYMENT_TOKEN_ADDRESS`, `DUTCH_AUCTION_NFT_RESERVE_ADDRESS`
-/// (your `AuctionSell`), `FEE_HANDLER_ADDRESS`, and exactly one of `PRIVATE_KEY` / `DEPLOYER_PRIVATE_KEY`.
+/// Required env: `WARPLETS_NFT_ADDRESS`, `DUTCH_AUCTION_PAYMENT_TOKEN_ADDRESS`,
+/// `DUTCH_AUCTION_NFT_RESERVE_ADDRESS` (**NFTReserve** FIFO custody; ingest from Dutch + queue for AuctionSell),
+/// `FEE_HANDLER_ADDRESS`, and exactly one of `PRIVATE_KEY` / `DEPLOYER_PRIVATE_KEY`.
 contract MigrateToNewDutchAuction is DeployHelpers {
     function run() external {
         uint256 pk = _loadPrivateKey();

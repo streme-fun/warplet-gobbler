@@ -21,11 +21,16 @@ function dedupeFids(ids: bigint[]): number[] {
  * Keeps Parallax tiles aligned with the queue strip.
  */
 export function useAuctionQueueStripFids(): number[] {
-  const { configured, isError } = useAuctionSellAuction();
+  const { configured, isError, auction } = useAuctionSellAuction();
   const queueReadsEnabled = configured && !isError;
+  const liveTokenId =
+    auction != null && auction.tokenId > 0n && !auction.settled
+      ? auction.tokenId
+      : undefined;
   const { data: chainQueuedIds = [], isLoading: queueLoading } =
     useAuctionSellQueue({
       enabled: queueReadsEnabled,
+      excludeTokenId: liveTokenId,
     });
 
   return useMemo(() => {
