@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useModal } from "connectkit";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 import { formatUnits, isAddressEqual, parseUnits, zeroAddress } from "viem";
 import type { Address } from "viem";
@@ -218,7 +218,7 @@ function StartNewAuctionPanel({
   cfg: AuctionLiveHeroStartNewAuction;
 }) {
   const { isDisconnected, isReconnecting, isConnecting } = useAccount();
-  const { setOpen: setConnectModalOpen } = useModal();
+  const { openConnectModal } = useConnectModal();
   const [pressPulse, setPressPulse] = useState(false);
   // While wagmi is restoring a session from storage, address is already known but
   // isConnected hasn't flipped yet. Don't show "Connect Wallet" or open the modal
@@ -237,7 +237,7 @@ function StartNewAuctionPanel({
           if (cfg.loading) return;
           if (walletReconnecting) return;
           if (walletDisconnected) {
-            setConnectModalOpen(true);
+            openConnectModal?.();
             return;
           }
           if (cfg.disabled) return;
@@ -376,7 +376,7 @@ export default function AuctionLiveHero({
   const renewFlashRef = useRef<HTMLDivElement>(null);
   const userSelectedPaymentModeRef = useRef(false);
   const { isDisconnected, isReconnecting, isConnecting } = useAccount();
-  const { setOpen: setConnectModalOpen } = useModal();
+  const { openConnectModal } = useConnectModal();
   const [bidAmountRaw, setBidAmountRaw] = useState("");
   const [ethAmountDisplayRaw, setEthAmountDisplayRaw] = useState("");
   const [bidValidationError, setBidValidationError] = useState<string | null>(
@@ -733,7 +733,7 @@ export default function AuctionLiveHero({
   const walletReconnecting = isReconnecting || isConnecting;
   const openConnectWallet = () => {
     if (walletReconnecting) return;
-    setConnectModalOpen(true);
+    openConnectModal?.();
   };
 
   return (

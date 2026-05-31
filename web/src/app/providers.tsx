@@ -3,14 +3,24 @@
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { base, mainnet } from "wagmi/chains";
 import { ethMainnetHttp } from "@/lib/eth-mainnet-http";
+import { createWalletConnectStorage } from "@/lib/walletconnect-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  ConnectKitProvider,
-  getDefaultConfig,
-  getDefaultConnectors,
-} from "connectkit";
+  RainbowKitProvider,
+  darkTheme,
+  getDefaultWallets,
+  type RainbowKitWalletConnectParameters,
+} from "@rainbow-me/rainbowkit";
 import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 
+const appName = "WarpletGobbler";
+const appDescription =
+  "A PunkStrategy-style flywheel for Warplets using Superfluid streaming";
+const appUrl =
+  (typeof window !== "undefined" && window.location.origin) ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "https://warpletgobbler.xyz";
+const appIcon = `${appUrl}/logo.jpeg`;
 const walletConnectProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID ?? "";
 
 /**
@@ -26,36 +36,45 @@ const walletConnectProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID ?? "";
 const baseRpcUrl =
   process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() ||
   "https://rpc-endpoints.superfluid.dev/base-mainnet?app=streme-x8fsj6";
+const chains = [base, mainnet] as const;
+
+const walletConnectParameters = {
+  customStoragePrefix: "warplet-gobbler",
+  storage: createWalletConnectStorage(),
+  metadata: {
+    name: appName,
+    description: appDescription,
+    url: appUrl,
+    icons: [appIcon],
+  },
+} satisfies RainbowKitWalletConnectParameters;
+
+const { connectors: rainbowKitConnectors } = getDefaultWallets({
+  appName,
+  appDescription,
+  appUrl,
+  appIcon,
+  projectId: walletConnectProjectId,
+  walletConnectParameters,
+});
 
 /**
- * One config everywhere: iframe heuristic must not swap connector sets or wagmi/ConnectKit disagree.
+ * One config everywhere: iframe heuristic must not swap connector sets or wagmi's
+ * wallet UI state can disagree with the available connectors.
  *
- * Mainnet is included ONLY so ConnectKit's `<Avatar>` component finds chain 1 in the app's
- * config and uses our CORS-friendly transport instead of falling back to its hardcoded
- * `createConfig({ chains: [mainnet], transports: { [mainnet.id]: http() } })` in
- * `connectkit/build/index.es.js` — that fallback hits viem's default public endpoint
- * (`eth.merkle.io`) which does not serve `Access-Control-Allow-Origin`.
+ * Mainnet is included so wallet UI ENS/avatar reads use our CORS-friendly transport
+ * instead of viem's default public endpoint (`eth.merkle.io`), which does not serve
+ * `Access-Control-Allow-Origin`.
  */
-const config = createConfig(
-  getDefaultConfig({
-    chains: [base, mainnet],
-    transports: {
-      [base.id]: http(baseRpcUrl),
-      [mainnet.id]: ethMainnetHttp(),
-    },
-    walletConnectProjectId,
-    appName: "WarpletGobbler",
-    connectors: [
-      farcasterMiniApp(),
-      ...getDefaultConnectors({
-        app: { name: "WarpletGobbler" },
-        walletConnectProjectId,
-        // Aave Account is ConnectKit’s optional smart-account connector, not this app’s product.
-        enableAaveAccount: false,
-      }),
-    ],
-  }),
-);
+const config = createConfig({
+  ssr: true,
+  chains,
+  transports: {
+    [base.id]: http(baseRpcUrl),
+    [mainnet.id]: ethMainnetHttp(),
+  },
+  connectors: [farcasterMiniApp(), ...rainbowKitConnectors],
+});
 
 const queryClient = new QueryClient();
 
@@ -63,7 +82,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <ConnectKitProvider mode="dark">{children}</ConnectKitProvider>
+        <RainbowKitProvider
+          initialChain={base.id}
+          modalSize="compact"
+          theme={darkTheme({
+            accentColor: "#00F5FF",
+            accentColorForeground: "#13111C",
+            borderRadius: "medium",
+          })}
+        >
+          {children}
+        </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

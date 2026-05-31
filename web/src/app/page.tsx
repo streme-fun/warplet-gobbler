@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
-import { ConnectKitButton, useModal } from "connectkit";
+import { ConnectButton, useConnectModal } from "@rainbow-me/rainbowkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits, type Address } from "viem";
 import { useMiniApp } from "@/hooks/useMiniApp";
@@ -593,7 +593,7 @@ function GobblerBootOverlay({
 export default function Home() {
   const { isLoaded, context, isMiniApp } = useMiniApp();
   const { isConnected } = useAccount();
-  const { setOpen: setConnectModalOpen } = useModal();
+  const { openConnectModal } = useConnectModal();
   const publicClient = usePublicClient();
   const [gobbling, setGobbling] = useState(false);
   const [warpletVisible, setWarpletVisible] = useState(true);
@@ -712,8 +712,8 @@ export default function Home() {
   const claimBlockingResolved = claimBlocking !== null;
   const claimBlockingActive = claimBlocking ?? false;
   const handleConnectWallet = useCallback(() => {
-    setConnectModalOpen(true);
-  }, [setConnectModalOpen]);
+    openConnectModal?.();
+  }, [openConnectModal]);
   const [initialViewResolved, setInitialViewResolved] = useState(false);
   const [bootDone, setBootDone] = useState(false);
   /** Hysteresis for jump-link label — avoids flip-flopping when scroll sits near 50% blend. */
@@ -1115,19 +1115,22 @@ export default function Home() {
               {isMiniApp ? (
                 <MiniAppWalletButton />
               ) : (
-                <ConnectKitButton.Custom>
-                  {({ isConnected, show, address, ensName }) => (
-                    <button
-                      onClick={show}
-                      className="text-xs px-3 py-1.5 rounded-full border border-base-content/20 text-base-content/70 hover:border-base-content/40 hover:text-base-content transition-colors"
-                    >
-                      {isConnected
-                        ? (ensName ??
-                          `${address?.slice(0, 4)}…${address?.slice(-3)}`)
-                        : "Connect"}
-                    </button>
-                  )}
-                </ConnectKitButton.Custom>
+                <ConnectButton.Custom>
+                  {({ account, mounted, openAccountModal, openConnectModal }) => {
+                    const connected = mounted && account;
+                    return (
+                      <button
+                        type="button"
+                        onClick={
+                          connected ? openAccountModal : openConnectModal
+                        }
+                        className="text-xs px-3 py-1.5 rounded-full border border-base-content/20 text-base-content/70 hover:border-base-content/40 hover:text-base-content transition-colors"
+                      >
+                        {connected ? account.displayName : "Connect"}
+                      </button>
+                    );
+                  }}
+                </ConnectButton.Custom>
               )}
             </div>
           </div>

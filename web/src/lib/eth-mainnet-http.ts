@@ -3,10 +3,10 @@ import { fallback, http } from "viem";
 /**
  * Ethereum L1 JSON-RPC for ENS and other mainnet reads (client + server).
  *
- * We need a browser-CORS-enabled mainnet RPC specifically so ConnectKit's
- * hardcoded `<Avatar>` ENS queries don't fail preflight. viem's `http()`
- * default (`eth.merkle.io`) refuses cross-origin requests, and Cloudflare's
- * public `cloudflare-eth.com` gateway stopped serving
+ * We need a browser-CORS-enabled mainnet RPC specifically so wallet UI ENS and
+ * avatar queries don't fail preflight. viem's `http()` default (`eth.merkle.io`)
+ * refuses cross-origin requests, and Cloudflare's public `cloudflare-eth.com`
+ * gateway stopped serving
  * `Access-Control-Allow-Origin` in early 2024 — so neither is a safe default.
  *
  * Instead we build a `fallback` transport across several independent public
