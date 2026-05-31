@@ -6,6 +6,8 @@ const isAddressLike = (value?: string): value is Address =>
   !!value && /^0x[a-fA-F0-9]{40}$/.test(value);
 const envAddress = (value?: string): Address =>
   isAddressLike(value) ? value : ZERO_ADDRESS;
+const envBlock = (value?: string): bigint =>
+  value != null && /^\d+$/.test(value) ? BigInt(value) : 0n;
 
 // Contract addresses — set in web/.env.local
 export const CONTRACTS = {
@@ -27,6 +29,10 @@ export const CONTRACTS = {
   usdcToken: envAddress(process.env.NEXT_PUBLIC_USDC_TOKEN_ADDRESS),
   warpgobbWethPool: envAddress(process.env.NEXT_PUBLIC_WARPGOBB_WETH_POOL_ADDRESS),
   wethUsdcPool: envAddress(process.env.NEXT_PUBLIC_WETH_USDC_POOL_ADDRESS),
+} as const;
+
+export const CONTRACT_BLOCKS = {
+  auctionSellDeploy: envBlock(process.env.NEXT_PUBLIC_AUCTION_SELL_DEPLOY_BLOCK),
 } as const;
 
 const ZERO_BYTES32 =
