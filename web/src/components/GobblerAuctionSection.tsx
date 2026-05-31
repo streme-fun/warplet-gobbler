@@ -229,6 +229,7 @@ export default function GobblerAuctionSection({
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
   const prewarmSentKeysRef = useRef<Set<string>>(new Set());
   const missingDeployBlockWarnedRef = useRef(false);
+  const claimableHeldWarpletsRef = useRef<ClaimableHolding[]>([]);
   const targetResolveSeedRecordsRef = useRef<SettlementRecord[]>([]);
 
   useEffect(() => {
@@ -395,8 +396,8 @@ export default function GobblerAuctionSection({
                 scanRecords,
                 windowRecords,
               );
+              persistScanProgress(partialLastBlock, scanRecords);
             }
-            persistScanProgress(partialLastBlock, scanRecords);
           } catch (error) {
             completedAllWindows = false;
             console.warn("[auction-settled-logs] chunk failed", {
@@ -635,16 +636,9 @@ export default function GobblerAuctionSection({
     [claimableHeldWarplets],
   );
 
-  const stableClaimableHeldWarplets = useMemo((): ClaimableHolding[] => {
-    if (claimableHeldWarpletKey === "") return [];
-    return claimableHeldWarpletKey.split("|").map((part) => {
-      const [warpletId, receiptId] = part.split(":");
-      return {
-        warpletId: BigInt(warpletId!),
-        receiptId: BigInt(receiptId!),
-      };
-    });
-  }, [claimableHeldWarpletKey]);
+  useEffect(() => {
+    claimableHeldWarpletsRef.current = claimableHeldWarplets;
+  }, [claimableHeldWarplets]);
 
   const holdingsAuthorityReady =
     holdingsReadsEnabled &&
@@ -1052,16 +1046,15 @@ export default function GobblerAuctionSection({
       }
       return;
     }
-    if (stableClaimableHeldWarplets.length === 0) {
+    const claimableTargets = claimableHeldWarpletsRef.current;
+    if (claimableTargets.length === 0) {
       setTargetedSettlementRecords([]);
       return;
     }
 
-    const targetReceiptIds = stableClaimableHeldWarplets.map((h) =>
-      h.receiptId.toString(),
-    );
+    const targetReceiptIds = claimableTargets.map((h) => h.receiptId.toString());
     const seedMatches = settlementRecordsForClaimableHoldings(
-      stableClaimableHeldWarplets,
+      claimableTargets,
       targetResolveSeedRecordsRef.current,
     );
     const seedMatchedIds = seedMatches
@@ -1076,7 +1069,7 @@ export default function GobblerAuctionSection({
 
     let cancelled = false;
     void (async () => {
-      const targetTokenIds = stableClaimableHeldWarplets.map((h) => h.warpletId);
+      const targetTokenIds = claimableTargets.map((h) => h.warpletId);
       const targetReceiptIdSet = new Set(targetReceiptIds);
       const matchedReceiptIds = new Set(seedMatchedIds);
       let resolvedRecords = seedMatches;
@@ -1141,7 +1134,7 @@ export default function GobblerAuctionSection({
 
             if (windowRecords.length > 0) {
               resolvedRecords = settlementRecordsForClaimableHoldings(
-                stableClaimableHeldWarplets,
+                claimableTargets,
                 mergeSettlementScanProgress(resolvedRecords, windowRecords),
               );
               setTargetedSettlementRecords(resolvedRecords);
@@ -1195,7 +1188,7 @@ export default function GobblerAuctionSection({
     onChainMode,
     publicClient,
     holdingsAuthorityReady,
-    stableClaimableHeldWarplets,
+    claimableHeldWarpletKey,
     targetResolveSeedRecordKey,
   ]);
 
