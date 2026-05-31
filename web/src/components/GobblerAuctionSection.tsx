@@ -232,6 +232,10 @@ export default function GobblerAuctionSection({
   const claimableHeldWarpletsRef = useRef<ClaimableHolding[]>([]);
   const targetResolveSeedRecordsRef = useRef<SettlementRecord[]>([]);
 
+  const clearTargetedSettlementRecords = useCallback(() => {
+    setTargetedSettlementRecords((prev) => (prev.length === 0 ? prev : []));
+  }, []);
+
   useEffect(() => {
     setDismissedWinnerFps(readDismissedFpArray());
     setSettlementHistory(readSettlementHistory());
@@ -328,17 +332,10 @@ export default function GobblerAuctionSection({
           lastBlock: bigint,
           records: SettlementRecord[],
         ) => {
-          const currentCached = readScanCache(base.id, CONTRACTS.auctionSell);
           const safeLastBlock =
-            currentCached && currentCached.lastBlock > lastBlock
-              ? currentCached.lastBlock
-              : lastBlock;
-          const merged = mergeSettlementScanProgress(
-            currentCached?.records ?? [],
-            records,
-          );
-          setChainSettlementRecords(merged);
-          writeScanCache(base.id, CONTRACTS.auctionSell, safeLastBlock, merged);
+            partialLastBlock > lastBlock ? partialLastBlock : lastBlock;
+          setChainSettlementRecords(records);
+          writeScanCache(base.id, CONTRACTS.auctionSell, safeLastBlock, records);
         };
 
         // Walk newest → oldest in provider-safe windows: a capped RPC can't
@@ -1035,11 +1032,11 @@ export default function GobblerAuctionSection({
 
   useEffect(() => {
     if (!onChainMode || !publicClient || !holdingsAuthorityReady) {
-      setTargetedSettlementRecords([]);
+      clearTargetedSettlementRecords();
       return;
     }
     if (CONTRACT_BLOCKS.auctionSellDeploy <= 0n) {
-      setTargetedSettlementRecords([]);
+      clearTargetedSettlementRecords();
       if (!missingDeployBlockWarnedRef.current) {
         missingDeployBlockWarnedRef.current = true;
         console.warn("[auction-settled-targeted] deploy block not configured");
@@ -1048,7 +1045,7 @@ export default function GobblerAuctionSection({
     }
     const claimableTargets = claimableHeldWarpletsRef.current;
     if (claimableTargets.length === 0) {
-      setTargetedSettlementRecords([]);
+      clearTargetedSettlementRecords();
       return;
     }
 
@@ -1063,7 +1060,7 @@ export default function GobblerAuctionSection({
     if (allTargetReceiptsMatched(targetReceiptIds, seedMatchedIds)) {
       // Complete seed records already contribute through targetResolveSeedRecords;
       // no separate targeted state is needed when there is nothing new to add.
-      setTargetedSettlementRecords([]);
+      clearTargetedSettlementRecords();
       return;
     }
 
@@ -1188,6 +1185,7 @@ export default function GobblerAuctionSection({
     onChainMode,
     publicClient,
     holdingsAuthorityReady,
+    clearTargetedSettlementRecords,
     claimableHeldWarpletKey,
     targetResolveSeedRecordKey,
   ]);
