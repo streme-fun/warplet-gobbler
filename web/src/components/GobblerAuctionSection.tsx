@@ -57,17 +57,29 @@ import {
   dropRescuedRecords,
   gobbledTokenIdsToReconcile,
 } from "@/lib/claimable-records";
+import {
+  claimableHoldings,
+  classifyHeldWarplet,
+  latestReceiptId,
+  settlementRecordsForClaimableHoldings,
+  type ClaimableHolding,
+} from "@/lib/claimable-holdings";
 import { gobbledWarpletsAbi } from "@/abi/gobbledWarplets";
 import { attachGobbledTokenId } from "@/lib/auction-settled";
-import { computeLogScanWindows } from "@/lib/log-scan";
 import {
-  boundScanRecords,
+  allTargetReceiptsMatched,
+  computeLogScanWindows,
+  computeLogScanWindowsToFloor,
+} from "@/lib/log-scan";
+import {
   readScanCache,
   writeScanCache,
 } from "@/lib/settlement-cache";
-import { CONTRACTS } from "@/lib/contracts";
+import { mergeSettlementScanProgress } from "@/lib/settlement-backfill";
+import { CONTRACT_BLOCKS, CONTRACTS } from "@/lib/contracts";
 import { defaultAuctionBidPaymentMethod } from "@/lib/defaultAuctionBidPayment";
 import { formatUserFacingTxError } from "@/lib/format-tx-error";
+import { warpletsErc721EnumerableAbi } from "@/lib/warplets-abi";
 import {
   DEV_MOCK_EXTRA_QUEUE_TOKEN_IDS,
   DEV_MOCK_QUEUE_APPEND_EXTRAS,
@@ -99,6 +111,8 @@ const MAX_PREWARM_SENT_KEYS = 200;
 const AUCTION_SETTLED_LOOKBACK_BLOCKS = 1_000_000n;
 /** Per-call window — wide single `getLogs` ranges are rejected by capped RPCs. */
 const AUCTION_SETTLED_LOG_CHUNK_BLOCKS = 10_000n;
+/** Targeted token-topic queries are tiny, but still windowed for capped RPCs. */
+const AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS = 100_000n;
 /** Base block time (~2s) — used to estimate a ms timestamp from a block number
  *  so backfilled records sort on the same scale as `Date.now()`-stamped ones. */
 const BASE_BLOCK_MS = 2_000;
@@ -209,8 +223,18 @@ export default function GobblerAuctionSection({
   const [chainSettlementRecords, setChainSettlementRecords] = useState<
     SettlementRecord[]
   >([]);
+  const [targetedSettlementRecords, setTargetedSettlementRecords] = useState<
+    SettlementRecord[]
+  >([]);
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
   const prewarmSentKeysRef = useRef<Set<string>>(new Set());
+  const missingDeployBlockWarnedRef = useRef(false);
+  const claimableHeldWarpletsRef = useRef<ClaimableHolding[]>([]);
+  const targetResolveSeedRecordsRef = useRef<SettlementRecord[]>([]);
+
+  const clearTargetedSettlementRecords = useCallback(() => {
+    setTargetedSettlementRecords((prev) => (prev.length === 0 ? prev : []));
+  }, []);
 
   useEffect(() => {
     setDismissedWinnerFps(readDismissedFpArray());
@@ -300,8 +324,19 @@ export default function GobblerAuctionSection({
           AUCTION_SETTLED_LOG_CHUNK_BLOCKS,
         );
 
-        const records: SettlementRecord[] = [];
-        let scanFailed = false;
+        let scanRecords = cachedRecords;
+        const partialLastBlock = cached?.lastBlock ?? 0n;
+        let completedAllWindows = true;
+
+        const persistScanProgress = (
+          lastBlock: bigint,
+          records: SettlementRecord[],
+        ) => {
+          const safeLastBlock =
+            partialLastBlock > lastBlock ? partialLastBlock : lastBlock;
+          setChainSettlementRecords(records);
+          writeScanCache(base.id, CONTRACTS.auctionSell, safeLastBlock, records);
+        };
 
         // Walk newest → oldest in provider-safe windows: a capped RPC can't
         // reject one giant range, and a mid-scan failure still yields the most
@@ -316,6 +351,7 @@ export default function GobblerAuctionSection({
             });
             if (cancelled) return;
 
+            const windowRecords: SettlementRecord[] = [];
             for (const log of logs) {
               const { tokenId, winner, amount, gobbledTokenId } = log.args as {
                 tokenId?: bigint;
@@ -331,7 +367,7 @@ export default function GobblerAuctionSection({
               ) {
                 continue;
               }
-              records.push({
+              const windowRecord: SettlementRecord = {
                 fp: getWinnerFingerprint(
                   tokenId,
                   winner,
@@ -349,10 +385,18 @@ export default function GobblerAuctionSection({
                   nowMs -
                   Math.max(0, Number(latest - (log.blockNumber ?? latest))) *
                     BASE_BLOCK_MS,
-              });
+              };
+              windowRecords.push(windowRecord);
+            }
+            if (windowRecords.length > 0) {
+              scanRecords = mergeSettlementScanProgress(
+                scanRecords,
+                windowRecords,
+              );
+              persistScanProgress(partialLastBlock, scanRecords);
             }
           } catch (error) {
-            scanFailed = true;
+            completedAllWindows = false;
             console.warn("[auction-settled-logs] chunk failed", {
               fromBlock: fromBlock.toString(),
               toBlock: toBlock.toString(),
@@ -363,16 +407,9 @@ export default function GobblerAuctionSection({
         }
 
         if (cancelled) return;
-        // Don't blank previously-fetched records when a transient failure
-        // turned up nothing — keep the cache seed / prior scan on screen.
-        if (scanFailed && records.length === 0) return;
-        // Merge the delta over the cached set (exact-id records dedupe by
-        // fingerprint), bound it, display, and persist for the next visit.
-        const merged = boundScanRecords(
-          mergeSettlementRecords([...cachedRecords, ...records]),
-        );
-        setChainSettlementRecords(merged);
-        writeScanCache(base.id, CONTRACTS.auctionSell, latest, merged);
+        if (completedAllWindows) {
+          persistScanProgress(latest, scanRecords);
+        }
       } catch (error) {
         if (!cancelled) {
           console.warn("[auction-settled-logs] failed", {
@@ -393,6 +430,220 @@ export default function GobblerAuctionSection({
   /** Consider a lot live only while it is not marked settled on-chain. */
   const liveAuction =
     hasParsedLot && chainLot.tokenId > 0n && !chainLot.settled;
+
+  const holdingsReadsEnabled =
+    onChainMode &&
+    hasParsedLot &&
+    !auctionReadError &&
+    !isAddressEqual(CONTRACTS.auctionSell, zeroAddress) &&
+    !isAddressEqual(CONTRACTS.warplets, zeroAddress) &&
+    !isAddressEqual(CONTRACTS.gobbledWarplets, zeroAddress);
+
+  const liveAuctionTokenId =
+    liveAuction && chainLot != null ? chainLot.tokenId : null;
+
+  const {
+    data: auctionSellWarpletBalance,
+    isSuccess: auctionSellWarpletBalanceSuccess,
+  } = useReadContract({
+    address: CONTRACTS.warplets,
+    abi: warpletsErc721EnumerableAbi,
+    functionName: "balanceOf",
+    args: [CONTRACTS.auctionSell],
+    query: {
+      enabled: holdingsReadsEnabled,
+      refetchInterval: 30_000,
+    },
+  });
+
+  const { data: gobbledTokenIdPadding, isSuccess: gobbledPaddingSuccess } =
+    useReadContract({
+      address: CONTRACTS.gobbledWarplets,
+      abi: gobbledWarpletsAbi,
+      functionName: "WARPLET_ID_PADDING",
+      query: {
+        enabled: holdingsReadsEnabled,
+      },
+    });
+
+  const auctionSellWarpletBalanceCount = useMemo(() => {
+    if (typeof auctionSellWarpletBalance !== "bigint") return 0;
+    const count = Number(auctionSellWarpletBalance);
+    return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+  }, [auctionSellWarpletBalance]);
+
+  const { data: heldWarpletIdReads } = useReadContracts({
+    contracts: Array.from({ length: auctionSellWarpletBalanceCount }, (_, i) => ({
+      address: CONTRACTS.warplets,
+      abi: warpletsErc721EnumerableAbi,
+      functionName: "tokenOfOwnerByIndex",
+      args: [CONTRACTS.auctionSell, BigInt(i)],
+      chainId: base.id,
+    })),
+    query: {
+      enabled: holdingsReadsEnabled && auctionSellWarpletBalanceCount > 0,
+      refetchInterval: 30_000,
+    },
+  });
+
+  const heldWarpletIds = useMemo((): bigint[] => {
+    if (!heldWarpletIdReads) return [];
+    return heldWarpletIdReads.flatMap((r) => {
+      const read = r as { status?: string; result?: unknown } | undefined;
+      return read?.status === "success" && typeof read.result === "bigint"
+        ? [read.result]
+        : [];
+    });
+  }, [heldWarpletIdReads]);
+
+  const heldWarpletIdsComplete =
+    auctionSellWarpletBalanceSuccess &&
+    (auctionSellWarpletBalanceCount === 0 ||
+      (heldWarpletIdReads != null &&
+        heldWarpletIdReads.length === auctionSellWarpletBalanceCount &&
+        heldWarpletIdReads.every((r) => r?.status === "success")));
+
+  const { data: heldGobbleCountReads } = useReadContracts({
+    contracts: heldWarpletIds.map((id) => ({
+      address: CONTRACTS.gobbledWarplets,
+      abi: gobbledWarpletsAbi,
+      functionName: "gobbleCount",
+      args: [id],
+      chainId: base.id,
+    })),
+    query: {
+      enabled:
+        holdingsReadsEnabled &&
+        heldWarpletIdsComplete &&
+        heldWarpletIds.length > 0,
+      refetchInterval: 30_000,
+    },
+  });
+
+  const heldGobbleCountsComplete =
+    heldWarpletIds.length === 0 ||
+    (heldGobbleCountReads != null &&
+      heldGobbleCountReads.length === heldWarpletIds.length &&
+      heldGobbleCountReads.every((r) => r?.status === "success"));
+
+  const heldReceiptTargets = useMemo(() => {
+    if (typeof gobbledTokenIdPadding !== "bigint") return [];
+    if (!heldGobbleCountReads) return [];
+    return heldWarpletIds.flatMap((warpletId, i) => {
+      const countRead = heldGobbleCountReads[i];
+      if (countRead?.status !== "success") return [];
+      const gobbleCount = countRead.result;
+      if (typeof gobbleCount !== "bigint" || gobbleCount <= 0n) return [];
+      try {
+        const receiptId = latestReceiptId({
+          warpletId,
+          gobbleCount,
+          padding: gobbledTokenIdPadding,
+        });
+        return receiptId == null ? [] : [{ warpletId, receiptId }];
+      } catch {
+        return [];
+      }
+    });
+  }, [gobbledTokenIdPadding, heldGobbleCountReads, heldWarpletIds]);
+
+  const { data: heldWarpletRescuedReads } = useReadContracts({
+    contracts: heldReceiptTargets.map(({ receiptId }) => ({
+      address: CONTRACTS.gobbledWarplets,
+      abi: gobbledWarpletsAbi,
+      functionName: "warpletRescued",
+      args: [receiptId],
+      chainId: base.id,
+    })),
+    query: {
+      enabled:
+        holdingsReadsEnabled &&
+        heldGobbleCountsComplete &&
+        heldReceiptTargets.length > 0,
+      refetchInterval: 30_000,
+    },
+  });
+
+  const heldWarpletRescuedComplete =
+    heldReceiptTargets.length === 0 ||
+    (heldWarpletRescuedReads != null &&
+      heldWarpletRescuedReads.length === heldReceiptTargets.length &&
+      heldWarpletRescuedReads.every((r) => r?.status === "success"));
+
+  const heldWarpletClaimability = useMemo(() => {
+    if (typeof gobbledTokenIdPadding !== "bigint") return [];
+    if (!heldGobbleCountReads) return [];
+    const rescuedByReceipt = new Map<string, boolean>();
+    heldReceiptTargets.forEach(({ receiptId }, i) => {
+      const rescued = heldWarpletRescuedReads?.[i];
+      if (rescued?.status === "success") {
+        rescuedByReceipt.set(receiptId.toString(), Boolean(rescued.result));
+      }
+    });
+
+    return heldWarpletIds.flatMap((warpletId, i) => {
+      const countRead = heldGobbleCountReads[i];
+      if (countRead?.status !== "success") return [];
+      const gobbleCount = countRead.result;
+      if (typeof gobbleCount !== "bigint") return [];
+      let receiptId: bigint | null = null;
+      if (gobbleCount > 0n) {
+        try {
+          receiptId = latestReceiptId({
+            warpletId,
+            gobbleCount,
+            padding: gobbledTokenIdPadding,
+          });
+        } catch {
+          return [];
+        }
+      }
+      return [
+        classifyHeldWarplet({
+          warpletId,
+          gobbleCount,
+          padding: gobbledTokenIdPadding,
+          liveAuctionTokenId,
+          warpletRescued:
+            receiptId == null
+              ? undefined
+              : rescuedByReceipt.get(receiptId.toString()),
+        }),
+      ];
+    });
+  }, [
+    gobbledTokenIdPadding,
+    heldGobbleCountReads,
+    heldReceiptTargets,
+    heldWarpletIds,
+    heldWarpletRescuedReads,
+    liveAuctionTokenId,
+  ]);
+
+  const claimableHeldWarplets = useMemo(
+    () => claimableHoldings(heldWarpletClaimability),
+    [heldWarpletClaimability],
+  );
+
+  const claimableHeldWarpletKey = useMemo(
+    () =>
+      claimableHeldWarplets
+        .map(({ warpletId, receiptId }) => `${warpletId}:${receiptId}`)
+        .join("|"),
+    [claimableHeldWarplets],
+  );
+
+  useEffect(() => {
+    claimableHeldWarpletsRef.current = claimableHeldWarplets;
+  }, [claimableHeldWarplets]);
+
+  const holdingsAuthorityReady =
+    holdingsReadsEnabled &&
+    auctionSellWarpletBalanceSuccess &&
+    gobbledPaddingSuccess &&
+    heldWarpletIdsComplete &&
+    heldGobbleCountsComplete &&
+    heldWarpletRescuedComplete;
 
   const idleNoChainAuction = hasParsedLot && chainLot.startTime === 0n;
 
@@ -749,7 +1000,7 @@ export default function GobblerAuctionSection({
     return { ...chainSettledWinnerSnap, recordedAt };
   }, [onChainMode, chainSettledWinnerSnap, chainLot]);
 
-  const mergedSettlementRecords = useMemo(
+  const targetResolveSeedRecords = useMemo(
     (): SettlementRecord[] =>
       mergeSettlementRecords([
         ...chainSettlementRecords,
@@ -757,6 +1008,195 @@ export default function GobblerAuctionSection({
         ...(chainSettlementRecord ? [chainSettlementRecord] : []),
       ]),
     [chainSettlementRecords, settlementHistory, chainSettlementRecord],
+  );
+
+  const targetResolveSeedRecordKey = useMemo(
+    () =>
+      targetResolveSeedRecords
+        .map((r) =>
+          [
+            r.gobbledTokenId ?? "",
+            r.tokenId,
+            r.bidder.toLowerCase(),
+            r.amountWei,
+          ].join(":"),
+        )
+        .sort()
+        .join("|"),
+    [targetResolveSeedRecords],
+  );
+
+  useEffect(() => {
+    targetResolveSeedRecordsRef.current = targetResolveSeedRecords;
+  }, [targetResolveSeedRecords]);
+
+  useEffect(() => {
+    if (!onChainMode || !publicClient || !holdingsAuthorityReady) {
+      clearTargetedSettlementRecords();
+      return;
+    }
+    if (CONTRACT_BLOCKS.auctionSellDeploy <= 0n) {
+      clearTargetedSettlementRecords();
+      if (!missingDeployBlockWarnedRef.current) {
+        missingDeployBlockWarnedRef.current = true;
+        console.warn("[auction-settled-targeted] deploy block not configured");
+      }
+      return;
+    }
+    const claimableTargets = claimableHeldWarpletsRef.current;
+    if (claimableTargets.length === 0) {
+      clearTargetedSettlementRecords();
+      return;
+    }
+
+    const targetReceiptIds = claimableTargets.map((h) => h.receiptId.toString());
+    const seedMatches = settlementRecordsForClaimableHoldings(
+      claimableTargets,
+      targetResolveSeedRecordsRef.current,
+    );
+    const seedMatchedIds = seedMatches
+      .map((r) => r.gobbledTokenId)
+      .filter((id): id is string => id != null);
+    if (allTargetReceiptsMatched(targetReceiptIds, seedMatchedIds)) {
+      // Complete seed records already contribute through targetResolveSeedRecords;
+      // no separate targeted state is needed when there is nothing new to add.
+      clearTargetedSettlementRecords();
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const targetTokenIds = claimableTargets.map((h) => h.warpletId);
+      const targetReceiptIdSet = new Set(targetReceiptIds);
+      const matchedReceiptIds = new Set(seedMatchedIds);
+      let resolvedRecords = seedMatches;
+
+      try {
+        const latest = await publicClient.getBlockNumber();
+        if (cancelled) return;
+        const windows = computeLogScanWindowsToFloor(
+          latest,
+          CONTRACT_BLOCKS.auctionSellDeploy,
+          AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS,
+        );
+        const nowMs = Date.now();
+
+        for (const { fromBlock, toBlock } of windows) {
+          try {
+            const logs = await publicClient.getLogs({
+              address: CONTRACTS.auctionSell,
+              event: auctionSettledEvent,
+              args: { tokenId: targetTokenIds },
+              fromBlock,
+              toBlock,
+            });
+            if (cancelled) return;
+
+            const windowRecords: SettlementRecord[] = [];
+            for (const log of logs) {
+              const { tokenId, winner, amount, gobbledTokenId } =
+                log.args as {
+                  tokenId?: bigint;
+                  winner?: Address;
+                  amount?: bigint;
+                  gobbledTokenId?: bigint;
+                };
+              if (
+                tokenId == null ||
+                winner == null ||
+                amount == null ||
+                gobbledTokenId == null
+              ) {
+                continue;
+              }
+              if (!targetReceiptIdSet.has(gobbledTokenId.toString())) continue;
+              matchedReceiptIds.add(gobbledTokenId.toString());
+              windowRecords.push({
+                fp: getWinnerFingerprint(
+                  tokenId,
+                  winner,
+                  amount,
+                  gobbledTokenId,
+                ),
+                tokenId: Number(tokenId),
+                gobbledTokenId: gobbledTokenId.toString(),
+                bidder: winner,
+                amountWei: amount.toString(),
+                recordedAt:
+                  nowMs -
+                  Math.max(0, Number(latest - (log.blockNumber ?? latest))) *
+                    BASE_BLOCK_MS,
+              });
+            }
+
+            if (windowRecords.length > 0) {
+              resolvedRecords = settlementRecordsForClaimableHoldings(
+                claimableTargets,
+                mergeSettlementScanProgress(resolvedRecords, windowRecords),
+              );
+              setTargetedSettlementRecords(resolvedRecords);
+
+              const currentCached = readScanCache(base.id, CONTRACTS.auctionSell);
+              writeScanCache(
+                base.id,
+                CONTRACTS.auctionSell,
+                currentCached?.lastBlock ?? 0n,
+                mergeSettlementScanProgress(
+                  currentCached?.records ?? [],
+                  resolvedRecords,
+                ),
+              );
+            }
+
+            if (allTargetReceiptsMatched(targetReceiptIds, matchedReceiptIds)) {
+              return;
+            }
+          } catch (error) {
+            console.warn("[auction-settled-targeted] chunk failed", {
+              fromBlock: fromBlock.toString(),
+              toBlock: toBlock.toString(),
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return;
+          }
+        }
+
+        if (!allTargetReceiptsMatched(targetReceiptIds, matchedReceiptIds)) {
+          console.warn("[auction-settled-targeted] deploy floor reached", {
+            deployBlock: CONTRACT_BLOCKS.auctionSellDeploy.toString(),
+            unmatchedReceiptIds: targetReceiptIds.filter(
+              (id) => !matchedReceiptIds.has(id),
+            ),
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("[auction-settled-targeted] failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    onChainMode,
+    publicClient,
+    holdingsAuthorityReady,
+    clearTargetedSettlementRecords,
+    claimableHeldWarpletKey,
+    targetResolveSeedRecordKey,
+  ]);
+
+  const mergedSettlementRecords = useMemo(
+    (): SettlementRecord[] =>
+      mergeSettlementRecords([
+        ...targetResolveSeedRecords,
+        ...targetedSettlementRecords,
+      ]),
+    [targetResolveSeedRecords, targetedSettlementRecords],
   );
 
   const dismissedFpSet = useMemo(
@@ -802,7 +1242,7 @@ export default function GobblerAuctionSection({
     return set;
   }, [rescuedReads, reconcileGobbledIds]);
 
-  const sortedOpenSettlements = useMemo(() => {
+  const sortedDisplaySettlements = useMemo(() => {
     if (!onChainMode) return [];
     const open = mergedSettlementRecords.filter(
       (r) => !dismissedFpSet.has(r.fp),
@@ -811,10 +1251,32 @@ export default function GobblerAuctionSection({
     return sortSettlementsForDisplay(unclaimed);
   }, [onChainMode, mergedSettlementRecords, dismissedFpSet, rescuedGobbledIdSet]);
 
+  const sortedClaimableSettlements = useMemo(() => {
+    if (!onChainMode) return [];
+    const displayCandidates = dropRescuedRecords(
+      mergedSettlementRecords.filter((r) => !dismissedFpSet.has(r.fp)),
+      rescuedGobbledIdSet,
+    );
+    const claimCandidates = holdingsAuthorityReady
+      ? settlementRecordsForClaimableHoldings(
+          claimableHeldWarplets,
+          displayCandidates,
+        )
+      : displayCandidates;
+    return sortSettlementsForDisplay(claimCandidates);
+  }, [
+    onChainMode,
+    mergedSettlementRecords,
+    dismissedFpSet,
+    rescuedGobbledIdSet,
+    holdingsAuthorityReady,
+    claimableHeldWarplets,
+  ]);
+
   /** Which won lot the connected wallet should rescue first (chain-won ties over history). */
   const claimFocusRecord = useMemo((): SettlementRecord | null => {
-    if (!viewerAddress || sortedOpenSettlements.length === 0) return null;
-    const wins = sortedOpenSettlements.filter((r) =>
+    if (!viewerAddress || sortedClaimableSettlements.length === 0) return null;
+    const wins = sortedClaimableSettlements.filter((r) =>
       isAddressEqual(viewerAddress, r.bidder),
     );
     if (wins.length === 0) return null;
@@ -831,16 +1293,16 @@ export default function GobblerAuctionSection({
       if (ar < br) return best;
       return r.recordedAt > best.recordedAt ? r : best;
     });
-  }, [viewerAddress, sortedOpenSettlements, chainSettlementRecord]);
+  }, [viewerAddress, sortedClaimableSettlements, chainSettlementRecord]);
 
   const displaySettlementRows = useMemo(
     () =>
       pickDisplaySettlementRows(
-        sortedOpenSettlements,
+        sortedDisplaySettlements,
         claimFocusRecord,
         SETTLEMENT_DISPLAY_LIMIT,
       ),
-    [sortedOpenSettlements, claimFocusRecord],
+    [sortedDisplaySettlements, claimFocusRecord],
   );
 
   const showLastWinnerBanner = displaySettlementRows.length > 0;

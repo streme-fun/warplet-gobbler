@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { computeLogScanWindows, type LogScanWindow } from "./log-scan";
+import {
+  allTargetReceiptsMatched,
+  computeLogScanWindows,
+  computeLogScanWindowsToFloor,
+  type LogScanWindow,
+} from "./log-scan";
 
 function floorOf(latest: bigint, lookback: bigint): bigint {
   return latest > lookback ? latest - lookback : 0n;
@@ -87,5 +92,72 @@ describe("computeLogScanWindows", () => {
     assertCover(windows, latest, floorOf(latest, lookback), chunk);
     // 1,000,001 blocks / 10k ≈ 101 windows — bounded, not runaway
     expect(windows.length).toBeLessThanOrEqual(102);
+  });
+});
+
+describe("computeLogScanWindowsToFloor", () => {
+  it("rejects invalid arguments", () => {
+    expect(() => computeLogScanWindowsToFloor(-1n, 0n, 10n)).toThrow();
+    expect(() => computeLogScanWindowsToFloor(10n, -1n, 10n)).toThrow();
+    expect(() => computeLogScanWindowsToFloor(10n, 0n, 0n)).toThrow();
+  });
+
+  it("floors at the deploy block and never undershoots it", () => {
+    const latest = 46_700_000n;
+    const deployBlock = 43_000_000n;
+    const chunk = 100_000n;
+    const windows = computeLogScanWindowsToFloor(latest, deployBlock, chunk);
+
+    assertCover(windows, latest, deployBlock, chunk);
+    expect(windows.at(-1)?.fromBlock).toBe(deployBlock);
+  });
+
+  it("reaches old in-set wins beyond the previous fixed lookback", () => {
+    const latest = 46_679_379n;
+    const oldSettlement = 44_731_673n;
+    const oldLookbackFloor = latest - 1_000_000n;
+
+    expect(oldSettlement < oldLookbackFloor).toBe(true);
+    const windows = computeLogScanWindowsToFloor(
+      latest,
+      43_000_000n,
+      100_000n,
+    );
+
+    expect(
+      windows.some(
+        (window) =>
+          window.fromBlock <= oldSettlement && oldSettlement <= window.toBlock,
+      ),
+    ).toBe(true);
+  });
+
+  it("returns no windows when the deploy floor is above latest", () => {
+    expect(computeLogScanWindowsToFloor(10n, 11n, 5n)).toEqual([]);
+  });
+});
+
+describe("allTargetReceiptsMatched", () => {
+  it("returns true only when every target receipt is matched", () => {
+    expect(allTargetReceiptsMatched(["901147", "100884860"], ["901147"])).toBe(
+      false,
+    );
+    expect(
+      allTargetReceiptsMatched(["901147", "100884860"], [
+        "100884860",
+        "901147",
+      ]),
+    ).toBe(true);
+  });
+
+  it("keys on gobbledTokenId so re-gobbled Warplets need the exact receipt", () => {
+    expect(allTargetReceiptsMatched(["100884860"], ["884860"])).toBe(false);
+    expect(allTargetReceiptsMatched(["100884860"], ["100884860"])).toBe(true);
+  });
+
+  it("supports a set of matched ids for incremental resolver state", () => {
+    expect(
+      allTargetReceiptsMatched([901_147n], new Set(["901147"])),
+    ).toBe(true);
   });
 });
