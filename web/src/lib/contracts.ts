@@ -32,6 +32,8 @@ export const CONTRACTS = {
 } as const;
 
 export const CONTRACT_BLOCKS = {
+  // 0 means "unconfigured"; callers that use this as a scan floor must guard
+  // against full-chain scans.
   auctionSellDeploy: envBlock(process.env.NEXT_PUBLIC_AUCTION_SELL_DEPLOY_BLOCK),
 } as const;
 
