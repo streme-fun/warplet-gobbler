@@ -879,8 +879,7 @@ export default function AuctionLiveHero({
                           walletDisconnected ? (
                             <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3 px-2 py-3 text-center">
                               <p className="text-xs font-medium leading-snug text-base-content/60 sm:text-sm">
-                                Connect your wallet to sell a Warplet to the
-                                Gobbler.
+                                Queue empty — sell a Warplet to the Gobbler.
                               </p>
                               <button
                                 type="button"
