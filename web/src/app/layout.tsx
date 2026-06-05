@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Caveat, Creepster, Inter, Rubik_Wet_Paint } from "next/font/google";
+import "@rainbow-me/rainbowkit/styles.css";
 import "./globals.css";
 import { Providers } from "./providers";
 import {

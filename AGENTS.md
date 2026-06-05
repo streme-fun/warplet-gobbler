@@ -20,7 +20,7 @@ Note: `contracts/` is NOT in the pnpm workspace — it's a standalone Foundry pr
 
 ## Important
 
-Do NOT run build, dev, lint, typecheck, or any other build/compile commands unless explicitly asked to.
+Do NOT run build, lint, typecheck, tests, or other compile/verification commands automatically after every change. Run them only when explicitly asked, when the user asks for verification, or when they are the narrowest practical way to validate risky work. It is OK to start the dev server when the user asks to open, preview, or test the app in a browser.
 
 ## Commands
 

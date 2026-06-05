@@ -39,3 +39,38 @@ export function computeLogScanWindows(
 
   return windows;
 }
+
+export function computeLogScanWindowsToFloor(
+  latest: bigint,
+  floorBlock: bigint,
+  chunkBlocks: bigint,
+): LogScanWindow[] {
+  if (latest < 0n || floorBlock < 0n) {
+    throw new Error(
+      "computeLogScanWindowsToFloor: block numbers must be non-negative",
+    );
+  }
+  if (chunkBlocks <= 0n) {
+    throw new Error("computeLogScanWindowsToFloor: chunkBlocks must be positive");
+  }
+  if (floorBlock > latest) return [];
+  return computeLogScanWindows(latest, latest - floorBlock, chunkBlocks);
+}
+
+function isReceiptIdArray(
+  value: ReadonlySet<string> | readonly (bigint | string)[],
+): value is readonly (bigint | string)[] {
+  return Array.isArray(value);
+}
+
+export function allTargetReceiptsMatched(
+  targetReceiptIds: readonly (bigint | string)[],
+  matchedReceiptIds: ReadonlySet<string> | readonly (bigint | string)[],
+): boolean {
+  const matched: { has: (id: string) => boolean } = isReceiptIdArray(
+    matchedReceiptIds,
+  )
+    ? new Set(matchedReceiptIds.map((id) => id.toString()))
+    : matchedReceiptIds;
+  return targetReceiptIds.every((id) => matched.has(id.toString()));
+}
