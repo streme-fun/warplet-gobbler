@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Caveat, Creepster, Inter, Rubik_Wet_Paint } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import {
+  appUrl,
+  AUCTION_EMBED_IMAGE,
+  buildMiniappEmbed,
+} from "@/lib/miniapp-embed";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,26 +31,13 @@ const creepster = Creepster({
   weight: "400",
 });
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://warpletgobbler.xyz";
-
 export const metadata: Metadata = {
   title: "WarpletGobbler",
   description: "A PunkStrategy-style flywheel for Warplets using Superfluid streaming",
   other: {
-    "fc:miniapp": JSON.stringify({
-      version: "1",
-      imageUrl: `https://api.warpletgobbler.xyz/api/gobbler/frimg/mini/auction.png`,
-      button: {
-        title: "Launch",
-        action: {
-          type: "launch_miniapp",
-          name: "WarpletGobbler",
-          url: appUrl,
-          splashImageUrl: `${appUrl}/splash.png`,
-          splashBackgroundColor: "#13111C",
-        },
-      },
-    }),
+    "fc:miniapp": JSON.stringify(
+      buildMiniappEmbed({ imageUrl: AUCTION_EMBED_IMAGE, launchUrl: appUrl }),
+    ),
   },
 };
 
