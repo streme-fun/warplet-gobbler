@@ -46,7 +46,7 @@ forge fmt             # format Solidity
 
 ### Web (`web/`)
 
-- **App Router** — page shell at `src/app/page.tsx`, all UI components split into `src/components/`
+- **App Router** — thin server route pages (`src/app/page.tsx`, `src/app/buy/page.tsx`, `src/app/sell/page.tsx`) each render the shared client shell `src/components/HomeView.tsx` and set their own `fc:miniapp` embed; `/buy` and `/sell` pass an `initialView` so the app opens to the matching screen. `HomeView.tsx` is the page shell (intentionally larger than the small split components below). Other UI components split into `src/components/`
 - **Components** (`src/components/`) — one file per component:
   - `AbyssBackground.tsx` — ground silhouette SVG + floating void particles
   - `ParallaxBackground.tsx` — depth-layered warplet field (back/mid/front layers)
@@ -95,6 +95,6 @@ Dynamic daisyUI classes like `bg-primary/20` are safelisted in `tailwind.config.
 
 ### Environment Variables
 
-- `web/.env.local`: `NEXT_PUBLIC_WC_PROJECT_ID` (WalletConnect), `NEXT_PUBLIC_BASE_RPC_URL` (optional), `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL` / `NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL` (UI labels)
+- `web/.env.local`: `NEXT_PUBLIC_WC_PROJECT_ID` (WalletConnect), `NEXT_PUBLIC_BASE_RPC_URL` (optional), `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL` / `NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL` (UI labels), `NEXT_PUBLIC_APP_URL` (deployed base URL for Farcaster mini-app embed launch URLs; defaults to `https://warpletgobbler.xyz` — set it on preview/staging or share links embed production)
 - `web/.env.local` (gobbled image pipeline): `GEMINI_API_KEY`, `warpletgobbler_READ_WRITE_TOKEN` (Vercel Blob), `PINATA_JWT`, `PINATA_GATEWAY_URL`
 - `contracts/.env`: `BASE_RPC_URL`, `BASESCAN_API_KEY`, `DEPLOYER_PRIVATE_KEY`
