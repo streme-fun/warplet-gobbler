@@ -346,7 +346,7 @@ contract GobbledWarpletsTest is Test {
         assertFalse(g.warpletRescued(tid));
 
         vm.prank(alice);
-        g.rescueWarplet(tid);
+        g.rescueWarplet(wid);
 
         assertEq(warplets.ownerOf(wid), alice);
         assertTrue(g.warpletRescued(tid));
@@ -359,30 +359,30 @@ contract GobbledWarpletsTest is Test {
     function test_bare_rescue_reverts_stranger() public {
         uint256 wid = _seedHeldWarplet();
         vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        g.reserve(alice, wid);
 
         vm.prank(makeAddr("stranger"));
-        vm.expectRevert("GobbledWarplets: not recipient");
-        g.rescueWarplet(tid);
+        vm.expectRevert("GobbledWarplets: no rescuable reservation");
+        g.rescueWarplet(wid);
     }
 
     function test_bare_rescue_reverts_when_unreserved() public {
         vm.prank(alice);
-        vm.expectRevert("GobbledWarplets: not reserved");
+        vm.expectRevert("GobbledWarplets: no rescuable reservation");
         g.rescueWarplet(1);
     }
 
     function test_bare_rescue_reverts_on_replay() public {
         uint256 wid = _seedHeldWarplet();
         vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
+        g.reserve(alice, wid);
 
         vm.prank(alice);
-        g.rescueWarplet(tid);
+        g.rescueWarplet(wid);
 
         vm.prank(alice);
-        vm.expectRevert("GobbledWarplets: already rescued");
-        g.rescueWarplet(tid);
+        vm.expectRevert("GobbledWarplets: no rescuable reservation");
+        g.rescueWarplet(wid);
     }
 
     /* ========== variant 1 → variant 2 sequence ========== */
@@ -394,7 +394,7 @@ contract GobbledWarpletsTest is Test {
 
         // Bare rescue first: warplet is alice's, receipt unminted.
         vm.prank(alice);
-        g.rescueWarplet(tid);
+        g.rescueWarplet(wid);
         assertEq(warplets.ownerOf(wid), alice);
         assertTrue(g.warpletRescued(tid));
 
@@ -418,8 +418,8 @@ contract GobbledWarpletsTest is Test {
         _rescueWithSig(alice, tid, IPFS_URI);
 
         vm.prank(alice);
-        vm.expectRevert("GobbledWarplets: not reserved");
-        g.rescueWarplet(tid);
+        vm.expectRevert("GobbledWarplets: no rescuable reservation");
+        g.rescueWarplet(wid);
     }
 
     /* ========== misc ========== */

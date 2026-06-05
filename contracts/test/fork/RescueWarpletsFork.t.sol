@@ -166,7 +166,7 @@ contract RescueWarpletsForkTest is Test {
         assertFalse(gobbled.warpletRescued(receiptId));
 
         vm.prank(alice);
-        gobbled.rescueWarplet(receiptId);
+        gobbled.rescueWarplet(warpletId);
 
         assertEq(warplets.ownerOf(warpletId), alice);
         assertTrue(gobbled.warpletRescued(receiptId));
@@ -201,7 +201,7 @@ contract RescueWarpletsForkTest is Test {
         uint256 receiptId = warpletId;
 
         vm.prank(alice);
-        gobbled.rescueWarplet(receiptId);
+        gobbled.rescueWarplet(warpletId);
         assertEq(warplets.ownerOf(warpletId), alice);
 
         // Sign + complete the receipt. The signed overload must NOT attempt a second NFT transfer

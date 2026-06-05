@@ -115,20 +115,27 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
     }
 
     /// @notice Reserved recipient pulls the underlying Warplet from the auction without minting a receipt.
-    /// @dev Leaves the reservation in place so the recipient can still call the metadata overload later
-    ///      to mint the gobbled receipt (which will skip the second NFT transfer).
-    function rescueWarplet(uint256 tokenId) external {
-        address to = _reservedRecipient[tokenId];
-        require(to != address(0), "GobbledWarplets: not reserved");
-        require(msg.sender == to, "GobbledWarplets: not recipient");
-        require(!warpletRescued[tokenId], "GobbledWarplets: already rescued");
+    /// @dev Takes a `warpletId` (the original Warplet ERC-721 id, what users actually recognize) rather
+    ///      than an encoded receipt id. Since a Warplet can be gobbled multiple times, this picks the
+    ///      lowest-index reservation slot for `warpletId` that belongs to `msg.sender` and has not yet
+    ///      been rescued. Leaves the reservation in place so the recipient can still call the metadata
+    ///      overload later to mint the gobbled receipt (which will skip the second NFT transfer).
+    ///      Loop is bounded by `_gobbles[warpletId]` (gobble count for that Warplet — small in practice).
+    function rescueWarplet(uint256 warpletId) external {
+        require(warpletId < WARPLET_ID_PADDING, "GobbledWarplets: warpletId too large");
+        uint256 count = _gobbles[warpletId];
+        for (uint256 idx = 0; idx < count; ++idx) {
+            uint256 tokenId = _encodeTokenId(warpletId, idx);
+            if (_reservedRecipient[tokenId] != msg.sender) continue;
+            if (warpletRescued[tokenId]) continue;
 
-        warpletRescued[tokenId] = true;
-
-        (uint256 wid, uint256 idx) = _decodeTokenId(tokenId);
-        IERC721 warplets = IGobbledWarpletsMinter(minter).nft();
-        warplets.transferFrom(minter, to, wid);
-        emit WarpletRescued(to, wid, tokenId, idx);
+            warpletRescued[tokenId] = true;
+            IERC721 warplets = IGobbledWarpletsMinter(minter).nft();
+            warplets.transferFrom(minter, msg.sender, warpletId);
+            emit WarpletRescued(msg.sender, warpletId, tokenId, idx);
+            return;
+        }
+        revert("GobbledWarplets: no rescuable reservation");
     }
 
     /// @notice Reserved recipient mints the receipt with signed metadata. If the underlying Warplet has

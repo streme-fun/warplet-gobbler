@@ -3,7 +3,7 @@ pragma solidity ^0.8.26;
 
 /// @title IGobbledWarplets
 /// @notice Gobbled Warplet receipt: minter reserves a token id for the winner; the winner later either
-///         walks away with just the underlying Warplet (`rescueWarplet(tokenId)`) or claims the receipt
+///         walks away with just the underlying Warplet (`rescueWarplet(warpletId)`) or claims the receipt
 ///         with signed metadata AND the underlying Warplet in one tx (`rescueWarplet(tokenId, uri, deadline, sig)`).
 interface IGobbledWarplets {
     /// @notice Reserve the next gobbled receipt for `warpletId` to `to` (minter only — typically `AuctionSell` on settlement).
