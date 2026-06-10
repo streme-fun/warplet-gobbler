@@ -157,4 +157,36 @@ describe("settlementRecordsForClaimableHoldings", () => {
       [884_860],
     );
   });
+
+  it("keeps an exact freshly-settled record while holdings reads are stale", () => {
+    const fresh = rec({ tokenId: 901_147, gobbledTokenId: "901147" });
+
+    expect(
+      settlementRecordsForClaimableHoldings([], [fresh], {
+        freshRecords: [fresh],
+      }),
+    ).toEqual([fresh]);
+  });
+
+  it("does not bridge freshly-settled records without an exact receipt id", () => {
+    const freshLegacy = rec({ tokenId: 901_147 });
+
+    expect(
+      settlementRecordsForClaimableHoldings([], [freshLegacy], {
+        freshRecords: [freshLegacy],
+      }),
+    ).toEqual([]);
+  });
+
+  it("dedupes a fresh bridge once holdings reads catch up", () => {
+    const fresh = rec({ tokenId: 901_147, gobbledTokenId: "901147" });
+
+    expect(
+      settlementRecordsForClaimableHoldings(
+        [{ warpletId: 901_147n, receiptId: 901_147n }],
+        [fresh],
+        { freshRecords: [fresh] },
+      ),
+    ).toEqual([fresh]);
+  });
 });
