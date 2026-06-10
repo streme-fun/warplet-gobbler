@@ -116,6 +116,7 @@ const AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS = 100_000n;
 /** Base block time (~2s) — used to estimate a ms timestamp from a block number
  *  so backfilled records sort on the same scale as `Date.now()`-stamped ones. */
 const BASE_BLOCK_MS = 2_000;
+const FRESH_CLAIM_BRIDGE_LIMIT = 10;
 const auctionSettledEvent = parseAbiItem(
   "event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId)",
 );
@@ -226,6 +227,8 @@ export default function GobblerAuctionSection({
   const [targetedSettlementRecords, setTargetedSettlementRecords] = useState<
     SettlementRecord[]
   >([]);
+  const [freshClaimSettlementRecords, setFreshClaimSettlementRecords] =
+    useState<SettlementRecord[]>([]);
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
   const prewarmSentKeysRef = useRef<Set<string>>(new Set());
   const missingDeployBlockWarnedRef = useRef(false);
@@ -445,6 +448,7 @@ export default function GobblerAuctionSection({
   const {
     data: auctionSellWarpletBalance,
     isSuccess: auctionSellWarpletBalanceSuccess,
+    refetch: refetchAuctionSellWarpletBalance,
   } = useReadContract({
     address: CONTRACTS.warplets,
     abi: warpletsErc721EnumerableAbi,
@@ -456,15 +460,18 @@ export default function GobblerAuctionSection({
     },
   });
 
-  const { data: gobbledTokenIdPadding, isSuccess: gobbledPaddingSuccess } =
-    useReadContract({
-      address: CONTRACTS.gobbledWarplets,
-      abi: gobbledWarpletsAbi,
-      functionName: "WARPLET_ID_PADDING",
-      query: {
-        enabled: holdingsReadsEnabled,
-      },
-    });
+  const {
+    data: gobbledTokenIdPadding,
+    isSuccess: gobbledPaddingSuccess,
+    refetch: refetchGobbledTokenIdPadding,
+  } = useReadContract({
+    address: CONTRACTS.gobbledWarplets,
+    abi: gobbledWarpletsAbi,
+    functionName: "WARPLET_ID_PADDING",
+    query: {
+      enabled: holdingsReadsEnabled,
+    },
+  });
 
   const auctionSellWarpletBalanceCount = useMemo(() => {
     if (typeof auctionSellWarpletBalance !== "bigint") return 0;
@@ -472,19 +479,23 @@ export default function GobblerAuctionSection({
     return Number.isSafeInteger(count) && count >= 0 ? count : 0;
   }, [auctionSellWarpletBalance]);
 
-  const { data: heldWarpletIdReads } = useReadContracts({
-    contracts: Array.from({ length: auctionSellWarpletBalanceCount }, (_, i) => ({
-      address: CONTRACTS.warplets,
-      abi: warpletsErc721EnumerableAbi,
-      functionName: "tokenOfOwnerByIndex",
-      args: [CONTRACTS.auctionSell, BigInt(i)],
-      chainId: base.id,
-    })),
-    query: {
-      enabled: holdingsReadsEnabled && auctionSellWarpletBalanceCount > 0,
-      refetchInterval: 30_000,
-    },
-  });
+  const { data: heldWarpletIdReads, refetch: refetchHeldWarpletIds } =
+    useReadContracts({
+      contracts: Array.from(
+        { length: auctionSellWarpletBalanceCount },
+        (_, i) => ({
+          address: CONTRACTS.warplets,
+          abi: warpletsErc721EnumerableAbi,
+          functionName: "tokenOfOwnerByIndex",
+          args: [CONTRACTS.auctionSell, BigInt(i)],
+          chainId: base.id,
+        }),
+      ),
+      query: {
+        enabled: holdingsReadsEnabled && auctionSellWarpletBalanceCount > 0,
+        refetchInterval: 30_000,
+      },
+    });
 
   const heldWarpletIds = useMemo((): bigint[] => {
     if (!heldWarpletIdReads) return [];
@@ -503,22 +514,23 @@ export default function GobblerAuctionSection({
         heldWarpletIdReads.length === auctionSellWarpletBalanceCount &&
         heldWarpletIdReads.every((r) => r?.status === "success")));
 
-  const { data: heldGobbleCountReads } = useReadContracts({
-    contracts: heldWarpletIds.map((id) => ({
-      address: CONTRACTS.gobbledWarplets,
-      abi: gobbledWarpletsAbi,
-      functionName: "gobbleCount",
-      args: [id],
-      chainId: base.id,
-    })),
-    query: {
-      enabled:
-        holdingsReadsEnabled &&
-        heldWarpletIdsComplete &&
-        heldWarpletIds.length > 0,
-      refetchInterval: 30_000,
-    },
-  });
+  const { data: heldGobbleCountReads, refetch: refetchHeldGobbleCounts } =
+    useReadContracts({
+      contracts: heldWarpletIds.map((id) => ({
+        address: CONTRACTS.gobbledWarplets,
+        abi: gobbledWarpletsAbi,
+        functionName: "gobbleCount",
+        args: [id],
+        chainId: base.id,
+      })),
+      query: {
+        enabled:
+          holdingsReadsEnabled &&
+          heldWarpletIdsComplete &&
+          heldWarpletIds.length > 0,
+        refetchInterval: 30_000,
+      },
+    });
 
   const heldGobbleCountsComplete =
     heldWarpletIds.length === 0 ||
@@ -547,7 +559,10 @@ export default function GobblerAuctionSection({
     });
   }, [gobbledTokenIdPadding, heldGobbleCountReads, heldWarpletIds]);
 
-  const { data: heldWarpletRescuedReads } = useReadContracts({
+  const {
+    data: heldWarpletRescuedReads,
+    refetch: refetchHeldWarpletRescued,
+  } = useReadContracts({
     contracts: heldReceiptTargets.map(({ receiptId }) => ({
       address: CONTRACTS.gobbledWarplets,
       abi: gobbledWarpletsAbi,
@@ -644,6 +659,22 @@ export default function GobblerAuctionSection({
     heldWarpletIdsComplete &&
     heldGobbleCountsComplete &&
     heldWarpletRescuedComplete;
+
+  const refetchClaimAuthority = useCallback(() => {
+    void Promise.allSettled([
+      refetchAuctionSellWarpletBalance(),
+      refetchGobbledTokenIdPadding(),
+      refetchHeldWarpletIds(),
+      refetchHeldGobbleCounts(),
+      refetchHeldWarpletRescued(),
+    ]);
+  }, [
+    refetchAuctionSellWarpletBalance,
+    refetchGobbledTokenIdPadding,
+    refetchHeldWarpletIds,
+    refetchHeldGobbleCounts,
+    refetchHeldWarpletRescued,
+  ]);
 
   const idleNoChainAuction = hasParsedLot && chainLot.startTime === 0n;
 
@@ -1261,6 +1292,7 @@ export default function GobblerAuctionSection({
       ? settlementRecordsForClaimableHoldings(
           claimableHeldWarplets,
           displayCandidates,
+          { freshRecords: freshClaimSettlementRecords },
         )
       : displayCandidates;
     return sortSettlementsForDisplay(claimCandidates);
@@ -1271,6 +1303,7 @@ export default function GobblerAuctionSection({
     rescuedGobbledIdSet,
     holdingsAuthorityReady,
     claimableHeldWarplets,
+    freshClaimSettlementRecords,
   ]);
 
   /** Which won lot the connected wallet should rescue first (chain-won ties over history). */
@@ -1342,6 +1375,7 @@ export default function GobblerAuctionSection({
 
   const handleDismissSettlement = useCallback((fp: string) => {
     setDismissedWinnerFps(addDismissedFp(fp));
+    setFreshClaimSettlementRecords((prev) => prev.filter((r) => r.fp !== fp));
   }, []);
 
   // ---------- Gobbled-warplet rescue (signed mint + NFT pull) ----------
@@ -1365,6 +1399,9 @@ export default function GobblerAuctionSection({
     if (fp == null) return;
     const t = setTimeout(() => {
       setDismissedWinnerFps(addDismissedFp(fp));
+      setFreshClaimSettlementRecords((prev) =>
+        prev.filter((r) => r.fp !== fp),
+      );
     }, 1500);
     return () => clearTimeout(t);
   }, [rescue.stage, claimFocusRecord?.fp]);
@@ -1673,6 +1710,16 @@ export default function GobblerAuctionSection({
   const ethBidQuoteError =
     ethBidQuote.isError && ethBidQuote.error ? ethBidQuote.error.message : null;
 
+  const rememberFreshClaimSettlement = useCallback((record: SettlementRecord) => {
+    if (record.gobbledTokenId == null) return;
+    setFreshClaimSettlementRecords((prev) =>
+      mergeSettlementRecords([record, ...prev]).slice(
+        0,
+        FRESH_CLAIM_BRIDGE_LIMIT,
+      ),
+    );
+  }, []);
+
   const handleSettlePaused = useCallback(async () => {
     setSettleError(null);
     expectNewLotAfterSettleRef.current = false;
@@ -1681,16 +1728,24 @@ export default function GobblerAuctionSection({
       const receipt = await settleWhenPaused();
       const settledSnap = attachGobbledTokenId(snap, receipt);
       if (settledSnap) {
-        const next = appendSettlementRecord({
+        const settledRecord = {
           ...settledSnap,
           recordedAt: Date.now(),
-        });
+        };
+        const next = appendSettlementRecord(settledRecord);
         setSettlementHistory(next);
+        rememberFreshClaimSettlement(settledRecord);
+        refetchClaimAuthority();
       }
     } catch (e) {
       setSettleError(formatUserFacingTxError(e));
     }
-  }, [settleWhenPaused, chainLot]);
+  }, [
+    settleWhenPaused,
+    chainLot,
+    rememberFreshClaimSettlement,
+    refetchClaimAuthority,
+  ]);
 
   const handleSettleAndNext = useCallback(async () => {
     setSettleError(null);
@@ -1700,17 +1755,25 @@ export default function GobblerAuctionSection({
       const receipt = await settleAndStartNext();
       const settledSnap = attachGobbledTokenId(snap, receipt);
       if (settledSnap) {
-        const next = appendSettlementRecord({
+        const settledRecord = {
           ...settledSnap,
           recordedAt: Date.now(),
-        });
+        };
+        const next = appendSettlementRecord(settledRecord);
         setSettlementHistory(next);
+        rememberFreshClaimSettlement(settledRecord);
+        refetchClaimAuthority();
       }
     } catch (e) {
       expectNewLotAfterSettleRef.current = false;
       setSettleError(formatUserFacingTxError(e));
     }
-  }, [settleAndStartNext, chainLot]);
+  }, [
+    settleAndStartNext,
+    chainLot,
+    rememberFreshClaimSettlement,
+    refetchClaimAuthority,
+  ]);
 
   const handleExtendAuction = useCallback(async () => {
     setSettleError(null);
