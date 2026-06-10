@@ -62,11 +62,16 @@ export async function POST(req: NextRequest) {
     case "miniapp_added":
     case "notifications_enabled": {
       const details = event.notificationDetails;
-      if (details) {
+      // https-only: the stored URL becomes a server-side POST target in
+      // sendGobblerNotification — defense-in-depth against SSRF should the
+      // signature check ever be bypassed.
+      if (details && details.url.startsWith("https://")) {
         await saveNotificationToken(fid, {
           url: details.url,
           token: details.token,
         });
+      } else if (details) {
+        console.warn("[webhook] rejected non-https notification url", { fid });
       }
       break;
     }

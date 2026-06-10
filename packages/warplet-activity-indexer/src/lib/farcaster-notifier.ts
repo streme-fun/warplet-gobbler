@@ -31,11 +31,15 @@ if (!farcasterNotifyEnabled) {
 
 export function truncateNotificationText(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value;
-  // Slice on code points so an emoji surrogate pair never gets split,
-  // then keep trimming until the UTF-16 length fits alongside the ellipsis.
-  const points = Array.from(value);
-  while (points.length > 0 && points.join("").length > maxLength - 1) points.pop();
-  return `${points.join("")}…`;
+  // Accumulate whole code points until the UTF-16 budget (minus the ellipsis)
+  // is spent — an emoji surrogate pair is kept or dropped atomically.
+  const budget = maxLength - 1;
+  let out = "";
+  for (const point of value) {
+    if (out.length + point.length > budget) break;
+    out += point;
+  }
+  return `${out}…`;
 }
 
 export async function sendFarcasterNotification(

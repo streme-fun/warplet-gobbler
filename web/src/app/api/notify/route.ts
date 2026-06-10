@@ -44,16 +44,22 @@ export async function POST(req: NextRequest) {
     targetFids?: unknown;
   };
 
+  // Reject oversized inputs up front (the sender truncates to the protocol
+  // limits of 128/32/128, but a caller blowing past sane bounds is a bug or
+  // abuse, not copy that wants trimming).
   if (
     typeof notificationId !== "string" ||
     notificationId.length === 0 ||
+    notificationId.length > 128 ||
     typeof title !== "string" ||
     title.length === 0 ||
+    title.length > 256 ||
     typeof text !== "string" ||
-    text.length === 0
+    text.length === 0 ||
+    text.length > 1024
   ) {
     return NextResponse.json(
-      { error: "notificationId, title and body are required strings" },
+      { error: "notificationId, title and body are required bounded strings" },
       { status: 400 },
     );
   }

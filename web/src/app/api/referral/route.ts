@@ -35,15 +35,13 @@ export async function POST(req: NextRequest) {
   }
   const viaKey =
     typeof via === "string" && /^[a-z0-9_-]{1,16}$/i.test(via) ? via : "other";
-  const viewerKey =
+  const hasViewerFid =
     typeof viewerFid === "number" &&
     Number.isInteger(viewerFid) &&
     viewerFid > 0 &&
-    viewerFid <= 1e12
-      ? `fid:${viewerFid}`
-      : `anon:${crypto.randomUUID()}`;
+    viewerFid <= 1e12;
 
-  if (viewerKey === `fid:${ref}`) {
+  if (hasViewerFid && viewerFid === ref) {
     return NextResponse.json({ ok: true, counted: false });
   }
 
@@ -51,8 +49,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, counted: false, stored: false });
   }
 
+  // Surface-attribution counters accept anonymous reports; leaderboard
+  // credit does not. An anon viewer key would be unique per request (SADD
+  // always 1), letting a curl loop farm any fid's score — so only joins
+  // that present a viewer fid count, deduped per (referrer, viewer fid).
+  // (The fid is client-claimed; a spoofer can still enumerate fids, but
+  // each one counts once and the set is auditable.)
+  if (!hasViewerFid) {
+    await kvPipeline([["HINCRBY", "wg:ref:via", viaKey, 1]]);
+    return NextResponse.json({ ok: true, counted: false });
+  }
+
   const first = await kvPipeline([
-    ["SADD", `wg:ref:joined:${ref}`, viewerKey],
+    ["SADD", `wg:ref:joined:${ref}`, `fid:${viewerFid}`],
     ["HINCRBY", "wg:ref:via", viaKey, 1],
   ]);
   const isNewJoin = first?.[0] === 1;

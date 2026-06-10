@@ -43,6 +43,10 @@ export type SettleEvent = {
 /** Module-level TTL cache — receipts are immutable, so long TTL is safe. */
 const lookupCache = new Map<string, { at: number; value: unknown }>();
 const CACHE_TTL_MS = 10 * 60_000;
+// Keys are attacker-supplied tx hashes; cap the map so unique-hash spam
+// can't grow it unboundedly in a long-lived process (insertion-order Map
+// eviction ≈ oldest-first).
+const CACHE_MAX_ENTRIES = 500;
 
 async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   const hit = lookupCache.get(key);
@@ -50,7 +54,15 @@ async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   const value = await load();
   // Only cache positive results: a tx can be "not found" simply because it
   // hasn't propagated to our RPC yet.
-  if (value != null) lookupCache.set(key, { at: Date.now(), value });
+  if (value != null) {
+    lookupCache.delete(key);
+    lookupCache.set(key, { at: Date.now(), value });
+    while (lookupCache.size > CACHE_MAX_ENTRIES) {
+      const oldest = lookupCache.keys().next().value;
+      if (oldest == null) break;
+      lookupCache.delete(oldest);
+    }
+  }
   return value;
 }
 

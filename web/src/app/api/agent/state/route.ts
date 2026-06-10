@@ -59,9 +59,10 @@ async function readAuctionState() {
         { address: CONTRACTS.auctionSell, abi: auctionSellAbi, functionName: "minBidIncrementPercentage" },
         { address: CONTRACTS.auctionSell, abi: auctionSellAbi, functionName: "getQueuedTokenIds" },
         { address: CONTRACTS.auctionSell, abi: auctionSellAbi, functionName: "queueBumpFee" },
+        { address: CONTRACTS.auctionSell, abi: auctionSellAbi, functionName: "bidToken" },
       ],
     });
-    const [lotR, pausedR, reserveR, incR, queueR, bumpFeeR] = reads;
+    const [lotR, pausedR, reserveR, incR, queueR, bumpFeeR, bidTokenR] = reads;
     if (lotR.status !== "success") return null;
     const lot = lotR.result;
     const paused = pausedR.status === "success" ? pausedR.result : false;
@@ -70,6 +71,8 @@ async function readAuctionState() {
     const queue =
       queueR.status === "success" ? queueR.result.map((id) => Number(id)) : [];
     const bumpFee = bumpFeeR.status === "success" ? bumpFeeR.result : null;
+    const bidTokenAddress =
+      bidTokenR.status === "success" ? bidTokenR.result : null;
 
     const hasBid = lot.bidder !== zeroAddress && lot.amount > 0n;
     const minNextBid = hasBid
@@ -91,6 +94,7 @@ async function readAuctionState() {
       minBidIncrementPercentage: incrementPct,
       queue,
       queueBumpFeeWei: bumpFee?.toString() ?? null,
+      bidTokenAddress,
     };
   } catch {
     return null;
@@ -107,18 +111,7 @@ export async function GET() {
       readAuctionState(),
     ]);
 
-  const bidTokenAddress = await (async () => {
-    if (CONTRACTS.auctionSell === ZERO_ADDRESS) return null;
-    try {
-      return await basePublicClient.readContract({
-        address: CONTRACTS.auctionSell,
-        abi: auctionSellAbi,
-        functionName: "bidToken",
-      });
-    } catch {
-      return null;
-    }
-  })();
+  const bidTokenAddress = auction?.bidTokenAddress ?? null;
 
   const state = {
     game: "WarpletGobbler",
@@ -140,6 +133,9 @@ export async function GET() {
         ? null
         : {
             ...auction,
+            // Folded into the structured bidToken object below; undefined
+            // drops out of the JSON serialization.
+            bidTokenAddress: undefined,
             bidToken: {
               address: bidTokenAddress,
               symbol: bidMeta.symbol,
