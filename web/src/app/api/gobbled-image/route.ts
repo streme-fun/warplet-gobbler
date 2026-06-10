@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http } from "viem";
+import { createPublicClient } from "viem";
 import { base } from "viem/chains";
+import { baseHttp } from "@/lib/base-http";
 import { ensureGobbledImage } from "@/lib/generate-gobbled-image";
 import { isWarpletInGobblerAuctionCustody } from "@/lib/warplet-gobbled-custody";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const publicClient = createPublicClient({ chain: base, transport: http() });
+const publicClient = createPublicClient({ chain: base, transport: baseHttp() });
 
 export async function POST(request: NextRequest) {
   try {

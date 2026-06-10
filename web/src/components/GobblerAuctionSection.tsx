@@ -342,14 +342,24 @@ export default function GobblerAuctionSection({
         const latest = await publicClient.getBlockNumber();
         if (cancelled) return;
         const nowMs = Date.now();
+        // Never scan past the AuctionSell deploy block — a cold mount with
+        // no cache otherwise issues the full 1M-block window (~100 getLogs
+        // calls) even when the contract is much younger than that.
+        const deployBlock = CONTRACT_BLOCKS.auctionSellDeploy;
+        const maxLookback =
+          deployBlock > 0n &&
+          latest > deployBlock &&
+          latest - deployBlock < AUCTION_SETTLED_LOOKBACK_BLOCKS
+            ? latest - deployBlock
+            : AUCTION_SETTLED_LOOKBACK_BLOCKS;
         // Delta since the last scan (capped at the full lookback); a full
         // lookback when there's no usable cache.
         const lookback = !cached
-          ? AUCTION_SETTLED_LOOKBACK_BLOCKS
+          ? maxLookback
           : latest > cached.lastBlock
-            ? latest - cached.lastBlock < AUCTION_SETTLED_LOOKBACK_BLOCKS
+            ? latest - cached.lastBlock < maxLookback
               ? latest - cached.lastBlock
-              : AUCTION_SETTLED_LOOKBACK_BLOCKS
+              : maxLookback
             : 0n;
         const windows = computeLogScanWindows(
           latest,

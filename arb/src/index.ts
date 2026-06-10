@@ -167,11 +167,28 @@ async function main() {
   const balance = await publicClient.getBalance({ address: account.address });
   log.info("Bot ETH balance", { eth: formatEther(balance) });
 
+  // A slow tick (RPC/OpenSea stall) must not overlap the next interval —
+  // two concurrent ticks can both pass the `recentlyAttempted` check and
+  // double-submit the same snipe.
+  let tickInFlight = false;
+  const guardedTick = async () => {
+    if (tickInFlight) {
+      log.debug("Skipping tick — previous tick still running");
+      return;
+    }
+    tickInFlight = true;
+    try {
+      await tick();
+    } finally {
+      tickInFlight = false;
+    }
+  };
+
   // Run first tick immediately
-  await tick();
+  await guardedTick();
 
   // Then poll
-  const interval = setInterval(tick, POLL_INTERVAL_MS);
+  const interval = setInterval(guardedTick, POLL_INTERVAL_MS);
 
   // Graceful shutdown
   const shutdown = () => {
