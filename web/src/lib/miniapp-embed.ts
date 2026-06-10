@@ -11,18 +11,11 @@ export const AUCTION_EMBED_IMAGE =
   "https://api.warpletgobbler.xyz/api/gobbler/frimg/mini/auction.png";
 
 /**
- * Sell preview image — PLACEHOLDER.
- *
- * The real sell-themed asset is an external dependency: it must be produced and
- * hosted at `…/frimg/mini/sell.png` on the image service. Until it exists we
- * fall back to the auction image so the embed preview never 404s.
- *
- * ROLLOUT CAVEAT: while this points at the auction image, a shared `/sell` link
- * previews with the *bid* image — do not promote `/sell` in marketing until the
- * real asset lands (see the plan's Scope Boundaries → Deferred to Follow-Up Work).
- * TODO: switch to `…/frimg/mini/sell.png` once the asset is hosted.
+ * Sell preview image — the live pot OG render. A shared `/sell` link previews
+ * the actual pot ("THE POT IS FATTENING" + current balance), which is both
+ * sell-themed and self-updating, replacing the old external-asset placeholder.
  */
-export const SELL_EMBED_IMAGE = AUCTION_EMBED_IMAGE;
+export const SELL_EMBED_IMAGE = `${appUrl}/api/og/pot`;
 
 export type MiniappEmbed = {
   version: string;
@@ -47,15 +40,18 @@ export type MiniappEmbed = {
 export function buildMiniappEmbed({
   imageUrl,
   launchUrl,
+  buttonTitle = "Launch",
 }: {
   imageUrl: string;
   launchUrl: string;
+  /** Feed CTA next to the embed image — ≤32 chars per the miniapp spec. */
+  buttonTitle?: string;
 }): MiniappEmbed {
   return {
     version: "1",
     imageUrl,
     button: {
-      title: "Launch",
+      title: buttonTitle,
       action: {
         type: "launch_miniapp",
         name: "WarpletGobbler",

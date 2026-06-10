@@ -59,10 +59,18 @@ describe("buildMiniappEmbed", () => {
     expect(appUrl).toBe("https://warpletgobbler.xyz");
   });
 
-  it("SELL_EMBED_IMAGE is still the auction-image placeholder", () => {
-    // Enforces the rollout caveat: /sell previews with the auction image until
-    // the real sell asset is hosted. Delete this test when SELL_EMBED_IMAGE is
-    // switched to the real sell URL.
-    expect(SELL_EMBED_IMAGE).toBe(AUCTION_EMBED_IMAGE);
+  it("SELL_EMBED_IMAGE is the live pot OG render", () => {
+    // /sell previews the self-updating pot image instead of the old
+    // external-asset placeholder.
+    expect(SELL_EMBED_IMAGE).toBe(`${appUrl}/api/og/pot`);
+  });
+
+  it("buildMiniappEmbed accepts a custom button title for share pages", () => {
+    const embed = buildMiniappEmbed({
+      imageUrl: AUCTION_EMBED_IMAGE,
+      launchUrl: `${appUrl}/sell`,
+      buttonTitle: "🦷 Feed the Gobbler",
+    });
+    expect(embed.button.title).toBe("🦷 Feed the Gobbler");
   });
 });

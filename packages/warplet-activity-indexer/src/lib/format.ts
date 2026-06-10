@@ -25,3 +25,14 @@ export function formatActor(address: string | null | undefined, profile?: Neynar
   bits.push(`<code>${shortAddress(address)}</code>`);
   return bits.join(" · ");
 }
+
+// Plain-text actor label (no HTML) for Farcaster notification copy.
+export function formatActorPlain(
+  address: string | null | undefined,
+  profile?: NeynarUser | null,
+): string {
+  if (!address) return "Someone";
+  if (profile?.displayName) return profile.displayName;
+  if (profile?.username) return `@${profile.username}`;
+  return shortAddress(address);
+}

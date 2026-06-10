@@ -61,6 +61,11 @@ export const env = {
   neynarClientId: process.env.NEYNAR_CLIENT_ID,
   notifyOnBackfill: optionalBoolean("INDEXER_NOTIFY_ON_BACKFILL", true),
   notifyFromBlockRaw: optionalString("INDEXER_NOTIFY_FROM_BLOCK"),
+  gobblerNotifyUrl: optionalString("GOBBLER_NOTIFY_URL"),
+  gobblerNotifySecret: optionalString("GOBBLER_NOTIFY_SECRET"),
+  gobblerAppUrlRaw: optionalString("GOBBLER_APP_URL"),
+  gobblerPaymentTokenSymbolRaw: optionalString("GOBBLER_PAYMENT_TOKEN_SYMBOL"),
+  gobblerBidTokenSymbolRaw: optionalString("GOBBLER_BID_TOKEN_SYMBOL"),
 };
 
 export const startBlock: number | "latest" = (() => {
@@ -92,3 +97,12 @@ export const telegramRoutes: Partial<Record<ActivityType, TelegramRoute>> = {
 };
 
 export const neynarEnabled = Boolean(env.neynarApiKey);
+
+export const farcasterNotifyEnabled = Boolean(env.gobblerNotifyUrl && env.gobblerNotifySecret);
+
+// App base URL for Farcaster notification target links (no trailing slash).
+export const gobblerAppUrl = (env.gobblerAppUrlRaw ?? "https://warpletgobbler.xyz").replace(/\/+$/, "");
+
+// Token symbols for notification copy — defaults mirror web/src/lib/paymentToken.ts.
+export const paymentTokenSymbol = env.gobblerPaymentTokenSymbolRaw ?? "WARPGOBB";
+export const bidTokenSymbol = env.gobblerBidTokenSymbolRaw ?? paymentTokenSymbol;

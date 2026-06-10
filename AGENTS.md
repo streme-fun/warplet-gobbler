@@ -69,6 +69,9 @@ forge fmt             # format Solidity
 - **Font** — EB Garamond (Google Fonts via `next/font`)
 - **Path alias** — `@/*` maps to `./src/*`
 - **Webpack config** (`next.config.js`) — polyfill exclusions for web3 libs (fs, net, tls, pino-pretty, lokijs, encoding)
+- **Viral share layer** — onchain-verifiable share pages (`/g/[tx]` gobble, `/w/[tx]` auction win, `/c/[id]` claimed receipt, `/pot` live pot), each with its own `fc:miniapp` embed + dynamic 3:2 image from `/api/og/*` (satori; fonts base64-embedded in `src/lib/og/font-data.ts`). Cast copy/URL builders in `src/lib/share/share-links.ts`; share UI = `ShareCastButton` + `useShareCast` (composeCast in-app, farcaster.xyz intent fallback) wired into `GobbleShareCard`, `BidTauntToast`, `ClaimShareStrip`, and the pot-dare button in `SellSection`. Share URLs carry `?ref=<fid>` (captured by `useReferralCapture`, counted in `/api/referral`, KV-optional)
+- **Notifications** — `/api/webhook` (signature-verified via `@farcaster/miniapp-node`, needs `NEYNAR_API_KEY`) stores tokens in KV (`src/lib/kv.ts`); `/api/notify` (secret-protected) fans out batched Mini App notifications (`src/lib/notifications/`); the indexer POSTs gobble/settle/outbid events to it
+- **Agent API** — `/api/agent/state` (pot, auction, contracts, how-to JSON), `/api/agent/feed` (recent events via log scan), `/llms.txt` (agent prose front door); `packages/gobbler-mcp` is the matching MCP server
 
 ### Contracts (`contracts/`)
 
@@ -100,5 +103,8 @@ Dynamic daisyUI classes like `bg-primary/20` are safelisted in `tailwind.config.
 - `web/.env.local`: `NEXT_PUBLIC_WC_PROJECT_ID` (WalletConnect), `NEXT_PUBLIC_BASE_RPC_URL` (optional), `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL` / `NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL` (UI labels), `NEXT_PUBLIC_APP_URL` (deployed base URL for Farcaster mini-app embed launch URLs; defaults to `https://warpletgobbler.xyz` — set it on preview/staging or share links embed production)
 - `web/.env.local` (gobbled image pipeline): `GEMINI_API_KEY`, `warpletgobbler_READ_WRITE_TOKEN` (Vercel Blob), `PINATA_JWT`, `PINATA_GATEWAY_URL`
 - `web/.env.local` (claim flow): `GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY` — EIP-712 signer for `GobbledWarplets.rescueWarplet` metadata; required for `/api/mint-gobbled-nft`
-- `web/.env.local` (optional): `NEYNAR_API_KEY` — Farcaster display name/avatar resolution in `/api/bidder-profile`
+- `web/.env.local` (optional): `NEYNAR_API_KEY` — Farcaster display name/avatar resolution in `/api/bidder-profile`, share OG images, and webhook signature verification (`/api/webhook`)
+- `web/.env.local` (share/notifications layer, all optional-degrade): `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or Upstash names) — notification token store + referral leaderboard; `GOBBLER_NOTIFY_SECRET` — shared secret for `/api/notify` (must match the indexer's)
+- `packages/warplet-activity-indexer/.env` (Farcaster notify): `GOBBLER_NOTIFY_URL`, `GOBBLER_NOTIFY_SECRET`, `GOBBLER_APP_URL`, `GOBBLER_PAYMENT_TOKEN_SYMBOL`, `GOBBLER_BID_TOKEN_SYMBOL`
+- `packages/gobbler-mcp` (env at runtime): `GOBBLER_API_URL`, `BASE_RPC_URL`, optional address overrides, `AGENT_PRIVATE_KEY` (gates `send_tx`)
 - `contracts/.env`: `BASE_RPC_URL`, `BASESCAN_API_KEY`, `DEPLOYER_PRIVATE_KEY`

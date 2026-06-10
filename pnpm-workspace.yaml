@@ -2,6 +2,7 @@ packages:
   - "web"
   - "arb"
   - "packages/warplet-activity-indexer"
+  - "packages/gobbler-mcp"
 
 patchedDependencies:
   cuer@0.0.3: patches/cuer@0.0.3.patch
