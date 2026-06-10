@@ -7,17 +7,26 @@
   "miniapp": {
     "version": "1",
     "name": "Warplet Gobbler",
+    "subtitle": "Feed it. Drain the pot.",
     "iconUrl": "https://warpletgobbler.xyz/icon.jpeg",
     "homeUrl": "https://warpletgobbler.xyz/",
-    "imageUrl": "https://api.warpletgobbler.xyz/api/gobbler/frimg/mini/auction.png",
-    "buttonTitle": "Launch",
+    "imageUrl": "https://warpletgobbler.xyz/api/og/pot",
+    "buttonTitle": "🦷 Enter the Gobbler",
     "splashImageUrl": "https://warpletgobbler.xyz/splash.png",
     "splashBackgroundColor": "#13111C",
-    "webhookUrl": "https://api.warpletgobbler.xyz/api/webhook/gobbler",
-    "description": "A flywheel for Warplets using Superfluid streaming",
+    "webhookUrl": "https://warpletgobbler.xyz/api/webhook",
+    "castShareUrl": "https://warpletgobbler.xyz/",
+    "description": "A pot of $WARPGOBB streams in every second. Deposit a Warplet to drain it all in one gulp — then watch it get auctioned from the Gobbler's gut.",
+    "ogTitle": "Warplet Gobbler",
+    "ogDescription": "The pot fattens every second. One Warplet in takes it all.",
+    "ogImageUrl": "https://warpletgobbler.xyz/api/og/pot",
     "primaryCategory": "finance",
     "tags": ["warplets", "defi", "auction", "staking", "base"],
     "requiredChains": ["eip155:8453"],
-    "requiredCapabilities": []
+    "requiredCapabilities": [
+      "actions.ready",
+      "actions.composeCast",
+      "wallet.getEthereumProvider"
+    ]
   }
 }

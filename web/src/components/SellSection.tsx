@@ -1,6 +1,9 @@
 "use client";
 
 import StreamingNumber from "./StreamingNumber";
+import ShareCastButton from "./ShareCastButton";
+import { formatCompactAmount } from "@/lib/share/format-amount";
+import { potCastText, potShareUrl } from "@/lib/share/share-links";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -156,6 +159,22 @@ export default function SellSection({
               </>
             )}
           </p>
+        </div>
+        {/* Dare the timeline — spectator share keeps the pot in the feed even
+            between gobbles. */}
+        <div className="mt-3 flex justify-center">
+          <ShareCastButton
+            className="btn-ghost btn-xs text-base-content/40 hover:text-base-content/80 normal-case font-normal tracking-wide"
+            label="dare someone to gobble it →"
+            sharedLabel="dare casted ✓"
+            buildPayload={(viewerFid) => ({
+              text: potCastText({
+                amountLabel: formatCompactAmount(payoutAmount),
+                symbol: payoutSymbol?.replace(/^\$/, "") ?? "WARPGOBB",
+              }),
+              embeds: [potShareUrl({ ref: viewerFid })],
+            })}
+          />
         </div>
         <div className="w-full mt-8 sm:mt-10">
           <div className="relative">

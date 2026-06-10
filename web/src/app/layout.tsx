@@ -34,10 +34,26 @@ const creepster = Creepster({
 
 export const metadata: Metadata = {
   title: "WarpletGobbler",
-  description: "A PunkStrategy-style flywheel for Warplets using Superfluid streaming",
+  description:
+    "A pot of $WARPGOBB streams in every second. Deposit a Warplet to drain it all in one gulp.",
+  openGraph: {
+    title: "Warplet Gobbler",
+    description: "The pot fattens every second. One Warplet in takes it all.",
+    images: [{ url: `${appUrl}/api/og/pot`, width: 1200, height: 800 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Warplet Gobbler",
+    description: "The pot fattens every second. One Warplet in takes it all.",
+    images: [`${appUrl}/api/og/pot`],
+  },
   other: {
     "fc:miniapp": JSON.stringify(
-      buildMiniappEmbed({ imageUrl: AUCTION_EMBED_IMAGE, launchUrl: appUrl }),
+      buildMiniappEmbed({
+        imageUrl: AUCTION_EMBED_IMAGE,
+        launchUrl: appUrl,
+        buttonTitle: "🦷 Enter the Gobbler",
+      }),
     ),
   },
 };

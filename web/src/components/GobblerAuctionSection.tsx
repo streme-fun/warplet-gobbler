@@ -32,6 +32,7 @@ import AuctionQueueHeadSlot, {
   type QueueBumpHeadPhase,
 } from "./AuctionQueueHeadSlot";
 import BidFeedbackOverlay from "./BidFeedbackOverlay";
+import ClaimShareStrip from "./ClaimShareStrip";
 import QueueBumpCutStrip from "./QueueBumpCutStrip";
 import QueueStripCellChrome from "./QueueStripCellChrome";
 import {
@@ -1432,6 +1433,16 @@ export default function GobblerAuctionSection({
     }
   }, [claimFocusRecord, rescue]);
 
+  // After a successful rescue, surface the brag strip for the claimed Warplet.
+  const [claimedShareWarpletId, setClaimedShareWarpletId] = useState<
+    number | null
+  >(null);
+  useEffect(() => {
+    if (rescue.stage !== "success") return;
+    const id = claimFocusRecord?.tokenId;
+    if (id != null) setClaimedShareWarpletId(id);
+  }, [rescue.stage, claimFocusRecord?.tokenId]);
+
   // After a successful rescue, dismiss that row so we don't keep showing the CTA.
   useEffect(() => {
     if (rescue.stage !== "success") return;
@@ -2030,6 +2041,15 @@ export default function GobblerAuctionSection({
             : undefined
         }
       />
+
+      {claimedShareWarpletId != null && !claimBlocking ? (
+        <div className="mt-3 w-full flex justify-center px-1">
+          <ClaimShareStrip
+            warpletId={claimedShareWarpletId}
+            onDismiss={() => setClaimedShareWarpletId(null)}
+          />
+        </div>
+      ) : null}
 
       {onQueueEmptyBetweenSales && showLastWinnerBanner && !claimBlocking ? (
         <div className="mt-3 w-full flex justify-center px-1">

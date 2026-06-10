@@ -27,6 +27,11 @@ import FlyingWarplet from "@/components/FlyingWarplet";
 import SellSection from "@/components/SellSection";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import HowItWorks from "@/components/HowItWorks";
+import GobbleShareCard from "@/components/GobbleShareCard";
+import BidTauntToast from "@/components/BidTauntToast";
+import { useReferralCapture } from "@/hooks/useReferralCapture";
+import { AUCTION_BID_TOKEN_SYMBOL } from "@/lib/paymentToken";
+import { formatCompactWei } from "@/lib/share/format-amount";
 import { warpletImageSrc } from "@/lib/warplet-image-src";
 import {
   GOBBLE_TRANSACTION_REVERTED_FRIENDLY,
@@ -600,6 +605,7 @@ export default function HomeView({
   initialView?: InitialView;
 }) {
   const { isLoaded, context, isMiniApp } = useMiniApp();
+  useReferralCapture();
   const { isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
   const publicClient = usePublicClient();
@@ -883,6 +889,18 @@ export default function HomeView({
     tokens: number;
     usd: number | null;
   } | null>(null);
+  /** Receipt for the post-gobble share card — survives the overlay reset. */
+  const [lastGobble, setLastGobble] = useState<{
+    fid: number;
+    tokens: number;
+    usd: number | null;
+    txHash: string;
+  } | null>(null);
+  /** Taunt toast payload after the viewer's bid lands on-chain. */
+  const [bidTaunt, setBidTaunt] = useState<{
+    tokenId: number;
+    amountLabel: string;
+  } | null>(null);
 
   const displayPrice = currentPrice ?? BigInt(0);
   const payoutAmount = Number(formatUnits(displayPrice, payoutDecimals));
@@ -970,6 +988,12 @@ export default function HomeView({
         return;
       }
 
+      setLastGobble({
+        fid: selectedFid,
+        tokens: chestTokens,
+        usd: chestUsd,
+        txHash: gobbleHash,
+      });
       setChestPayout({ tokens: chestTokens, usd: chestUsd });
       if (!startSellAnimation()) {
         setChestPayout(null);
@@ -1022,12 +1046,17 @@ export default function HomeView({
             setAuctionBidError("Something went wrong. Try again in a moment.");
             return;
           }
+          const bidWei = auctionSell.minNextBidAmount!;
           const hash = await approveAndBid({
-            amount: auctionSell.minNextBidAmount!,
+            amount: bidWei,
             bidTokenAddress: auctionSell.bidTokenAddress!,
           });
           await publicClient.waitForTransactionReceipt({ hash });
           await auctionSell.refetchAuction();
+          setBidTaunt({
+            tokenId: Number(a.tokenId),
+            amountLabel: formatCompactWei(bidWei, auctionSell.decimals ?? 18),
+          });
           setBuyingFid(fid);
           setBuyRect(rect);
         } catch (err) {
@@ -1091,6 +1120,28 @@ export default function HomeView({
           payout={chestPayout?.tokens ?? payoutAmount}
           payoutSymbol={payoutSymbol}
           payoutUsd={chestPayout?.usd ?? payoutUsd}
+        />
+      )}
+
+      {/* Post-gobble receipt — brag + alerts, shown once the jaws finish */}
+      {lastGobble && !gobbling && !flyingFid && (
+        <GobbleShareCard
+          fid={lastGobble.fid}
+          tokens={lastGobble.tokens}
+          usd={lastGobble.usd}
+          txHash={lastGobble.txHash}
+          symbol={payoutSymbol ?? "WARPGOBB"}
+          onDismiss={() => setLastGobble(null)}
+        />
+      )}
+
+      {/* Bid taunt — slim share toast once the buy overlay clears */}
+      {bidTaunt && !buyingFid && !gobbling && (
+        <BidTauntToast
+          tokenId={bidTaunt.tokenId}
+          amountLabel={bidTaunt.amountLabel}
+          symbol={auctionSell.bidSymbol ?? AUCTION_BID_TOKEN_SYMBOL}
+          onDismiss={() => setBidTaunt(null)}
         />
       )}
 
