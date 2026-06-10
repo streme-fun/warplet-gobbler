@@ -12,7 +12,11 @@ export function mintErrorForClient(message: string): string {
     return "We couldn’t generate the claim artwork for this Warplet yet. Please try again shortly.";
   if (/pinata|PINATA|JWT/i.test(message))
     return "We couldn’t prepare the claim assets right now. Please try again shortly.";
+  if (/GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY|token URI setter/i.test(message))
+    return "Claim signing is not configured right now. Please try again shortly.";
   if (/GEMINI|genai|GoogleGenerativeAI/i.test(message))
+    return "We couldn’t prepare the claim artwork right now. Please try again shortly.";
+  if (/Image generation failed/i.test(message))
     return "We couldn’t prepare the claim artwork right now. Please try again shortly.";
   if (
     /blob|BLOB|vercel.*storage/i.test(message) &&
