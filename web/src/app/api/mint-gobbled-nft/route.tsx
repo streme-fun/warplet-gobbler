@@ -128,14 +128,24 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     // Accept either field name for back-compat with the old image-only response.
+    // Validate as a digit string before any Number() round-trip — Number()
+    // silently loses precision above 2^53, which would derive a receipt id
+    // for the wrong token.
     const rawId = body.warpletId ?? body.tokenId;
-    const warpletIdNum = Number(rawId);
-    if (!Number.isInteger(warpletIdNum) || warpletIdNum < 0) {
+    const rawIdStr =
+      typeof rawId === "string" || typeof rawId === "number"
+        ? String(rawId)
+        : "";
+    if (
+      !/^\d+$/.test(rawIdStr) ||
+      BigInt(rawIdStr) > BigInt(Number.MAX_SAFE_INTEGER)
+    ) {
       return NextResponse.json(
         { success: false, error: "Invalid warpletId" },
         { status: 400 },
       );
     }
+    const warpletIdNum = Number(rawIdStr);
 
     const gobbledContract = await resolveGobbledWarpletsContract();
     if (isAddressEqual(gobbledContract, zeroAddress)) {

@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatUnits, type Address, isAddressEqual, zeroAddress } from "viem";
+import {
+  formatUnits,
+  type Address,
+  isAddress,
+  isAddressEqual,
+  zeroAddress,
+} from "viem";
 import { useReadContract } from "wagmi";
 import { base } from "wagmi/chains";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/contracts";
@@ -120,8 +126,9 @@ export function useAuctionSellAuction() {
 
   const bidTokenAddr =
     typeof bidTokenQ.data === "string" &&
-    !isAddressEqual(bidTokenQ.data as Address, zeroAddress)
-      ? (bidTokenQ.data as Address)
+    isAddress(bidTokenQ.data) &&
+    !isAddressEqual(bidTokenQ.data, zeroAddress)
+      ? bidTokenQ.data
       : undefined;
 
   const decimalsQ = useReadContract({
@@ -224,8 +231,9 @@ export function useAuctionSellAuction() {
   const stremeZapAddr =
     stremeZapQ.isSuccess &&
     typeof stremeZapQ.data === "string" &&
-    !isAddressEqual(stremeZapQ.data as Address, zeroAddress)
-      ? (stremeZapQ.data as Address)
+    isAddress(stremeZapQ.data) &&
+    !isAddressEqual(stremeZapQ.data, zeroAddress)
+      ? stremeZapQ.data
       : undefined;
 
   const nativeEthBidConfigured = stremeZapAddr != null;
