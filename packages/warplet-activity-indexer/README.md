@@ -13,6 +13,7 @@ For each relevant event it:
 2. upserts the actor wallet into a `user` table
 3. optionally enriches the wallet with Neynar / Farcaster profile data
 4. sends a Telegram notification to the configured route for that event type
+5. optionally mirrors notable events to the web app's Farcaster Mini App notify endpoint (gobbles and settlements broadcast; new bids send a targeted "outbid" alert to the previous bidder's fid)
 
 ## Stack
 
@@ -42,6 +43,9 @@ Copy `.env.example` and fill in:
   - `TELEGRAM_NEW_USER_INTERACTION_CHAT_ID`
 - optional `NEYNAR_API_KEY`
 - optional `NEYNAR_CLIENT_ID`
+- optional `GOBBLER_NOTIFY_URL` + `GOBBLER_NOTIFY_SECRET` to mirror notifications to the web app's Farcaster Mini App notify endpoint
+- optional `GOBBLER_APP_URL` (target-link base, defaults to `https://warpletgobbler.xyz`)
+- optional `GOBBLER_PAYMENT_TOKEN_SYMBOL` / `GOBBLER_BID_TOKEN_SYMBOL` for notification copy
 
 ## Run locally
 
