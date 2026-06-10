@@ -69,7 +69,8 @@ async function fetchSignedPayload(
  * Variant 1 (`rescueWarplet(uint256)`) is intentionally NOT exposed — it's reserved for
  * emergency use and would skip the receipt mint, leaving an orphaned reservation slot.
  */
-export function useGobbledRescue() {
+export function useGobbledRescue(opts: { contractAddress?: Address } = {}) {
+  const contractAddress = opts.contractAddress ?? CONTRACTS.gobbledWarplets;
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient({ chainId: base.id });
   const { writeContractAsync } = useWriteContract();
@@ -78,8 +79,7 @@ export function useGobbledRescue() {
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<Hash | null>(null);
 
-  const ready =
-    !isAddressEqual(CONTRACTS.gobbledWarplets, zeroAddress as Address);
+  const ready = !isAddressEqual(contractAddress, zeroAddress as Address);
 
   const reset = useCallback(() => {
     setStage("idle");
@@ -109,7 +109,7 @@ export function useGobbledRescue() {
         const hash = await writeContractAsync({
           chainId: base.id,
           account: address,
-          address: CONTRACTS.gobbledWarplets,
+          address: contractAddress,
           abi: gobbledWarpletsAbi,
           functionName: "rescueWarplet",
           args: [
@@ -137,6 +137,7 @@ export function useGobbledRescue() {
       isConnected,
       address,
       publicClient,
+      contractAddress,
       writeContractAsync,
     ],
   );

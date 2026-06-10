@@ -72,6 +72,13 @@ export const auctionSellAbi = [
   },
   {
     type: "function",
+    name: "gobbledWarplets",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
     name: "stremeZap",
     stateMutability: "view",
     inputs: [],

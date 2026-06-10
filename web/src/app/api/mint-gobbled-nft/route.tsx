@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, isHex, type Address, type Hex } from "viem";
+import {
+  createPublicClient,
+  isAddressEqual,
+  isHex,
+  type Address,
+  type Hex,
+  zeroAddress,
+} from "viem";
 import { base } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseHttp } from "@/lib/base-http";
@@ -36,6 +43,16 @@ export const maxDuration = 60;
 const SIGNATURE_TTL_SECONDS = 60 * 30; // 30 minutes — well over a typical wallet flow
 
 const publicClient = createPublicClient({ chain: base, transport: baseHttp() });
+
+const auctionSellGobbledWarpletsAbi = [
+  {
+    type: "function",
+    name: "gobbledWarplets",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+] as const;
 
 function getSignerAccount() {
   const raw = process.env.GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY;
@@ -90,6 +107,20 @@ async function readReceiptTokenId(
   return { receiptTokenId, padding };
 }
 
+async function resolveGobbledWarpletsContract(): Promise<Address> {
+  if (!isAddressEqual(CONTRACTS.gobbledWarplets, zeroAddress)) {
+    return CONTRACTS.gobbledWarplets;
+  }
+  if (isAddressEqual(CONTRACTS.auctionSell, zeroAddress)) {
+    return zeroAddress;
+  }
+  return publicClient.readContract({
+    address: CONTRACTS.auctionSell,
+    abi: auctionSellGobbledWarpletsAbi,
+    functionName: "gobbledWarplets",
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -103,8 +134,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const gobbledContract = CONTRACTS.gobbledWarplets;
-    if (gobbledContract === "0x0000000000000000000000000000000000000000") {
+    const gobbledContract = await resolveGobbledWarpletsContract();
+    if (isAddressEqual(gobbledContract, zeroAddress)) {
       return NextResponse.json(
         { success: false, error: "Claiming isn’t available right now." },
         { status: 500 },
@@ -213,4 +244,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

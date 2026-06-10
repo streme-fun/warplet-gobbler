@@ -89,6 +89,7 @@ import {
   MOCK_FALLBACK_TOP_BID_AMOUNT,
   MOCK_FALLBACK_TOP_BIDDER,
 } from "@/lib/mock-data";
+import { auctionSellAbi } from "@/abi/auctionSell";
 
 /** First occurrence wins — duplicate token ids break selection / bump index logic. */
 function dedupeQueueTokenIds(ids: bigint[]): bigint[] {
@@ -111,8 +112,8 @@ const MAX_PREWARM_SENT_KEYS = 200;
 const AUCTION_SETTLED_LOOKBACK_BLOCKS = 1_000_000n;
 /** Per-call window — wide single `getLogs` ranges are rejected by capped RPCs. */
 const AUCTION_SETTLED_LOG_CHUNK_BLOCKS = 10_000n;
-/** Targeted token-topic queries are tiny, but still windowed for capped RPCs. */
-const AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS = 100_000n;
+/** Targeted token-topic queries still respect Base public RPC's 10k-block cap. */
+const AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS = 10_000n;
 /** Base block time (~2s) — used to estimate a ms timestamp from a block number
  *  so backfilled records sort on the same scale as `Date.now()`-stamped ones. */
 const BASE_BLOCK_MS = 2_000;
@@ -288,6 +289,35 @@ export default function GobblerAuctionSection({
 
   const onChainMode = auctionSellConfigured;
 
+  const envGobbledWarpletsConfigured = !isAddressEqual(
+    CONTRACTS.gobbledWarplets,
+    zeroAddress,
+  );
+
+  const { data: auctionSellGobbledWarplets } = useReadContract({
+    address: CONTRACTS.auctionSell,
+    abi: auctionSellAbi,
+    functionName: "gobbledWarplets",
+    query: {
+      enabled:
+        onChainMode &&
+        !envGobbledWarpletsConfigured &&
+        !isAddressEqual(CONTRACTS.auctionSell, zeroAddress),
+      staleTime: Infinity,
+    },
+  });
+
+  const gobbledWarpletsAddress = useMemo<Address>(() => {
+    if (envGobbledWarpletsConfigured) return CONTRACTS.gobbledWarplets;
+    if (
+      typeof auctionSellGobbledWarplets === "string" &&
+      !isAddressEqual(auctionSellGobbledWarplets, zeroAddress)
+    ) {
+      return auctionSellGobbledWarplets as Address;
+    }
+    return zeroAddress as Address;
+  }, [auctionSellGobbledWarplets, envGobbledWarpletsConfigured]);
+
   useEffect(() => {
     // Only clear on a real "off" transition — not when publicClient merely
     // changes identity (wagmi reconnect/chain switch), which would blank
@@ -440,7 +470,7 @@ export default function GobblerAuctionSection({
     !auctionReadError &&
     !isAddressEqual(CONTRACTS.auctionSell, zeroAddress) &&
     !isAddressEqual(CONTRACTS.warplets, zeroAddress) &&
-    !isAddressEqual(CONTRACTS.gobbledWarplets, zeroAddress);
+    !isAddressEqual(gobbledWarpletsAddress, zeroAddress);
 
   const liveAuctionTokenId =
     liveAuction && chainLot != null ? chainLot.tokenId : null;
@@ -465,7 +495,7 @@ export default function GobblerAuctionSection({
     isSuccess: gobbledPaddingSuccess,
     refetch: refetchGobbledTokenIdPadding,
   } = useReadContract({
-    address: CONTRACTS.gobbledWarplets,
+    address: gobbledWarpletsAddress,
     abi: gobbledWarpletsAbi,
     functionName: "WARPLET_ID_PADDING",
     query: {
@@ -517,7 +547,7 @@ export default function GobblerAuctionSection({
   const { data: heldGobbleCountReads, refetch: refetchHeldGobbleCounts } =
     useReadContracts({
       contracts: heldWarpletIds.map((id) => ({
-        address: CONTRACTS.gobbledWarplets,
+        address: gobbledWarpletsAddress,
         abi: gobbledWarpletsAbi,
         functionName: "gobbleCount",
         args: [id],
@@ -564,7 +594,7 @@ export default function GobblerAuctionSection({
     refetch: refetchHeldWarpletRescued,
   } = useReadContracts({
     contracts: heldReceiptTargets.map(({ receiptId }) => ({
-      address: CONTRACTS.gobbledWarplets,
+      address: gobbledWarpletsAddress,
       abi: gobbledWarpletsAbi,
       functionName: "warpletRescued",
       args: [receiptId],
@@ -1246,7 +1276,7 @@ export default function GobblerAuctionSection({
 
   const { data: rescuedReads } = useReadContracts({
     contracts: reconcileGobbledIds.map((id) => ({
-      address: CONTRACTS.gobbledWarplets,
+      address: gobbledWarpletsAddress,
       abi: gobbledWarpletsAbi,
       functionName: "warpletRescued",
       args: [BigInt(id)],
@@ -1256,7 +1286,7 @@ export default function GobblerAuctionSection({
       enabled:
         onChainMode &&
         reconcileGobbledIds.length > 0 &&
-        !isAddressEqual(CONTRACTS.gobbledWarplets, zeroAddress),
+        !isAddressEqual(gobbledWarpletsAddress, zeroAddress),
     },
   });
 
@@ -1379,7 +1409,7 @@ export default function GobblerAuctionSection({
   }, []);
 
   // ---------- Gobbled-warplet rescue (signed mint + NFT pull) ----------
-  const rescue = useGobbledRescue();
+  const rescue = useGobbledRescue({ contractAddress: gobbledWarpletsAddress });
 
   // Reset the rescue hook whenever we move to a different winner / lot, otherwise stale
   // success/error state from a previous lot would leak into the new banner.
