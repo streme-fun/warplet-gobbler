@@ -990,7 +990,7 @@ export default function HomeView({
 
   const handleSell = useCallback(async () => {
     if (WARPLET_SELLING_DISABLED) {
-      setSellError("Warplet selling is temporarily paused during migration.");
+      setSellError("Warplet selling is temporarily paused.");
       return;
     }
 

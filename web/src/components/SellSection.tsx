@@ -81,7 +81,7 @@ export default function SellSection({
     isWriting ||
     (isConnected && !selectedFid);
   const buttonLabel = WARPLET_SELLING_DISABLED
-    ? "Selling paused for migration"
+    ? "Selling paused"
     : !isConnected
     ? "Connect Wallet to Sell"
     : ownedWarpletsLoading
@@ -297,8 +297,7 @@ export default function SellSection({
 
         {WARPLET_SELLING_DISABLED && (
           <p className="mt-2 text-xs text-base-content/50 text-center max-w-md mx-auto">
-            Warplet selling is temporarily paused while the new auction is
-            migrated.
+            Warplet selling is temporarily paused.
           </p>
         )}
 

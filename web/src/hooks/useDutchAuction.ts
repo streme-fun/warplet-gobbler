@@ -308,7 +308,7 @@ export function useDutchAuctionActions() {
    */
   const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
     if (WARPLET_SELLING_DISABLED) {
-      throw new Error("Warplet selling is temporarily paused during migration.");
+      throw new Error("Warplet selling is temporarily paused.");
     }
     if (!address) {
       throw new Error("Connect wallet to sell");
