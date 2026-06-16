@@ -1,7 +1,7 @@
 "use client";
 
 import type { Address } from "viem";
-import { formatUnits, isAddressEqual, zeroAddress } from "viem";
+import { formatUnits, isAddressEqual, parseAbiItem, zeroAddress } from "viem";
 import {
   useCallback,
   useEffect,
@@ -17,7 +17,6 @@ import AuctionWinnerClaimGate from "./AuctionWinnerClaimGate";
 import {
   addDismissedFp,
   appendSettlementRecord,
-  getWinnerFingerprint,
   LastAuctionSettlementStack,
   pickDisplaySettlementRows,
   readDismissedFpArray,
@@ -25,8 +24,6 @@ import {
   SETTLEMENT_DISPLAY_LIMIT,
   sortSettlementsForDisplay,
   type ClaimAction,
-  type SettlementRecord,
-  type StoredWinnerHighlight,
 } from "./LastAuctionWinnerBanner";
 import AuctionQueueCard from "./AuctionQueueCard";
 import AuctionQueueCardSkeleton from "./AuctionQueueCardSkeleton";
@@ -49,10 +46,40 @@ import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
 import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
 import { useGobbledRescue } from "@/hooks/useGobbledRescue";
 import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
-import { useReadContract } from "wagmi";
-import { CONTRACTS } from "@/lib/contracts";
+import { useReadContract, useReadContracts } from "wagmi";
+import {
+  getWinnerFingerprint,
+  mergeSettlementRecords,
+  type SettlementRecord,
+  type StoredWinnerHighlight,
+} from "@/lib/settlement-records";
+import {
+  dropRescuedRecords,
+  gobbledTokenIdsToReconcile,
+} from "@/lib/claimable-records";
+import {
+  claimableHoldings,
+  classifyHeldWarplet,
+  latestReceiptId,
+  settlementRecordsForClaimableHoldings,
+  type ClaimableHolding,
+} from "@/lib/claimable-holdings";
+import { gobbledWarpletsAbi } from "@/abi/gobbledWarplets";
+import { attachGobbledTokenId } from "@/lib/auction-settled";
+import {
+  allTargetReceiptsMatched,
+  computeLogScanWindows,
+  computeLogScanWindowsToFloor,
+} from "@/lib/log-scan";
+import {
+  readScanCache,
+  writeScanCache,
+} from "@/lib/settlement-cache";
+import { mergeSettlementScanProgress } from "@/lib/settlement-backfill";
+import { CONTRACT_BLOCKS, CONTRACTS } from "@/lib/contracts";
 import { defaultAuctionBidPaymentMethod } from "@/lib/defaultAuctionBidPayment";
 import { formatUserFacingTxError } from "@/lib/format-tx-error";
+import { warpletsErc721EnumerableAbi } from "@/lib/warplets-abi";
 import {
   DEV_MOCK_EXTRA_QUEUE_TOKEN_IDS,
   DEV_MOCK_QUEUE_APPEND_EXTRAS,
@@ -62,6 +89,7 @@ import {
   MOCK_FALLBACK_TOP_BID_AMOUNT,
   MOCK_FALLBACK_TOP_BIDDER,
 } from "@/lib/mock-data";
+import { auctionSellAbi } from "@/abi/auctionSell";
 
 /** First occurrence wins — duplicate token ids break selection / bump index logic. */
 function dedupeQueueTokenIds(ids: bigint[]): bigint[] {
@@ -81,6 +109,18 @@ const BUMP_FADE_SOURCE_MS = Math.round(420 * 1.2 * 1.2 * 0.9);
 const BUMP_HEAD_PREVIEW_MS = Math.round(680 * 1.2 * 1.2 * 0.9);
 const BUMP_FINALIZE_MS = Math.round(540 * 1.2 * 1.2 * 0.9);
 const MAX_PREWARM_SENT_KEYS = 200;
+const AUCTION_SETTLED_LOOKBACK_BLOCKS = 1_000_000n;
+/** Per-call window — wide single `getLogs` ranges are rejected by capped RPCs. */
+const AUCTION_SETTLED_LOG_CHUNK_BLOCKS = 10_000n;
+/** Targeted token-topic queries still respect Base public RPC's 10k-block cap. */
+const AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS = 10_000n;
+/** Base block time (~2s) — used to estimate a ms timestamp from a block number
+ *  so backfilled records sort on the same scale as `Date.now()`-stamped ones. */
+const BASE_BLOCK_MS = 2_000;
+const FRESH_CLAIM_BRIDGE_LIMIT = 10;
+const auctionSettledEvent = parseAbiItem(
+  "event AuctionSettled(uint256 indexed tokenId, address indexed winner, uint256 amount, uint256 gobbledTokenId)",
+);
 const erc20BalanceOfAbi = [
   {
     type: "function",
@@ -103,6 +143,8 @@ function settledLotSnapshot(
   ) {
     return null;
   }
+  // The exact gobbledTokenId is attached afterwards via attachGobbledTokenId
+  // (from the settle receipt) — this base snapshot carries only the lot id.
   return {
     fp: getWinnerFingerprint(lot.tokenId, lot.bidder, lot.amount),
     tokenId: Number(lot.tokenId),
@@ -134,7 +176,7 @@ export default function GobblerAuctionSection({
   viewerPfpUrl?: string | null;
 }) {
   const { address: viewerAddress, isConnected } = useAccount();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: base.id });
   const live = MOCK_AUCTIONS[0];
   const [selectedQueueFid, setSelectedQueueFid] = useState<number | null>(null);
   const [bumpError, setBumpError] = useState<string | null>(null);
@@ -180,8 +222,23 @@ export default function GobblerAuctionSection({
   const [settlementHistory, setSettlementHistory] = useState<
     SettlementRecord[]
   >([]);
+  const [chainSettlementRecords, setChainSettlementRecords] = useState<
+    SettlementRecord[]
+  >([]);
+  const [targetedSettlementRecords, setTargetedSettlementRecords] = useState<
+    SettlementRecord[]
+  >([]);
+  const [freshClaimSettlementRecords, setFreshClaimSettlementRecords] =
+    useState<SettlementRecord[]>([]);
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
   const prewarmSentKeysRef = useRef<Set<string>>(new Set());
+  const missingDeployBlockWarnedRef = useRef(false);
+  const claimableHeldWarpletsRef = useRef<ClaimableHolding[]>([]);
+  const targetResolveSeedRecordsRef = useRef<SettlementRecord[]>([]);
+
+  const clearTargetedSettlementRecords = useCallback(() => {
+    setTargetedSettlementRecords((prev) => (prev.length === 0 ? prev : []));
+  }, []);
 
   useEffect(() => {
     setDismissedWinnerFps(readDismissedFpArray());
@@ -232,12 +289,432 @@ export default function GobblerAuctionSection({
 
   const onChainMode = auctionSellConfigured;
 
+  const envGobbledWarpletsConfigured = !isAddressEqual(
+    CONTRACTS.gobbledWarplets,
+    zeroAddress,
+  );
+
+  const { data: auctionSellGobbledWarplets } = useReadContract({
+    address: CONTRACTS.auctionSell,
+    abi: auctionSellAbi,
+    functionName: "gobbledWarplets",
+    query: {
+      enabled:
+        onChainMode &&
+        !envGobbledWarpletsConfigured &&
+        !isAddressEqual(CONTRACTS.auctionSell, zeroAddress),
+      staleTime: Infinity,
+    },
+  });
+
+  const gobbledWarpletsAddress = useMemo<Address>(() => {
+    if (envGobbledWarpletsConfigured) return CONTRACTS.gobbledWarplets;
+    if (
+      typeof auctionSellGobbledWarplets === "string" &&
+      !isAddressEqual(auctionSellGobbledWarplets, zeroAddress)
+    ) {
+      return auctionSellGobbledWarplets as Address;
+    }
+    return zeroAddress as Address;
+  }, [auctionSellGobbledWarplets, envGobbledWarpletsConfigured]);
+
+  useEffect(() => {
+    // Only clear on a real "off" transition — not when publicClient merely
+    // changes identity (wagmi reconnect/chain switch), which would blank
+    // already-fetched winners mid-rescan.
+    if (!onChainMode || auctionReadError) {
+      setChainSettlementRecords([]);
+      return;
+    }
+    if (!publicClient) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        // Seed instantly from the last persisted scan, then only scan the
+        // blocks since — avoids re-issuing ~100 getLogs calls every mount.
+        const cached = readScanCache(base.id, CONTRACTS.auctionSell);
+        const cachedRecords = cached?.records ?? [];
+        if (cachedRecords.length > 0) {
+          setChainSettlementRecords(cachedRecords);
+        }
+
+        const latest = await publicClient.getBlockNumber();
+        if (cancelled) return;
+        const nowMs = Date.now();
+        // Never scan past the AuctionSell deploy block — a cold mount with
+        // no cache otherwise issues the full 1M-block window (~100 getLogs
+        // calls) even when the contract is much younger than that.
+        const deployBlock = CONTRACT_BLOCKS.auctionSellDeploy;
+        const maxLookback =
+          deployBlock > 0n &&
+          latest > deployBlock &&
+          latest - deployBlock < AUCTION_SETTLED_LOOKBACK_BLOCKS
+            ? latest - deployBlock
+            : AUCTION_SETTLED_LOOKBACK_BLOCKS;
+        // Delta since the last scan (capped at the full lookback); a full
+        // lookback when there's no usable cache.
+        const lookback = !cached
+          ? maxLookback
+          : latest > cached.lastBlock
+            ? latest - cached.lastBlock < maxLookback
+              ? latest - cached.lastBlock
+              : maxLookback
+            : 0n;
+        const windows = computeLogScanWindows(
+          latest,
+          lookback,
+          AUCTION_SETTLED_LOG_CHUNK_BLOCKS,
+        );
+
+        let scanRecords = cachedRecords;
+        const partialLastBlock = cached?.lastBlock ?? 0n;
+        let completedAllWindows = true;
+
+        const persistScanProgress = (
+          lastBlock: bigint,
+          records: SettlementRecord[],
+        ) => {
+          const safeLastBlock =
+            partialLastBlock > lastBlock ? partialLastBlock : lastBlock;
+          setChainSettlementRecords(records);
+          writeScanCache(base.id, CONTRACTS.auctionSell, safeLastBlock, records);
+        };
+
+        // Walk newest → oldest in provider-safe windows: a capped RPC can't
+        // reject one giant range, and a mid-scan failure still yields the most
+        // recent winners (which is what the banner + claim flow care about).
+        for (const { fromBlock, toBlock } of windows) {
+          try {
+            const logs = await publicClient.getLogs({
+              address: CONTRACTS.auctionSell,
+              event: auctionSettledEvent,
+              fromBlock,
+              toBlock,
+            });
+            if (cancelled) return;
+
+            const windowRecords: SettlementRecord[] = [];
+            for (const log of logs) {
+              const { tokenId, winner, amount, gobbledTokenId } = log.args as {
+                tokenId?: bigint;
+                winner?: Address;
+                amount?: bigint;
+                gobbledTokenId?: bigint;
+              };
+              if (
+                tokenId == null ||
+                winner == null ||
+                amount == null ||
+                gobbledTokenId == null
+              ) {
+                continue;
+              }
+              const windowRecord: SettlementRecord = {
+                fp: getWinnerFingerprint(
+                  tokenId,
+                  winner,
+                  amount,
+                  gobbledTokenId,
+                ),
+                tokenId: Number(tokenId),
+                gobbledTokenId: gobbledTokenId.toString(),
+                bidder: winner,
+                amountWei: amount.toString(),
+                // Estimate a ms-scale timestamp from the block number so these
+                // sort alongside Date.now()/endTime-stamped records instead of
+                // always ranking oldest (block numbers are ~1e7, ms are ~1e12).
+                recordedAt:
+                  nowMs -
+                  Math.max(0, Number(latest - (log.blockNumber ?? latest))) *
+                    BASE_BLOCK_MS,
+              };
+              windowRecords.push(windowRecord);
+            }
+            if (windowRecords.length > 0) {
+              scanRecords = mergeSettlementScanProgress(
+                scanRecords,
+                windowRecords,
+              );
+              persistScanProgress(partialLastBlock, scanRecords);
+            }
+          } catch (error) {
+            completedAllWindows = false;
+            console.warn("[auction-settled-logs] chunk failed", {
+              fromBlock: fromBlock.toString(),
+              toBlock: toBlock.toString(),
+              error: error instanceof Error ? error.message : String(error),
+            });
+            break;
+          }
+        }
+
+        if (cancelled) return;
+        if (completedAllWindows) {
+          persistScanProgress(latest, scanRecords);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("[auction-settled-logs] failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onChainMode, auctionReadError, publicClient]);
+
   const hasParsedLot =
     auctionSellConfigured && !auctionReadError && chainLot != null;
 
   /** Consider a lot live only while it is not marked settled on-chain. */
   const liveAuction =
     hasParsedLot && chainLot.tokenId > 0n && !chainLot.settled;
+
+  const holdingsReadsEnabled =
+    onChainMode &&
+    hasParsedLot &&
+    !auctionReadError &&
+    !isAddressEqual(CONTRACTS.auctionSell, zeroAddress) &&
+    !isAddressEqual(CONTRACTS.warplets, zeroAddress) &&
+    !isAddressEqual(gobbledWarpletsAddress, zeroAddress);
+
+  const liveAuctionTokenId =
+    liveAuction && chainLot != null ? chainLot.tokenId : null;
+
+  const {
+    data: auctionSellWarpletBalance,
+    isSuccess: auctionSellWarpletBalanceSuccess,
+    refetch: refetchAuctionSellWarpletBalance,
+  } = useReadContract({
+    address: CONTRACTS.warplets,
+    abi: warpletsErc721EnumerableAbi,
+    functionName: "balanceOf",
+    args: [CONTRACTS.auctionSell],
+    query: {
+      enabled: holdingsReadsEnabled,
+      refetchInterval: 30_000,
+    },
+  });
+
+  const {
+    data: gobbledTokenIdPadding,
+    isSuccess: gobbledPaddingSuccess,
+    refetch: refetchGobbledTokenIdPadding,
+  } = useReadContract({
+    address: gobbledWarpletsAddress,
+    abi: gobbledWarpletsAbi,
+    functionName: "WARPLET_ID_PADDING",
+    query: {
+      enabled: holdingsReadsEnabled,
+    },
+  });
+
+  const auctionSellWarpletBalanceCount = useMemo(() => {
+    if (typeof auctionSellWarpletBalance !== "bigint") return 0;
+    const count = Number(auctionSellWarpletBalance);
+    return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+  }, [auctionSellWarpletBalance]);
+
+  const { data: heldWarpletIdReads, refetch: refetchHeldWarpletIds } =
+    useReadContracts({
+      contracts: Array.from(
+        { length: auctionSellWarpletBalanceCount },
+        (_, i) => ({
+          address: CONTRACTS.warplets,
+          abi: warpletsErc721EnumerableAbi,
+          functionName: "tokenOfOwnerByIndex",
+          args: [CONTRACTS.auctionSell, BigInt(i)],
+          chainId: base.id,
+        }),
+      ),
+      query: {
+        enabled: holdingsReadsEnabled && auctionSellWarpletBalanceCount > 0,
+        refetchInterval: 30_000,
+      },
+    });
+
+  const heldWarpletIds = useMemo((): bigint[] => {
+    if (!heldWarpletIdReads) return [];
+    return heldWarpletIdReads.flatMap((r) => {
+      const read = r as { status?: string; result?: unknown } | undefined;
+      return read?.status === "success" && typeof read.result === "bigint"
+        ? [read.result]
+        : [];
+    });
+  }, [heldWarpletIdReads]);
+
+  const heldWarpletIdsComplete =
+    auctionSellWarpletBalanceSuccess &&
+    (auctionSellWarpletBalanceCount === 0 ||
+      (heldWarpletIdReads != null &&
+        heldWarpletIdReads.length === auctionSellWarpletBalanceCount &&
+        heldWarpletIdReads.every((r) => r?.status === "success")));
+
+  const { data: heldGobbleCountReads, refetch: refetchHeldGobbleCounts } =
+    useReadContracts({
+      contracts: heldWarpletIds.map((id) => ({
+        address: gobbledWarpletsAddress,
+        abi: gobbledWarpletsAbi,
+        functionName: "gobbleCount",
+        args: [id],
+        chainId: base.id,
+      })),
+      query: {
+        enabled:
+          holdingsReadsEnabled &&
+          heldWarpletIdsComplete &&
+          heldWarpletIds.length > 0,
+        refetchInterval: 30_000,
+      },
+    });
+
+  const heldGobbleCountsComplete =
+    heldWarpletIds.length === 0 ||
+    (heldGobbleCountReads != null &&
+      heldGobbleCountReads.length === heldWarpletIds.length &&
+      heldGobbleCountReads.every((r) => r?.status === "success"));
+
+  const heldReceiptTargets = useMemo(() => {
+    if (typeof gobbledTokenIdPadding !== "bigint") return [];
+    if (!heldGobbleCountReads) return [];
+    return heldWarpletIds.flatMap((warpletId, i) => {
+      const countRead = heldGobbleCountReads[i];
+      if (countRead?.status !== "success") return [];
+      const gobbleCount = countRead.result;
+      if (typeof gobbleCount !== "bigint" || gobbleCount <= 0n) return [];
+      try {
+        const receiptId = latestReceiptId({
+          warpletId,
+          gobbleCount,
+          padding: gobbledTokenIdPadding,
+        });
+        return receiptId == null ? [] : [{ warpletId, receiptId }];
+      } catch {
+        return [];
+      }
+    });
+  }, [gobbledTokenIdPadding, heldGobbleCountReads, heldWarpletIds]);
+
+  const {
+    data: heldWarpletRescuedReads,
+    refetch: refetchHeldWarpletRescued,
+  } = useReadContracts({
+    contracts: heldReceiptTargets.map(({ receiptId }) => ({
+      address: gobbledWarpletsAddress,
+      abi: gobbledWarpletsAbi,
+      functionName: "warpletRescued",
+      args: [receiptId],
+      chainId: base.id,
+    })),
+    query: {
+      enabled:
+        holdingsReadsEnabled &&
+        heldGobbleCountsComplete &&
+        heldReceiptTargets.length > 0,
+      refetchInterval: 30_000,
+    },
+  });
+
+  const heldWarpletRescuedComplete =
+    heldReceiptTargets.length === 0 ||
+    (heldWarpletRescuedReads != null &&
+      heldWarpletRescuedReads.length === heldReceiptTargets.length &&
+      heldWarpletRescuedReads.every((r) => r?.status === "success"));
+
+  const heldWarpletClaimability = useMemo(() => {
+    if (typeof gobbledTokenIdPadding !== "bigint") return [];
+    if (!heldGobbleCountReads) return [];
+    const rescuedByReceipt = new Map<string, boolean>();
+    heldReceiptTargets.forEach(({ receiptId }, i) => {
+      const rescued = heldWarpletRescuedReads?.[i];
+      if (rescued?.status === "success") {
+        rescuedByReceipt.set(receiptId.toString(), Boolean(rescued.result));
+      }
+    });
+
+    return heldWarpletIds.flatMap((warpletId, i) => {
+      const countRead = heldGobbleCountReads[i];
+      if (countRead?.status !== "success") return [];
+      const gobbleCount = countRead.result;
+      if (typeof gobbleCount !== "bigint") return [];
+      let receiptId: bigint | null = null;
+      if (gobbleCount > 0n) {
+        try {
+          receiptId = latestReceiptId({
+            warpletId,
+            gobbleCount,
+            padding: gobbledTokenIdPadding,
+          });
+        } catch {
+          return [];
+        }
+      }
+      return [
+        classifyHeldWarplet({
+          warpletId,
+          gobbleCount,
+          padding: gobbledTokenIdPadding,
+          liveAuctionTokenId,
+          warpletRescued:
+            receiptId == null
+              ? undefined
+              : rescuedByReceipt.get(receiptId.toString()),
+        }),
+      ];
+    });
+  }, [
+    gobbledTokenIdPadding,
+    heldGobbleCountReads,
+    heldReceiptTargets,
+    heldWarpletIds,
+    heldWarpletRescuedReads,
+    liveAuctionTokenId,
+  ]);
+
+  const claimableHeldWarplets = useMemo(
+    () => claimableHoldings(heldWarpletClaimability),
+    [heldWarpletClaimability],
+  );
+
+  const claimableHeldWarpletKey = useMemo(
+    () =>
+      claimableHeldWarplets
+        .map(({ warpletId, receiptId }) => `${warpletId}:${receiptId}`)
+        .join("|"),
+    [claimableHeldWarplets],
+  );
+
+  useEffect(() => {
+    claimableHeldWarpletsRef.current = claimableHeldWarplets;
+  }, [claimableHeldWarplets]);
+
+  const holdingsAuthorityReady =
+    holdingsReadsEnabled &&
+    auctionSellWarpletBalanceSuccess &&
+    gobbledPaddingSuccess &&
+    heldWarpletIdsComplete &&
+    heldGobbleCountsComplete &&
+    heldWarpletRescuedComplete;
+
+  const refetchClaimAuthority = useCallback(() => {
+    void Promise.allSettled([
+      refetchAuctionSellWarpletBalance(),
+      refetchGobbledTokenIdPadding(),
+      refetchHeldWarpletIds(),
+      refetchHeldGobbleCounts(),
+      refetchHeldWarpletRescued(),
+    ]);
+  }, [
+    refetchAuctionSellWarpletBalance,
+    refetchGobbledTokenIdPadding,
+    refetchHeldWarpletIds,
+    refetchHeldGobbleCounts,
+    refetchHeldWarpletRescued,
+  ]);
 
   const idleNoChainAuction = hasParsedLot && chainLot.startTime === 0n;
 
@@ -594,40 +1071,285 @@ export default function GobblerAuctionSection({
     return { ...chainSettledWinnerSnap, recordedAt };
   }, [onChainMode, chainSettledWinnerSnap, chainLot]);
 
-  const mergedSettlementRecords = useMemo((): SettlementRecord[] => {
-    const byFp = new Map<string, SettlementRecord>();
-    for (const r of settlementHistory) {
-      byFp.set(r.fp, r);
+  const targetResolveSeedRecords = useMemo(
+    (): SettlementRecord[] =>
+      mergeSettlementRecords([
+        ...chainSettlementRecords,
+        ...settlementHistory,
+        ...(chainSettlementRecord ? [chainSettlementRecord] : []),
+      ]),
+    [chainSettlementRecords, settlementHistory, chainSettlementRecord],
+  );
+
+  const targetResolveSeedRecordKey = useMemo(
+    () =>
+      targetResolveSeedRecords
+        .map((r) =>
+          [
+            r.gobbledTokenId ?? "",
+            r.tokenId,
+            r.bidder.toLowerCase(),
+            r.amountWei,
+          ].join(":"),
+        )
+        .sort()
+        .join("|"),
+    [targetResolveSeedRecords],
+  );
+
+  useEffect(() => {
+    targetResolveSeedRecordsRef.current = targetResolveSeedRecords;
+  }, [targetResolveSeedRecords]);
+
+  useEffect(() => {
+    if (!onChainMode || !publicClient || !holdingsAuthorityReady) {
+      clearTargetedSettlementRecords();
+      return;
     }
-    if (chainSettlementRecord) {
-      const prev = byFp.get(chainSettlementRecord.fp);
-      byFp.set(chainSettlementRecord.fp, {
-        ...chainSettlementRecord,
-        recordedAt: prev
-          ? Math.max(prev.recordedAt, chainSettlementRecord.recordedAt)
-          : chainSettlementRecord.recordedAt,
-      });
+    if (CONTRACT_BLOCKS.auctionSellDeploy <= 0n) {
+      clearTargetedSettlementRecords();
+      if (!missingDeployBlockWarnedRef.current) {
+        missingDeployBlockWarnedRef.current = true;
+        console.warn("[auction-settled-targeted] deploy block not configured");
+      }
+      return;
     }
-    return [...byFp.values()];
-  }, [settlementHistory, chainSettlementRecord]);
+    const claimableTargets = claimableHeldWarpletsRef.current;
+    if (claimableTargets.length === 0) {
+      clearTargetedSettlementRecords();
+      return;
+    }
+
+    const targetReceiptIds = claimableTargets.map((h) => h.receiptId.toString());
+    const seedMatches = settlementRecordsForClaimableHoldings(
+      claimableTargets,
+      targetResolveSeedRecordsRef.current,
+    );
+    const seedMatchedIds = seedMatches
+      .map((r) => r.gobbledTokenId)
+      .filter((id): id is string => id != null);
+    if (allTargetReceiptsMatched(targetReceiptIds, seedMatchedIds)) {
+      // Complete seed records already contribute through targetResolveSeedRecords;
+      // no separate targeted state is needed when there is nothing new to add.
+      clearTargetedSettlementRecords();
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const targetTokenIds = claimableTargets.map((h) => h.warpletId);
+      const targetReceiptIdSet = new Set(targetReceiptIds);
+      const matchedReceiptIds = new Set(seedMatchedIds);
+      let resolvedRecords = seedMatches;
+
+      try {
+        const latest = await publicClient.getBlockNumber();
+        if (cancelled) return;
+        const windows = computeLogScanWindowsToFloor(
+          latest,
+          CONTRACT_BLOCKS.auctionSellDeploy,
+          AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS,
+        );
+        const nowMs = Date.now();
+
+        for (const { fromBlock, toBlock } of windows) {
+          try {
+            const logs = await publicClient.getLogs({
+              address: CONTRACTS.auctionSell,
+              event: auctionSettledEvent,
+              args: { tokenId: targetTokenIds },
+              fromBlock,
+              toBlock,
+            });
+            if (cancelled) return;
+
+            const windowRecords: SettlementRecord[] = [];
+            for (const log of logs) {
+              const { tokenId, winner, amount, gobbledTokenId } =
+                log.args as {
+                  tokenId?: bigint;
+                  winner?: Address;
+                  amount?: bigint;
+                  gobbledTokenId?: bigint;
+                };
+              if (
+                tokenId == null ||
+                winner == null ||
+                amount == null ||
+                gobbledTokenId == null
+              ) {
+                continue;
+              }
+              if (!targetReceiptIdSet.has(gobbledTokenId.toString())) continue;
+              matchedReceiptIds.add(gobbledTokenId.toString());
+              windowRecords.push({
+                fp: getWinnerFingerprint(
+                  tokenId,
+                  winner,
+                  amount,
+                  gobbledTokenId,
+                ),
+                tokenId: Number(tokenId),
+                gobbledTokenId: gobbledTokenId.toString(),
+                bidder: winner,
+                amountWei: amount.toString(),
+                recordedAt:
+                  nowMs -
+                  Math.max(0, Number(latest - (log.blockNumber ?? latest))) *
+                    BASE_BLOCK_MS,
+              });
+            }
+
+            if (windowRecords.length > 0) {
+              resolvedRecords = settlementRecordsForClaimableHoldings(
+                claimableTargets,
+                mergeSettlementScanProgress(resolvedRecords, windowRecords),
+              );
+              setTargetedSettlementRecords(resolvedRecords);
+
+              const currentCached = readScanCache(base.id, CONTRACTS.auctionSell);
+              writeScanCache(
+                base.id,
+                CONTRACTS.auctionSell,
+                currentCached?.lastBlock ?? 0n,
+                mergeSettlementScanProgress(
+                  currentCached?.records ?? [],
+                  resolvedRecords,
+                ),
+              );
+            }
+
+            if (allTargetReceiptsMatched(targetReceiptIds, matchedReceiptIds)) {
+              return;
+            }
+          } catch (error) {
+            console.warn("[auction-settled-targeted] chunk failed", {
+              fromBlock: fromBlock.toString(),
+              toBlock: toBlock.toString(),
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return;
+          }
+        }
+
+        if (!allTargetReceiptsMatched(targetReceiptIds, matchedReceiptIds)) {
+          console.warn("[auction-settled-targeted] deploy floor reached", {
+            deployBlock: CONTRACT_BLOCKS.auctionSellDeploy.toString(),
+            unmatchedReceiptIds: targetReceiptIds.filter(
+              (id) => !matchedReceiptIds.has(id),
+            ),
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("[auction-settled-targeted] failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    onChainMode,
+    publicClient,
+    holdingsAuthorityReady,
+    clearTargetedSettlementRecords,
+    claimableHeldWarpletKey,
+    targetResolveSeedRecordKey,
+  ]);
+
+  const mergedSettlementRecords = useMemo(
+    (): SettlementRecord[] =>
+      mergeSettlementRecords([
+        ...targetResolveSeedRecords,
+        ...targetedSettlementRecords,
+      ]),
+    [targetResolveSeedRecords, targetedSettlementRecords],
+  );
 
   const dismissedFpSet = useMemo(
     () => new Set(dismissedWinnerFps),
     [dismissedWinnerFps],
   );
 
-  const sortedOpenSettlements = useMemo(() => {
+  // Reconcile against on-chain `warpletRescued`: a lot whose receipt the winner
+  // already pulled out of the auction must stop counting as claimable. Without
+  // this, an already-claimed higher-bid lot hijacks `claimFocusRecord` from a
+  // genuinely-unclaimed lower-bid lot (and renders a stale CTA that reverts).
+  const reconcileGobbledIds = useMemo(
+    () => gobbledTokenIdsToReconcile(mergedSettlementRecords),
+    [mergedSettlementRecords],
+  );
+
+  const { data: rescuedReads } = useReadContracts({
+    contracts: reconcileGobbledIds.map((id) => ({
+      address: gobbledWarpletsAddress,
+      abi: gobbledWarpletsAbi,
+      functionName: "warpletRescued",
+      args: [BigInt(id)],
+      chainId: base.id,
+    })),
+    query: {
+      enabled:
+        onChainMode &&
+        reconcileGobbledIds.length > 0 &&
+        !isAddressEqual(gobbledWarpletsAddress, zeroAddress),
+    },
+  });
+
+  const rescuedGobbledIdSet = useMemo(() => {
+    const set = new Set<string>();
+    if (rescuedReads) {
+      reconcileGobbledIds.forEach((id, i) => {
+        const r = rescuedReads[i];
+        // `warpletRescued(uint256)` returns bool; wagmi widens the result type
+        // across the `.map()`-built contracts array, so coerce explicitly.
+        if (r?.status === "success" && Boolean(r.result)) set.add(id);
+      });
+    }
+    return set;
+  }, [rescuedReads, reconcileGobbledIds]);
+
+  const sortedDisplaySettlements = useMemo(() => {
     if (!onChainMode) return [];
     const open = mergedSettlementRecords.filter(
       (r) => !dismissedFpSet.has(r.fp),
     );
-    return sortSettlementsForDisplay(open);
-  }, [onChainMode, mergedSettlementRecords, dismissedFpSet]);
+    const unclaimed = dropRescuedRecords(open, rescuedGobbledIdSet);
+    return sortSettlementsForDisplay(unclaimed);
+  }, [onChainMode, mergedSettlementRecords, dismissedFpSet, rescuedGobbledIdSet]);
+
+  const sortedClaimableSettlements = useMemo(() => {
+    if (!onChainMode) return [];
+    const displayCandidates = dropRescuedRecords(
+      mergedSettlementRecords.filter((r) => !dismissedFpSet.has(r.fp)),
+      rescuedGobbledIdSet,
+    );
+    const claimCandidates = holdingsAuthorityReady
+      ? settlementRecordsForClaimableHoldings(
+          claimableHeldWarplets,
+          displayCandidates,
+          { freshRecords: freshClaimSettlementRecords },
+        )
+      : displayCandidates;
+    return sortSettlementsForDisplay(claimCandidates);
+  }, [
+    onChainMode,
+    mergedSettlementRecords,
+    dismissedFpSet,
+    rescuedGobbledIdSet,
+    holdingsAuthorityReady,
+    claimableHeldWarplets,
+    freshClaimSettlementRecords,
+  ]);
 
   /** Which won lot the connected wallet should rescue first (chain-won ties over history). */
   const claimFocusRecord = useMemo((): SettlementRecord | null => {
-    if (!viewerAddress || sortedOpenSettlements.length === 0) return null;
-    const wins = sortedOpenSettlements.filter((r) =>
+    if (!viewerAddress || sortedClaimableSettlements.length === 0) return null;
+    const wins = sortedClaimableSettlements.filter((r) =>
       isAddressEqual(viewerAddress, r.bidder),
     );
     if (wins.length === 0) return null;
@@ -644,16 +1366,16 @@ export default function GobblerAuctionSection({
       if (ar < br) return best;
       return r.recordedAt > best.recordedAt ? r : best;
     });
-  }, [viewerAddress, sortedOpenSettlements, chainSettlementRecord]);
+  }, [viewerAddress, sortedClaimableSettlements, chainSettlementRecord]);
 
   const displaySettlementRows = useMemo(
     () =>
       pickDisplaySettlementRows(
-        sortedOpenSettlements,
+        sortedDisplaySettlements,
         claimFocusRecord,
         SETTLEMENT_DISPLAY_LIMIT,
       ),
-    [sortedOpenSettlements, claimFocusRecord],
+    [sortedDisplaySettlements, claimFocusRecord],
   );
 
   const showLastWinnerBanner = displaySettlementRows.length > 0;
@@ -693,10 +1415,11 @@ export default function GobblerAuctionSection({
 
   const handleDismissSettlement = useCallback((fp: string) => {
     setDismissedWinnerFps(addDismissedFp(fp));
+    setFreshClaimSettlementRecords((prev) => prev.filter((r) => r.fp !== fp));
   }, []);
 
   // ---------- Gobbled-warplet rescue (signed mint + NFT pull) ----------
-  const rescue = useGobbledRescue();
+  const rescue = useGobbledRescue({ contractAddress: gobbledWarpletsAddress });
 
   // Reset the rescue hook whenever we move to a different winner / lot, otherwise stale
   // success/error state from a previous lot would leak into the new banner.
@@ -716,13 +1439,19 @@ export default function GobblerAuctionSection({
     if (fp == null) return;
     const t = setTimeout(() => {
       setDismissedWinnerFps(addDismissedFp(fp));
+      setFreshClaimSettlementRecords((prev) =>
+        prev.filter((r) => r.fp !== fp),
+      );
     }, 1500);
     return () => clearTimeout(t);
   }, [rescue.stage, claimFocusRecord?.fp]);
 
   const handleClaimWarplet = useCallback(() => {
     if (!claimFocusRecord) return;
-    void rescue.claim(claimFocusRecord.tokenId);
+    void rescue.claim(
+      claimFocusRecord.tokenId,
+      claimFocusRecord.gobbledTokenId,
+    );
   }, [rescue, claimFocusRecord]);
 
   const claimAction: ClaimAction | undefined =
@@ -761,7 +1490,7 @@ export default function GobblerAuctionSection({
         visible: true,
         stage: rescue.stage,
         error: rescue.error,
-        onClaim: () => void rescue.claim(row.tokenId),
+        onClaim: () => void rescue.claim(row.tokenId, row.gobbledTokenId),
       };
     },
     [claimFocusRecord, viewerAddress, rescue],
@@ -1021,42 +1750,70 @@ export default function GobblerAuctionSection({
   const ethBidQuoteError =
     ethBidQuote.isError && ethBidQuote.error ? ethBidQuote.error.message : null;
 
+  const rememberFreshClaimSettlement = useCallback((record: SettlementRecord) => {
+    if (record.gobbledTokenId == null) return;
+    setFreshClaimSettlementRecords((prev) =>
+      mergeSettlementRecords([record, ...prev]).slice(
+        0,
+        FRESH_CLAIM_BRIDGE_LIMIT,
+      ),
+    );
+  }, []);
+
   const handleSettlePaused = useCallback(async () => {
     setSettleError(null);
     expectNewLotAfterSettleRef.current = false;
     const snap = settledLotSnapshot(chainLot);
     try {
-      await settleWhenPaused();
-      if (snap) {
-        const next = appendSettlementRecord({
-          ...snap,
+      const receipt = await settleWhenPaused();
+      const settledSnap = attachGobbledTokenId(snap, receipt);
+      if (settledSnap) {
+        const settledRecord = {
+          ...settledSnap,
           recordedAt: Date.now(),
-        });
+        };
+        const next = appendSettlementRecord(settledRecord);
         setSettlementHistory(next);
+        rememberFreshClaimSettlement(settledRecord);
+        refetchClaimAuthority();
       }
     } catch (e) {
       setSettleError(formatUserFacingTxError(e));
     }
-  }, [settleWhenPaused, chainLot]);
+  }, [
+    settleWhenPaused,
+    chainLot,
+    rememberFreshClaimSettlement,
+    refetchClaimAuthority,
+  ]);
 
   const handleSettleAndNext = useCallback(async () => {
     setSettleError(null);
     const snap = settledLotSnapshot(chainLot);
     expectNewLotAfterSettleRef.current = true;
     try {
-      await settleAndStartNext();
-      if (snap) {
-        const next = appendSettlementRecord({
-          ...snap,
+      const receipt = await settleAndStartNext();
+      const settledSnap = attachGobbledTokenId(snap, receipt);
+      if (settledSnap) {
+        const settledRecord = {
+          ...settledSnap,
           recordedAt: Date.now(),
-        });
+        };
+        const next = appendSettlementRecord(settledRecord);
         setSettlementHistory(next);
+        rememberFreshClaimSettlement(settledRecord);
+        refetchClaimAuthority();
       }
     } catch (e) {
       expectNewLotAfterSettleRef.current = false;
       setSettleError(formatUserFacingTxError(e));
     }
-  }, [settleAndStartNext, chainLot]);
+  }, [
+    settleAndStartNext,
+    chainLot,
+    rememberFreshClaimSettlement,
+    refetchClaimAuthority,
+  ]);
 
   const handleExtendAuction = useCallback(async () => {
     setSettleError(null);

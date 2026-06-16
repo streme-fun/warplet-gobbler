@@ -1,6 +1,6 @@
 "use client";
 
-import { useModal } from "connectkit";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 
 export default function AuctionQueueBumpPanel({
@@ -25,7 +25,7 @@ export default function AuctionQueueBumpPanel({
   isBumping: boolean;
 }) {
   const { isConnected } = useAccount();
-  const { setOpen: setConnectModalOpen } = useModal();
+  const { openConnectModal } = useConnectModal();
   const walletDisconnected = !isConnected;
   const buttonDisabled =
     !hasQueueSelection ||
@@ -80,7 +80,7 @@ export default function AuctionQueueBumpPanel({
             : "btn-ghost border border-base-content/15 text-base-content/55 hover:bg-base-content/5"
         }`}
         disabled={buttonDisabled}
-        onClick={walletDisconnected ? () => setConnectModalOpen(true) : onBump}
+        onClick={walletDisconnected ? () => openConnectModal?.() : onBump}
       >
         {buttonLabel}
       </button>

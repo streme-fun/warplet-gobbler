@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useModal } from "connectkit";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 import { formatUnits, isAddressEqual, parseUnits, zeroAddress } from "viem";
 import type { Address } from "viem";
@@ -218,7 +218,7 @@ function StartNewAuctionPanel({
   cfg: AuctionLiveHeroStartNewAuction;
 }) {
   const { isDisconnected, isReconnecting, isConnecting } = useAccount();
-  const { setOpen: setConnectModalOpen } = useModal();
+  const { openConnectModal } = useConnectModal();
   const [pressPulse, setPressPulse] = useState(false);
   // While wagmi is restoring a session from storage, address is already known but
   // isConnected hasn't flipped yet. Don't show "Connect Wallet" or open the modal
@@ -237,7 +237,7 @@ function StartNewAuctionPanel({
           if (cfg.loading) return;
           if (walletReconnecting) return;
           if (walletDisconnected) {
-            setConnectModalOpen(true);
+            openConnectModal?.();
             return;
           }
           if (cfg.disabled) return;
@@ -376,7 +376,7 @@ export default function AuctionLiveHero({
   const renewFlashRef = useRef<HTMLDivElement>(null);
   const userSelectedPaymentModeRef = useRef(false);
   const { isDisconnected, isReconnecting, isConnecting } = useAccount();
-  const { setOpen: setConnectModalOpen } = useModal();
+  const { openConnectModal } = useConnectModal();
   const [bidAmountRaw, setBidAmountRaw] = useState("");
   const [ethAmountDisplayRaw, setEthAmountDisplayRaw] = useState("");
   const [bidValidationError, setBidValidationError] = useState<string | null>(
@@ -733,7 +733,7 @@ export default function AuctionLiveHero({
   const walletReconnecting = isReconnecting || isConnecting;
   const openConnectWallet = () => {
     if (walletReconnecting) return;
-    setConnectModalOpen(true);
+    openConnectModal?.();
   };
 
   return (
@@ -875,7 +875,22 @@ export default function AuctionLiveHero({
                       >
                         <div className="flex w-full flex-col items-center">
                           {sold &&
-                          startNewAuction?.queueBlockedReason ? null : (
+                          startNewAuction?.queueBlockedReason &&
+                          walletDisconnected ? (
+                            <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3 px-2 py-3 text-center">
+                              <p className="text-xs font-medium leading-snug text-base-content/60 sm:text-sm">
+                                Queue empty — sell a Warplet to the Gobbler.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={openConnectWallet}
+                                className="gobble-btn-ghost-purple flex w-full max-w-56 items-center justify-center !font-sans !text-xs !font-semibold !tracking-normal active:scale-[0.97] sm:!text-sm"
+                              >
+                                Connect your wallet
+                              </button>
+                            </div>
+                          ) : sold &&
+                            startNewAuction?.queueBlockedReason ? null : (
                             <>
                               {!sold ? (
                                 <p className="mb-0.5 text-[10px] uppercase tracking-wider text-base-content/45 sm:mb-1 sm:text-xs">
@@ -1005,9 +1020,11 @@ export default function AuctionLiveHero({
                   ) : null}
                   {startNewAuction ? (
                     startNewAuction.queueBlockedReason ? (
-                      <p className="text-[10px] sm:text-xs text-base-content/50 leading-snug text-center">
-                        {startNewAuction.queueBlockedReason}
-                      </p>
+                      walletDisconnected ? null : (
+                        <p className="text-[10px] sm:text-xs text-base-content/50 leading-snug text-center">
+                          {startNewAuction.queueBlockedReason}
+                        </p>
+                      )
                     ) : (
                       <StartNewAuctionPanel cfg={startNewAuction} />
                     )

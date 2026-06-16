@@ -91,7 +91,10 @@ type OpenSeaFulfillmentResponse = {
 
 export async function fetchListings(): Promise<Listing[]> {
   const url = `${BASE_URL}/listings/collection/${WARPLETS_COLLECTION_SLUG}/all?limit=50`;
-  const res = await fetch(url, { headers: headers() });
+  const res = await fetch(url, {
+    headers: headers(),
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!res.ok) {
     log.error("OpenSea listings fetch failed", { status: res.status, body: await res.text() });
     return [];
@@ -160,6 +163,7 @@ export async function getFulfillment(
     method: "POST",
     headers: { ...headers(), "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!res.ok) {

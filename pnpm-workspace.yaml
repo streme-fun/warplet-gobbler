@@ -2,3 +2,6 @@ packages:
   - "web"
   - "arb"
   - "packages/warplet-activity-indexer"
+
+patchedDependencies:
+  cuer@0.0.3: patches/cuer@0.0.3.patch

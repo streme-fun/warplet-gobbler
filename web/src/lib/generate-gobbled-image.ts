@@ -53,9 +53,13 @@ async function ensureGobbledImageUnlocked(
     return { url: existingUrl };
   }
 
-  // Fetch source image
+  // Fetch source image. Explicit timeout — the calling routes cap at
+  // maxDuration=60, and a stalled blob fetch otherwise burns the whole
+  // budget before Gemini even runs.
   const sourceUrl = `${SOURCE_BASE}/warplet-${tokenId}.png`;
-  const sourceResponse = await fetch(sourceUrl);
+  const sourceResponse = await fetch(sourceUrl, {
+    signal: AbortSignal.timeout(15_000),
+  });
   if (!sourceResponse.ok) {
     throw new Error(`Source warplet image not found: ${sourceResponse.status}`);
   }
@@ -107,6 +111,7 @@ async function generateWithFallback(sourceBase64: string): Promise<Buffer> {
         ],
         config: {
           responseModalities: ["IMAGE", "TEXT"],
+          abortSignal: AbortSignal.timeout(30_000),
         },
       });
 

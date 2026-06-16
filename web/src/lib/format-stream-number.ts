@@ -6,6 +6,18 @@ function countIntegerDigits(n: number): number {
   return String(int).length;
 }
 
+const SUBSCRIPT_DIGITS = ["₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"];
+
+/** Leading-zero runs at or above this length collapse to 0.0₍ₙ₎ notation. */
+const COMPRESS_ZERO_RUN_AT = 4;
+
+function subscriptCount(count: number): string {
+  return String(count)
+    .split("")
+    .map((c) => SUBSCRIPT_DIGITS[Number(c)])
+    .join("");
+}
+
 /**
  * At least `minSigFigs` significant figures. No decimals when the integer part
  * has more than `hideDecimalsIfIntegerDigitsGt` digits. Fewest fractional digits
@@ -29,7 +41,20 @@ export function formatSmartStreamNumber(
   }
 
   const neg = n < 0;
-  const precStr = Math.abs(n).toPrecision(sig);
+  const abs = Math.abs(n);
+
+  // Tiny fractions: collapse the run of leading zeros into a subscript count
+  // so the string stays narrow at any magnitude: 0.000000000010028 → 0.0₁₀10028
+  if (intDig === 0) {
+    const [mantissa, expPart] = abs.toExponential(sig - 1).split("e");
+    const zeroRun = -Number(expPart) - 1;
+    if (zeroRun >= COMPRESS_ZERO_RUN_AT) {
+      const digits = mantissa.replace(".", "");
+      return `${neg ? "-" : ""}0.0${subscriptCount(zeroRun)}${digits}`;
+    }
+  }
+
+  const precStr = abs.toPrecision(sig);
 
   if (/e/i.test(precStr)) {
     const num = Number(precStr) * (neg ? -1 : 1);

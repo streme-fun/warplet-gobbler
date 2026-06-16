@@ -72,6 +72,13 @@ export const auctionSellAbi = [
   },
   {
     type: "function",
+    name: "gobbledWarplets",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
     name: "stremeZap",
     stateMutability: "view",
     inputs: [],
@@ -132,5 +139,15 @@ export const auctionSellAbi = [
     stateMutability: "nonpayable",
     inputs: [{ name: "tokenId", type: "uint256" }],
     outputs: [],
+  },
+  {
+    type: "event",
+    name: "AuctionSettled",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "winner", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "gobbledTokenId", type: "uint256", indexed: false },
+    ],
   },
 ] as const;

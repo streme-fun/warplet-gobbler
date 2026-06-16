@@ -145,8 +145,6 @@ export const MOCK_AUCTIONS = [
   },
 ] as const;
 
-export type MockAuction = (typeof MOCK_AUCTIONS)[number];
-
 /** Mock top bid when on-chain lot is not wired (display only). */
 export const MOCK_FALLBACK_TOP_BID_AMOUNT = "12,400";
 
@@ -183,22 +181,4 @@ export const DEV_MOCK_EXTRA_QUEUE_TOKEN_IDS = [
   781905n,
   720166n,
   1010524n,
-] as const;
-
-// Mock warplets the user "owns" — same fids as background
-export const MY_WARPLETS = [
-  { fid: 1, name: "Warplet #1" },
-  { fid: 3, name: "Warplet #3" },
-  { fid: 42, name: "Warplet #42" },
-  { fid: 69, name: "Warplet #69" },
-  { fid: 99, name: "Warplet #99" },
-  { fid: 256, name: "Warplet #256" },
-  { fid: 314, name: "Warplet #314" },
-  { fid: 616, name: "Warplet #616" },
-  { fid: 999, name: "Warplet #999" },
-  { fid: 1337, name: "Warplet #1337" },
-  { fid: 2025, name: "Warplet #2025" },
-  { fid: 4567, name: "Warplet #4567" },
-  { fid: 5000, name: "Warplet #5000" },
-  { fid: 7777, name: "Warplet #7777" },
 ] as const;
