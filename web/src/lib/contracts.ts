@@ -13,11 +13,24 @@ const envBlock = (value?: string): bigint =>
 const MAINNET_DUTCH_AUCTION_V2 =
   "0x3D44b22900A103ACF29dC8e81CDCB6306658F234" as Address;
 
+/** Pre-migration Gobbler — FeeHandler stream moved away; pot is empty. */
+const LEGACY_DUTCH_AUCTION_V2 =
+  "0x6B2A584369B2E81269618921C3b0033581819e39" as Address;
+
+function resolveDutchAuctionAddress(): Address {
+  const fromEnv = process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS;
+  if (
+    isAddressLike(fromEnv) &&
+    fromEnv.toLowerCase() !== LEGACY_DUTCH_AUCTION_V2.toLowerCase()
+  ) {
+    return fromEnv;
+  }
+  return MAINNET_DUTCH_AUCTION_V2;
+}
+
 // Contract addresses — set in web/.env.local (env overrides hardcoded mainnet defaults)
 export const CONTRACTS = {
-  dutchAuction: envAddress(
-    process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS ?? MAINNET_DUTCH_AUCTION_V2,
-  ),
+  dutchAuction: resolveDutchAuctionAddress(),
   auctionSell: envAddress(process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS),
   auctionSellLegacy: envAddress(
     process.env.NEXT_PUBLIC_AUCTION_SELL_LEGACY_ADDRESS,
