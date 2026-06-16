@@ -9,9 +9,15 @@ const envAddress = (value?: string): Address =>
 const envBlock = (value?: string): bigint =>
   value != null && /^\d+$/.test(value) ? BigInt(value) : 0n;
 
-// Contract addresses — set in web/.env.local
+/** Base mainnet `DutchAuctionV2` — migration deploy 2026-06-16 (block 47430889). */
+const MAINNET_DUTCH_AUCTION_V2 =
+  "0x3D44b22900A103ACF29dC8e81CDCB6306658F234" as Address;
+
+// Contract addresses — set in web/.env.local (env overrides hardcoded mainnet defaults)
 export const CONTRACTS = {
-  dutchAuction: envAddress(process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS),
+  dutchAuction: envAddress(
+    process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS ?? MAINNET_DUTCH_AUCTION_V2,
+  ),
   auctionSell: envAddress(process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS),
   auctionSellLegacy: envAddress(
     process.env.NEXT_PUBLIC_AUCTION_SELL_LEGACY_ADDRESS,
