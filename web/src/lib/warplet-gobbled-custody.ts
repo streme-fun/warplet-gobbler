@@ -58,6 +58,13 @@ export async function isWarpletInGobblerAuctionCustody(
       return true;
     }
 
+    if (
+      !isAddressEqual(CONTRACTS.auctionSellLegacy, zeroAddress) &&
+      isAddressEqual(owner, CONTRACTS.auctionSellLegacy)
+    ) {
+      return true;
+    }
+
     return false;
   } catch {
     return false;

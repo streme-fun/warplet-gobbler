@@ -9,10 +9,19 @@ const envAddress = (value?: string): Address =>
 const envBlock = (value?: string): bigint =>
   value != null && /^\d+$/.test(value) ? BigInt(value) : 0n;
 
-// Contract addresses — set in web/.env.local
+/** Base mainnet `DutchAuctionV2` — migration deploy 2026-06-16 (block 47430889). */
+const MAINNET_DUTCH_AUCTION_V2 =
+  "0x3D44b22900A103ACF29dC8e81CDCB6306658F234" as Address;
+
+// Contract addresses — set in web/.env.local (env overrides hardcoded mainnet defaults)
 export const CONTRACTS = {
-  dutchAuction: envAddress(process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS),
+  dutchAuction: envAddress(
+    process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS ?? MAINNET_DUTCH_AUCTION_V2,
+  ),
   auctionSell: envAddress(process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS),
+  auctionSellLegacy: envAddress(
+    process.env.NEXT_PUBLIC_AUCTION_SELL_LEGACY_ADDRESS,
+  ),
   staking: envAddress(process.env.NEXT_PUBLIC_STAKING_ADDRESS),
   stratToken: envAddress(
     process.env.NEXT_PUBLIC_STAKING_TOKEN_ADDRESS ??
@@ -26,6 +35,9 @@ export const CONTRACTS = {
   ),
   warplets: envAddress(process.env.NEXT_PUBLIC_WARPLETS_ADDRESS), // Warplets NFT collection on Base
   gobbledWarplets: envAddress(process.env.NEXT_PUBLIC_GOBBLED_WARPLETS_ADDRESS), // Gobbled receipt collection
+  gobbledWarpletsLegacy: envAddress(
+    process.env.NEXT_PUBLIC_GOBBLED_WARPLETS_LEGACY_ADDRESS,
+  ),
   usdcToken: envAddress(process.env.NEXT_PUBLIC_USDC_TOKEN_ADDRESS),
   warpgobbWethPool: envAddress(process.env.NEXT_PUBLIC_WARPGOBB_WETH_POOL_ADDRESS),
   wethUsdcPool: envAddress(process.env.NEXT_PUBLIC_WETH_USDC_POOL_ADDRESS),
@@ -35,6 +47,9 @@ export const CONTRACT_BLOCKS = {
   // 0 means "unconfigured"; callers that use this as a scan floor must guard
   // against full-chain scans.
   auctionSellDeploy: envBlock(process.env.NEXT_PUBLIC_AUCTION_SELL_DEPLOY_BLOCK),
+  auctionSellLegacyDeploy: envBlock(
+    process.env.NEXT_PUBLIC_AUCTION_SELL_LEGACY_DEPLOY_BLOCK,
+  ),
 } as const;
 
 const ZERO_BYTES32 =

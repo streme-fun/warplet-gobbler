@@ -43,6 +43,7 @@ import { useStremeEthBidQuote } from "@/hooks/useStremeEthBidQuote";
 import { useAuctionSellSettleActions } from "@/hooks/useAuctionSellSettle";
 import { useAuctionSellStartAuction } from "@/hooks/useAuctionSellStartAuction";
 import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
+import { useLegacyLockedQueueIds } from "@/hooks/useLegacyLockedQueue";
 import { useAuctionQueueBump } from "@/hooks/useAuctionQueueBump";
 import { useGobbledRescue } from "@/hooks/useGobbledRescue";
 import { useWarpgobbUsdPrice } from "@/hooks/useDutchAuction";
@@ -77,6 +78,7 @@ import {
 } from "@/lib/settlement-cache";
 import { mergeSettlementScanProgress } from "@/lib/settlement-backfill";
 import { CONTRACT_BLOCKS, CONTRACTS } from "@/lib/contracts";
+import { legacyMigrationConfigured, settlementScanFloorBlock } from "@/lib/legacy-migration";
 import { defaultAuctionBidPaymentMethod } from "@/lib/defaultAuctionBidPayment";
 import { formatUserFacingTxError } from "@/lib/format-tx-error";
 import { warpletsErc721EnumerableAbi } from "@/lib/warplets-abi";
@@ -386,50 +388,59 @@ export default function GobblerAuctionSection({
         // recent winners (which is what the banner + claim flow care about).
         for (const { fromBlock, toBlock } of windows) {
           try {
-            const logs = await publicClient.getLogs({
-              address: CONTRACTS.auctionSell,
-              event: auctionSettledEvent,
-              fromBlock,
-              toBlock,
-            });
-            if (cancelled) return;
+            const sellAddresses =
+              legacyMigrationConfigured() &&
+              !isAddressEqual(CONTRACTS.auctionSellLegacy, zeroAddress) &&
+              !isAddressEqual(CONTRACTS.auctionSellLegacy, CONTRACTS.auctionSell)
+                ? [CONTRACTS.auctionSell, CONTRACTS.auctionSellLegacy]
+                : [CONTRACTS.auctionSell];
 
             const windowRecords: SettlementRecord[] = [];
-            for (const log of logs) {
-              const { tokenId, winner, amount, gobbledTokenId } = log.args as {
-                tokenId?: bigint;
-                winner?: Address;
-                amount?: bigint;
-                gobbledTokenId?: bigint;
-              };
-              if (
-                tokenId == null ||
-                winner == null ||
-                amount == null ||
-                gobbledTokenId == null
-              ) {
-                continue;
+            for (const sellAddress of sellAddresses) {
+              const logs = await publicClient.getLogs({
+                address: sellAddress,
+                event: auctionSettledEvent,
+                fromBlock,
+                toBlock,
+              });
+              if (cancelled) return;
+
+              for (const log of logs) {
+                const { tokenId, winner, amount, gobbledTokenId } = log.args as {
+                  tokenId?: bigint;
+                  winner?: Address;
+                  amount?: bigint;
+                  gobbledTokenId?: bigint;
+                };
+                if (
+                  tokenId == null ||
+                  winner == null ||
+                  amount == null ||
+                  gobbledTokenId == null
+                ) {
+                  continue;
+                }
+                const windowRecord: SettlementRecord = {
+                  fp: getWinnerFingerprint(
+                    tokenId,
+                    winner,
+                    amount,
+                    gobbledTokenId,
+                  ),
+                  tokenId: Number(tokenId),
+                  gobbledTokenId: gobbledTokenId.toString(),
+                  bidder: winner,
+                  amountWei: amount.toString(),
+                  // Estimate a ms-scale timestamp from the block number so these
+                  // sort alongside Date.now()/endTime-stamped records instead of
+                  // always ranking oldest (block numbers are ~1e7, ms are ~1e12).
+                  recordedAt:
+                    nowMs -
+                    Math.max(0, Number(latest - (log.blockNumber ?? latest))) *
+                      BASE_BLOCK_MS,
+                };
+                windowRecords.push(windowRecord);
               }
-              const windowRecord: SettlementRecord = {
-                fp: getWinnerFingerprint(
-                  tokenId,
-                  winner,
-                  amount,
-                  gobbledTokenId,
-                ),
-                tokenId: Number(tokenId),
-                gobbledTokenId: gobbledTokenId.toString(),
-                bidder: winner,
-                amountWei: amount.toString(),
-                // Estimate a ms-scale timestamp from the block number so these
-                // sort alongside Date.now()/endTime-stamped records instead of
-                // always ranking oldest (block numbers are ~1e7, ms are ~1e12).
-                recordedAt:
-                  nowMs -
-                  Math.max(0, Number(latest - (log.blockNumber ?? latest))) *
-                    BASE_BLOCK_MS,
-              };
-              windowRecords.push(windowRecord);
             }
             if (windowRecords.length > 0) {
               scanRecords = mergeSettlementScanProgress(
@@ -836,9 +847,26 @@ export default function GobblerAuctionSection({
     enabled: queueReadsEnabled,
   });
 
+  const {
+    data: legacyLockedQueueIds = [],
+    isLoading: legacyQueueIsLoading,
+    refetch: refetchLegacyQueue,
+  } = useLegacyLockedQueueIds({
+    enabled: queueReadsEnabled,
+    excludeTokenIds: chainQueuedIds,
+  });
+
+  const legacyLockedIdSet = useMemo(
+    () => new Set(legacyLockedQueueIds.map((id) => id.toString())),
+    [legacyLockedQueueIds],
+  );
+
   const chainQueueFingerprint = useMemo(
-    () => chainQueuedIds.map((id) => id.toString()).join(","),
-    [chainQueuedIds],
+    () =>
+      [...chainQueuedIds, ...legacyLockedQueueIds]
+        .map((id) => id.toString())
+        .join(","),
+    [chainQueuedIds, legacyLockedQueueIds],
   );
 
   useEffect(() => {
@@ -849,16 +877,29 @@ export default function GobblerAuctionSection({
   const stripQueueIds = useMemo(() => {
     let raw: bigint[];
     if (!queueReadsEnabled) raw = chainQueuedIds;
-    else if (!DEV_MOCK_QUEUE_APPEND_EXTRAS) raw = chainQueuedIds;
-    else if (mockStripOrder) raw = mockStripOrder;
-    else raw = [...chainQueuedIds, ...DEV_MOCK_EXTRA_QUEUE_TOKEN_IDS];
+    else if (!DEV_MOCK_QUEUE_APPEND_EXTRAS) {
+      raw = dedupeQueueTokenIds([...chainQueuedIds, ...legacyLockedQueueIds]);
+    } else if (mockStripOrder) raw = mockStripOrder;
+    else {
+      raw = dedupeQueueTokenIds([
+        ...chainQueuedIds,
+        ...legacyLockedQueueIds,
+        ...DEV_MOCK_EXTRA_QUEUE_TOKEN_IDS,
+      ]);
+    }
     return dedupeQueueTokenIds(raw);
-  }, [queueReadsEnabled, chainQueuedIds, mockStripOrder]);
+  }, [
+    queueReadsEnabled,
+    chainQueuedIds,
+    legacyLockedQueueIds,
+    mockStripOrder,
+  ]);
 
   /** Skeleton tiles in the waiting row while queue is loading (not shown after load). */
   const QUEUE_STRIP_SKELETON_COUNT = 5;
   const showQueueStripSkeleton =
-    !queueReadsEnabled || (queueReadsEnabled && queueIsLoading);
+    !queueReadsEnabled ||
+    (queueReadsEnabled && (queueIsLoading || legacyQueueIsLoading));
 
   const {
     settleWhenPaused,
@@ -1106,7 +1147,8 @@ export default function GobblerAuctionSection({
       clearTargetedSettlementRecords();
       return;
     }
-    if (CONTRACT_BLOCKS.auctionSellDeploy <= 0n) {
+    const scanFloor = settlementScanFloorBlock();
+    if (scanFloor <= 0n) {
       clearTargetedSettlementRecords();
       if (!missingDeployBlockWarnedRef.current) {
         missingDeployBlockWarnedRef.current = true;
@@ -1147,57 +1189,66 @@ export default function GobblerAuctionSection({
         if (cancelled) return;
         const windows = computeLogScanWindowsToFloor(
           latest,
-          CONTRACT_BLOCKS.auctionSellDeploy,
+          scanFloor,
           AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS,
         );
         const nowMs = Date.now();
 
         for (const { fromBlock, toBlock } of windows) {
           try {
-            const logs = await publicClient.getLogs({
-              address: CONTRACTS.auctionSell,
-              event: auctionSettledEvent,
-              args: { tokenId: targetTokenIds },
-              fromBlock,
-              toBlock,
-            });
-            if (cancelled) return;
+            const sellAddresses =
+              legacyMigrationConfigured() &&
+              !isAddressEqual(CONTRACTS.auctionSellLegacy, zeroAddress) &&
+              !isAddressEqual(CONTRACTS.auctionSellLegacy, CONTRACTS.auctionSell)
+                ? [CONTRACTS.auctionSell, CONTRACTS.auctionSellLegacy]
+                : [CONTRACTS.auctionSell];
 
             const windowRecords: SettlementRecord[] = [];
-            for (const log of logs) {
-              const { tokenId, winner, amount, gobbledTokenId } =
-                log.args as {
-                  tokenId?: bigint;
-                  winner?: Address;
-                  amount?: bigint;
-                  gobbledTokenId?: bigint;
-                };
-              if (
-                tokenId == null ||
-                winner == null ||
-                amount == null ||
-                gobbledTokenId == null
-              ) {
-                continue;
-              }
-              if (!targetReceiptIdSet.has(gobbledTokenId.toString())) continue;
-              matchedReceiptIds.add(gobbledTokenId.toString());
-              windowRecords.push({
-                fp: getWinnerFingerprint(
-                  tokenId,
-                  winner,
-                  amount,
-                  gobbledTokenId,
-                ),
-                tokenId: Number(tokenId),
-                gobbledTokenId: gobbledTokenId.toString(),
-                bidder: winner,
-                amountWei: amount.toString(),
-                recordedAt:
-                  nowMs -
-                  Math.max(0, Number(latest - (log.blockNumber ?? latest))) *
-                    BASE_BLOCK_MS,
+            for (const sellAddress of sellAddresses) {
+              const logs = await publicClient.getLogs({
+                address: sellAddress,
+                event: auctionSettledEvent,
+                args: { tokenId: targetTokenIds },
+                fromBlock,
+                toBlock,
               });
+              if (cancelled) return;
+
+              for (const log of logs) {
+                const { tokenId, winner, amount, gobbledTokenId } =
+                  log.args as {
+                    tokenId?: bigint;
+                    winner?: Address;
+                    amount?: bigint;
+                    gobbledTokenId?: bigint;
+                  };
+                if (
+                  tokenId == null ||
+                  winner == null ||
+                  amount == null ||
+                  gobbledTokenId == null
+                ) {
+                  continue;
+                }
+                if (!targetReceiptIdSet.has(gobbledTokenId.toString())) continue;
+                matchedReceiptIds.add(gobbledTokenId.toString());
+                windowRecords.push({
+                  fp: getWinnerFingerprint(
+                    tokenId,
+                    winner,
+                    amount,
+                    gobbledTokenId,
+                  ),
+                  tokenId: Number(tokenId),
+                  gobbledTokenId: gobbledTokenId.toString(),
+                  bidder: winner,
+                  amountWei: amount.toString(),
+                  recordedAt:
+                    nowMs -
+                    Math.max(0, Number(latest - (log.blockNumber ?? latest))) *
+                      BASE_BLOCK_MS,
+                });
+              }
             }
 
             if (windowRecords.length > 0) {
@@ -1569,6 +1620,8 @@ export default function GobblerAuctionSection({
   const bumpLiveReady =
     queueReadsEnabled &&
     selectedQueueIdx > 0 &&
+    selectedInQueueFid != null &&
+    !legacyLockedIdSet.has(String(selectedInQueueFid)) &&
     !DEV_MOCK_QUEUE_SKIP_CTA_DISABLED &&
     (DEV_MOCK_QUEUE_BUMP_LOCAL || queueBumpReady);
 
@@ -1653,8 +1706,12 @@ export default function GobblerAuctionSection({
     }
   }, [skipLineOptionVisible]);
 
+  // Skip-the-line off until legacy queued warplets are on the new AuctionSell
+  // (#249800, #421769, #266221, #420499). Re-enable after bot drain / cutover.
+  const SKIP_LINE_ENABLED = false;
+
   /** Bump pay row mirrors sell CTA: show whenever multiple queue slots exist (outlined until a tile is picked). */
-  const showBumpPanel = skipLineOptionVisible;
+  const showBumpPanel = SKIP_LINE_ENABLED && skipLineOptionVisible;
 
   const clearBidTopDisplayHold = useCallback(() => {
     setBidTopDisplayHold(null);

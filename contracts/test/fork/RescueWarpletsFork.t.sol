@@ -157,26 +157,6 @@ contract RescueWarpletsForkTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    /* ========== variant 1: bare rescue ========== */
-
-    function test_bare_rescue_pulls_real_warplet_to_winner() public requiresIntegration {
-        _aliceWinsAndSettles();
-
-        uint256 receiptId = warpletId; // first gobble of this warplet
-        assertFalse(gobbled.warpletRescued(receiptId));
-
-        vm.prank(alice);
-        gobbled.rescueWarplet(receiptId);
-
-        assertEq(warplets.ownerOf(warpletId), alice);
-        assertTrue(gobbled.warpletRescued(receiptId));
-        // Receipt was not minted.
-        vm.expectRevert();
-        gobbled.ownerOf(receiptId);
-    }
-
-    /* ========== variant 2: signed rescue (mints receipt + transfers warplet) ========== */
-
     function test_signed_rescue_mints_receipt_and_pulls_real_warplet() public requiresIntegration {
         _aliceWinsAndSettles();
 
@@ -191,30 +171,5 @@ contract RescueWarpletsForkTest is Test {
         assertEq(gobbled.ownerOf(receiptId), alice);
         assertEq(gobbled.tokenURI(receiptId), GOBBLED_URI);
         assertTrue(gobbled.warpletRescued(receiptId));
-    }
-
-    /* ========== sequence: bare rescue → signed rescue ========== */
-
-    function test_signed_rescue_after_bare_rescue_only_mints_receipt() public requiresIntegration {
-        _aliceWinsAndSettles();
-
-        uint256 receiptId = warpletId;
-
-        vm.prank(alice);
-        gobbled.rescueWarplet(receiptId);
-        assertEq(warplets.ownerOf(warpletId), alice);
-
-        // Sign + complete the receipt. The signed overload must NOT attempt a second NFT transfer
-        // (the auction no longer holds the warplet — alice does).
-        uint256 deadline = block.timestamp + 1 days;
-        bytes memory sig = _signMint(receiptId, GOBBLED_URI, deadline);
-
-        vm.prank(alice);
-        gobbled.rescueWarplet(receiptId, GOBBLED_URI, deadline, sig);
-
-        assertEq(gobbled.ownerOf(receiptId), alice);
-        assertEq(gobbled.tokenURI(receiptId), GOBBLED_URI);
-        // Still alice — the second call did not move the warplet.
-        assertEq(warplets.ownerOf(warpletId), alice);
     }
 }

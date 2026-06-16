@@ -12,10 +12,8 @@ import {IGobbledWarplets} from "./interfaces/IGobbledWarplets.sol";
 
 /// @title GobbledWarplets
 /// @notice ERC721 receipt collection for gobbled Warplets. The authorized minter reserves receipts; the
-///         designated recipient later either walks away with just the underlying Warplet via
-///         {rescueWarplet}, or claims the receipt with signed metadata AND the underlying Warplet in one
-///         tx via the overloaded {rescueWarplet} (EIP-712 from `tokenURISetter`) so the receipt mint
-///         appears as their transaction (indexers / marketplaces).
+///         designated recipient claims via signed {rescueWarplet} (EIP-712 from `tokenURISetter`), which mints
+///         the receipt and pulls the underlying Warplet from the auction when still held there.
 /// @dev Token id encoding: `tokenId = gobbleIndex * WARPLET_ID_PADDING + warpletId`.
 ///      `warpletId` must be strictly less than {WARPLET_ID_PADDING} so decoding is unambiguous.
 ///      Padding is 1e8 (extra decimal zero vs 1e7) so sparse Warplet ids stay safely below the modulus; see `web/scripts/scan-warplet-token-ids.mjs`.
@@ -48,14 +46,10 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
 
     mapping(uint256 warpletId => uint256 count) private _gobbles;
 
-    /// @notice Recipient allowed to call {rescueWarplet} for a reserved `tokenId`. Cleared once the
-    ///         metadata-bearing overload mints the receipt; the bare overload leaves it set so the
-    ///         recipient can still come back later and mint the receipt with metadata.
+    /// @notice Recipient allowed to call {rescueWarplet} for a reserved `tokenId`. Cleared when the receipt is minted.
     mapping(uint256 tokenId => address recipient) private _reservedRecipient;
 
-    /// @notice True once the underlying Warplet for `tokenId` has been pulled out of the auction (by
-    ///         either {rescueWarplet} overload). Used to make the metadata overload skip the second
-    ///         transfer if the bare overload was called first.
+    /// @notice True once the underlying Warplet for `tokenId` has been pulled out of the auction.
     mapping(uint256 tokenId => bool) public warpletRescued;
 
     event MinterChanged(address indexed newMinter);
@@ -114,23 +108,6 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
         emit Reserved(to, warpletId, tokenId, gobbleIndex);
     }
 
-    /// @notice Reserved recipient pulls the underlying Warplet from the auction without minting a receipt.
-    /// @dev Leaves the reservation in place so the recipient can still call the metadata overload later
-    ///      to mint the gobbled receipt (which will skip the second NFT transfer).
-    function rescueWarplet(uint256 tokenId) external {
-        address to = _reservedRecipient[tokenId];
-        require(to != address(0), "GobbledWarplets: not reserved");
-        require(msg.sender == to, "GobbledWarplets: not recipient");
-        require(!warpletRescued[tokenId], "GobbledWarplets: already rescued");
-
-        warpletRescued[tokenId] = true;
-
-        (uint256 wid, uint256 idx) = _decodeTokenId(tokenId);
-        IERC721 warplets = IGobbledWarpletsMinter(minter).nft();
-        warplets.transferFrom(minter, to, wid);
-        emit WarpletRescued(to, wid, tokenId, idx);
-    }
-
     /// @notice Reserved recipient mints the receipt with signed metadata. If the underlying Warplet has
     ///         not yet been pulled, this also transfers it from the auction in the same transaction.
     /// @param deadline Unix timestamp after which the signature is invalid.
@@ -162,6 +139,25 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
             warplets.transferFrom(minter, to, wid);
         }
         emit Minted(to, wid, tokenId, idx);
+    }
+
+    /// @notice Owner mints a gobbled receipt directly (e.g. manual migration or break-glass).
+    /// @dev Does not set {warpletRescued} — the underlying Warplet is not pulled from the auction here.
+    function adminMint(address to, uint256 warpletId, string calldata uri) external onlyOwner {
+        require(to != address(0), "GobbledWarplets: zero recipient");
+        require(warpletId < WARPLET_ID_PADDING, "GobbledWarplets: warpletId too large");
+
+        uint256 gobbleIndex = _gobbles[warpletId];
+        uint256 tokenId = _encodeTokenId(warpletId, gobbleIndex);
+        require(_ownerOf(tokenId) == address(0), "GobbledWarplets: already minted");
+        require(_reservedRecipient[tokenId] == address(0), "GobbledWarplets: reserved");
+
+        _gobbles[warpletId] = gobbleIndex + 1;
+
+        _mint(to, tokenId);
+        _setTokenURI(tokenId, uri);
+
+        emit Minted(to, warpletId, tokenId, gobbleIndex);
     }
 
     function gobbleCount(uint256 warpletId) external view returns (uint256) {

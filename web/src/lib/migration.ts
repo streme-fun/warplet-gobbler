@@ -1,2 +1,2 @@
-export const WARPLET_SELLING_DISABLED = true;
+export const WARPLET_SELLING_DISABLED = false;
 
