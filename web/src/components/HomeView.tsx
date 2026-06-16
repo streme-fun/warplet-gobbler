@@ -33,6 +33,7 @@ import {
   formatGobbleSellTxError,
   formatUserFacingTxError,
 } from "@/lib/format-tx-error";
+import { WARPLET_SELLING_DISABLED } from "@/lib/migration";
 import {
   resolveInitialView,
   type InitialView,
@@ -988,6 +989,11 @@ export default function HomeView({
   }, [selectedFid, gobbling, flyingFid]);
 
   const handleSell = useCallback(async () => {
+    if (WARPLET_SELLING_DISABLED) {
+      setSellError("Warplet selling is temporarily paused during migration.");
+      return;
+    }
+
     if (
       !selectedFid ||
       !isConnected ||

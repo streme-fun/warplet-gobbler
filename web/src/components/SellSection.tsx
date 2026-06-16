@@ -1,6 +1,7 @@
 "use client";
 
 import StreamingNumber from "./StreamingNumber";
+import { WARPLET_SELLING_DISABLED } from "@/lib/migration";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -74,8 +75,14 @@ export default function SellSection({
   };
 
   const buttonDisabled =
-    !!flyingFid || isSelling || isWriting || (isConnected && !selectedFid);
-  const buttonLabel = !isConnected
+    WARPLET_SELLING_DISABLED ||
+    !!flyingFid ||
+    isSelling ||
+    isWriting ||
+    (isConnected && !selectedFid);
+  const buttonLabel = WARPLET_SELLING_DISABLED
+    ? "Selling paused for migration"
+    : !isConnected
     ? "Connect Wallet to Sell"
     : ownedWarpletsLoading
       ? "downloading your warplets... "
@@ -275,12 +282,25 @@ export default function SellSection({
             }`}
             disabled={buttonDisabled}
             onClick={
-              !isConnected ? onConnectWallet : selectedFid ? onSell : undefined
+              WARPLET_SELLING_DISABLED
+                ? undefined
+                : !isConnected
+                  ? onConnectWallet
+                  : selectedFid
+                    ? onSell
+                    : undefined
             }
           >
             {buttonLabel}
           </button>
         </div>
+
+        {WARPLET_SELLING_DISABLED && (
+          <p className="mt-2 text-xs text-base-content/50 text-center max-w-md mx-auto">
+            Warplet selling is temporarily paused while the new auction is
+            migrated.
+          </p>
+        )}
 
         {sellError && (
           <p className="mt-2 text-xs text-error/90 text-center max-w-md mx-auto break-words">
