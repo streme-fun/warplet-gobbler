@@ -12,7 +12,6 @@ function getMiniAppAddErrorName(error: unknown): string | null {
     : null;
 }
 
-
 export function useMiniApp() {
   const [isMiniApp, setIsMiniApp] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -142,5 +141,4 @@ export function useMiniApp() {
     close,
     openUrl,
   };
-
 }
