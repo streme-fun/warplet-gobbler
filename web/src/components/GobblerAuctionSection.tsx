@@ -1629,8 +1629,12 @@ export default function GobblerAuctionSection({
     }
   }, [skipLineOptionVisible]);
 
+  // Skip-the-line off until legacy queued warplets are on the new AuctionSell
+  // (#249800, #421769, #266221, #420499). Re-enable after bot drain / cutover.
+  const SKIP_LINE_ENABLED = false;
+
   /** Bump pay row mirrors sell CTA: show whenever multiple queue slots exist (outlined until a tile is picked). */
-  const showBumpPanel = skipLineOptionVisible;
+  const showBumpPanel = SKIP_LINE_ENABLED && skipLineOptionVisible;
 
   const clearBidTopDisplayHold = useCallback(() => {
     setBidTopDisplayHold(null);
