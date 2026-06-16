@@ -12,6 +12,21 @@ function getMiniAppAddErrorName(error: unknown): string | null {
     : null;
 }
 
+async function promptAddMiniApp(
+  onSuccess: () => void,
+  logContext: string,
+): Promise<void> {
+  try {
+    await sdk.actions.addMiniApp();
+    onSuccess();
+  } catch (e) {
+    const errorName = getMiniAppAddErrorName(e);
+    if (errorName !== "RejectedByUser") {
+      console.error(`${logContext}:`, e);
+    }
+  }
+}
+
 export function useMiniApp() {
   const [isMiniApp, setIsMiniApp] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -83,15 +98,7 @@ export function useMiniApp() {
 
         if (!ctx.client.added && !autoAddAttemptedRef.current) {
           autoAddAttemptedRef.current = true;
-          try {
-            await sdk.actions.addMiniApp();
-            markAdded({});
-          } catch (e) {
-            const errorName = getMiniAppAddErrorName(e);
-            if (errorName !== "RejectedByUser") {
-              console.error("Failed to auto-add mini app:", e);
-            }
-          }
+          await promptAddMiniApp(() => markAdded({}), "Failed to auto-add mini app");
         }
       } catch (e) {
         console.error("Failed to initialize mini app SDK:", e);
@@ -108,8 +115,7 @@ export function useMiniApp() {
     };
   }, []);
 
-  const addMiniApp = useCallback(async () => {
-    await sdk.actions.addMiniApp();
+  const markClientAdded = useCallback(() => {
     setIsAdded(true);
     setContext((prev) =>
       prev
@@ -123,6 +129,10 @@ export function useMiniApp() {
         : prev,
     );
   }, []);
+
+  const addMiniApp = useCallback(async () => {
+    await promptAddMiniApp(markClientAdded, "Failed to add mini app");
+  }, [markClientAdded]);
 
   const close = useCallback(() => {
     sdk.actions.close();
