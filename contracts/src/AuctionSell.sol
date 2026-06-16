@@ -88,6 +88,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
 
     event AuctionExtended(uint256 indexed tokenId, uint256 endTime);
     event AuctionTimeBufferUpdated(uint256 timeBuffer);
+    event AuctionDurationUpdated(uint256 duration);
     event AuctionReservePriceUpdated(uint256 reservePrice);
     event AuctionMinBidIncrementPercentageUpdated(uint8 minBidIncrementPercentage);
     event ProceedsRecipientUpdated(address indexed recipient);
@@ -368,6 +369,11 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     function setTimeBuffer(uint256 _timeBuffer) external onlyOwner {
         timeBuffer = _timeBuffer;
         emit AuctionTimeBufferUpdated(_timeBuffer);
+    }
+
+    function setDuration(uint256 _duration) external onlyOwner {
+        duration = _duration;
+        emit AuctionDurationUpdated(_duration);
     }
 
     function setReservePrice(uint256 _reservePrice) external onlyOwner {

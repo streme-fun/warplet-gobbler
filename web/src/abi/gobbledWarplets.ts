@@ -2,11 +2,8 @@
  * GobbledWarplets — receipt NFT minted to auction winners.
  *
  * Settlement reserves a `tokenId = gobbleIndex * WARPLET_ID_PADDING + warpletId` for the winner;
- * the winner finalizes by calling the signed `rescueWarplet` overload, which mints the receipt
- * with `tokenURI = uri` AND pulls the underlying Warplet from `AuctionSell` in the same tx.
- *
- * Two `rescueWarplet` overloads exist on the contract; this ABI only declares the signed one
- * (variant 2) since variant 1 is reserved for emergency use and is intentionally NOT wired in UI.
+ * the winner claims via signed `rescueWarplet`, which mints the receipt with `tokenURI = uri`
+ * and pulls the underlying Warplet from `AuctionSell` when still held there.
  */
 export const gobbledWarpletsAbi = [
   {

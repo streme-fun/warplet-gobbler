@@ -24,8 +24,11 @@ import {DeployHelpers} from "./DeployHelpers.sol";
 ///   `AUCTION_MIN_BID_INCREMENT_PERCENT`, `AUCTION_DURATION_SECONDS`,
 ///   `GOBBLED_WARPLETS_NAME`, `GOBBLED_WARPLETS_SYMBOL`
 ///   Optional: `GOBBLED_WARPLETS_TOKEN_URI_SETTER` (defaults to deployer) — signer for `GobbledWarplets.rescueWarplet` signatures.
-///   Optional: `AUCTION_SELL_STREME_ZAP` — `StremeZapUniversal` for ETH bids; omit or `address(0)` for pull-only `bid()`.
+///   Required: `AUCTION_SELL_STREME_ZAP` — `StremeZapUniversal` for ETH bids (defaults to Base mainnet zap).
 contract DeployAuctionSell is DeployHelpers {
+    /// @dev Streme `StremeZapUniversal` on Base mainnet (same address `FeeHandler` uses).
+    address internal constant STREME_ZAP_BASE_MAINNET = 0xEe3f62CF6987121f9cBe567C0E5a01c940A7e570;
+
     function run() external {
         uint256 pk = _loadPrivateKey();
 
@@ -49,12 +52,17 @@ contract DeployAuctionSell is DeployHelpers {
 
         console2.log("GobbledWarplets:", address(gobbled));
         console2.log("AuctionSell:", address(sell));
-        console2.log("GobbledWarplets owner (URI / admin):", gobbled.owner());
+        console2.log("AuctionSell stremeZap:", address(sell.stremeZap()));
+        console2.log("GobbledWarplets owner:", gobbled.owner());
+        console2.log("GobbledWarplets tokenURISetter:", gobbled.tokenURISetter());
     }
 
     function _newAuctionSell(GobbledWarplets gobbled) internal returns (AuctionSell sell) {
         uint256 minPctRaw = vm.envUint("AUCTION_MIN_BID_INCREMENT_PERCENT");
         require(minPctRaw <= type(uint8).max, "DeployAuctionSell: AUCTION_MIN_BID_INCREMENT_PERCENT too large");
+
+        address stremeZap = vm.envOr("AUCTION_SELL_STREME_ZAP", STREME_ZAP_BASE_MAINNET);
+        require(stremeZap != address(0), "DeployAuctionSell: AUCTION_SELL_STREME_ZAP required");
 
         sell = new AuctionSell(
             IERC721(vm.envAddress("WARPLETS_NFT_ADDRESS")),
@@ -66,7 +74,7 @@ contract DeployAuctionSell is DeployHelpers {
             uint8(minPctRaw),
             vm.envUint("AUCTION_DURATION_SECONDS"),
             vm.envAddress("AUCTION_SELL_OWNER"),
-            vm.envOr("AUCTION_SELL_STREME_ZAP", address(0))
+            stremeZap
         );
     }
 }

@@ -336,92 +336,6 @@ contract GobbledWarpletsTest is Test {
         g.rescueWarplet(tid, IPFS_URI, deadline, sig);
     }
 
-    /* ========== rescueWarplet — variant 1 (bare, no metadata) ========== */
-
-    function test_bare_rescue_pulls_warplet_without_minting_receipt() public {
-        uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
-
-        assertFalse(g.warpletRescued(tid));
-
-        vm.prank(alice);
-        g.rescueWarplet(wid);
-
-        assertEq(warplets.ownerOf(wid), alice);
-        assertTrue(g.warpletRescued(tid));
-        // Receipt was NOT minted.
-        vm.expectRevert();
-        g.ownerOf(tid);
-        assertEq(g.totalSupply(), 0);
-    }
-
-    function test_bare_rescue_reverts_stranger() public {
-        uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        g.reserve(alice, wid);
-
-        vm.prank(makeAddr("stranger"));
-        vm.expectRevert("GobbledWarplets: no rescuable reservation");
-        g.rescueWarplet(wid);
-    }
-
-    function test_bare_rescue_reverts_when_unreserved() public {
-        vm.prank(alice);
-        vm.expectRevert("GobbledWarplets: no rescuable reservation");
-        g.rescueWarplet(1);
-    }
-
-    function test_bare_rescue_reverts_on_replay() public {
-        uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        g.reserve(alice, wid);
-
-        vm.prank(alice);
-        g.rescueWarplet(wid);
-
-        vm.prank(alice);
-        vm.expectRevert("GobbledWarplets: no rescuable reservation");
-        g.rescueWarplet(wid);
-    }
-
-    /* ========== variant 1 → variant 2 sequence ========== */
-
-    function test_signed_rescue_after_bare_rescue_mints_receipt_skips_transfer() public {
-        uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
-
-        // Bare rescue first: warplet is alice's, receipt unminted.
-        vm.prank(alice);
-        g.rescueWarplet(wid);
-        assertEq(warplets.ownerOf(wid), alice);
-        assertTrue(g.warpletRescued(tid));
-
-        // Then mint the receipt with metadata. Should NOT touch the underlying NFT (no allowance issue
-        // even though the auction no longer holds it).
-        uint256 deadline = block.timestamp + 1 hours;
-        bytes memory sig = _signMint(tid, IPFS_URI, deadline);
-        vm.prank(alice);
-        g.rescueWarplet(tid, IPFS_URI, deadline, sig);
-
-        assertEq(g.ownerOf(tid), alice);
-        assertEq(g.tokenURI(tid), IPFS_URI);
-        assertEq(warplets.ownerOf(wid), alice);
-    }
-
-    function test_bare_rescue_after_signed_rescue_reverts() public {
-        uint256 wid = _seedHeldWarplet();
-        vm.prank(address(minterContract));
-        uint256 tid = g.reserve(alice, wid);
-
-        _rescueWithSig(alice, tid, IPFS_URI);
-
-        vm.prank(alice);
-        vm.expectRevert("GobbledWarplets: no rescuable reservation");
-        g.rescueWarplet(wid);
-    }
-
     /* ========== misc ========== */
 
     function test_warpletOf_and_gobbleIndexOf() public {
@@ -445,5 +359,35 @@ contract GobbledWarpletsTest is Test {
     function test_supportsInterface_721_enumerable_metadata() public view {
         assertTrue(g.supportsInterface(type(IERC721Enumerable).interfaceId));
         assertTrue(g.supportsInterface(type(IERC721Metadata).interfaceId));
+    }
+
+    /* ========== adminMint ========== */
+
+    function test_adminMint_onlyOwner() public {
+        uint256 wid = warplets.mint(alice);
+        vm.prank(owner);
+        g.adminMint(alice, wid, IPFS_URI);
+        assertEq(g.ownerOf(wid), alice);
+        assertEq(g.tokenURI(wid), IPFS_URI);
+        assertEq(g.gobbleCount(wid), 1);
+    }
+
+    function test_adminMint_can_mint_second_gobble_index() public {
+        address bob = makeAddr("bob");
+        uint256 wid = warplets.mint(alice);
+        vm.startPrank(owner);
+        g.adminMint(alice, wid, IPFS_URI);
+        uint256 tid2 = g.WARPLET_ID_PADDING() + wid;
+        g.adminMint(bob, wid, IPFS_URI);
+        vm.stopPrank();
+        assertEq(g.ownerOf(wid), alice);
+        assertEq(g.ownerOf(tid2), bob);
+        assertEq(g.gobbleCount(wid), 2);
+    }
+
+    function test_adminMint_reverts_non_owner() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        g.adminMint(alice, 1, IPFS_URI);
     }
 }

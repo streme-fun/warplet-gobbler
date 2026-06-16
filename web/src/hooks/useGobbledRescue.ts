@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { type Address, type Hash, type Hex, isAddressEqual, zeroAddress } from "viem";
+import {
+  type Address,
+  type Hash,
+  type Hex,
+  isAddressEqual,
+  zeroAddress,
+} from "viem";
 import { base } from "wagmi/chains";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { gobbledWarpletsAbi } from "@/abi/gobbledWarplets";
@@ -32,9 +38,6 @@ async function fetchSignedPayload(
   warpletId: number,
   gobbledTokenId?: string,
 ): Promise<SignedRescuePayload> {
-  // Cap below the route's 60s maxDuration so a stalled serverless invocation
-  // surfaces as an error instead of hanging "preparing…". Manual AbortController
-  // rather than AbortSignal.timeout for Safari < 16.4 support.
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 55_000);
   let res: Response;
@@ -64,10 +67,7 @@ async function fetchSignedPayload(
 }
 
 /**
- * Drives the signed `rescueWarplet` flow for the most recent auction winner.
- *
- * Variant 1 (`rescueWarplet(uint256)`) is intentionally NOT exposed — it's reserved for
- * emergency use and would skip the receipt mint, leaving an orphaned reservation slot.
+ * Drives claim for auction winners via signed `rescueWarplet` on GobbledWarplets.
  */
 export function useGobbledRescue() {
   const { address, isConnected } = useAccount();
@@ -99,6 +99,12 @@ export function useGobbledRescue() {
         setStage("error");
         return;
       }
+      if (!publicClient) {
+        setError("Wallet connection isn’t ready yet. Please try again.");
+        setStage("error");
+        return;
+      }
+
       setError(null);
       setTxHash(null);
       setStage("preparing");
@@ -106,6 +112,7 @@ export function useGobbledRescue() {
         const payload = await fetchSignedPayload(warpletId, gobbledTokenId);
 
         setStage("awaiting-wallet");
+
         const hash = await writeContractAsync({
           chainId: base.id,
           account: address,
@@ -119,26 +126,17 @@ export function useGobbledRescue() {
             payload.signature,
           ],
         });
+
         setTxHash(hash);
-
         setStage("confirming");
-        if (publicClient) {
-          await publicClient.waitForTransactionReceipt({ hash });
-        }
-
+        await publicClient.waitForTransactionReceipt({ hash });
         setStage("success");
       } catch (e) {
         setError(formatUserFacingTxError(e));
         setStage("error");
       }
     },
-    [
-      ready,
-      isConnected,
-      address,
-      publicClient,
-      writeContractAsync,
-    ],
+    [ready, isConnected, address, publicClient, writeContractAsync],
   );
 
   return {

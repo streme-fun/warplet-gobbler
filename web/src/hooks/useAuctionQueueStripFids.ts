@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useAuctionSellAuction } from "@/hooks/useAuctionSell";
 import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
+import { useLegacyLockedQueueIds } from "@/hooks/useLegacyLockedQueue";
 
 function dedupeFids(ids: bigint[]): number[] {
   const seen = new Set<string>();
@@ -27,11 +28,22 @@ export function useAuctionQueueStripFids(): number[] {
     useAuctionSellQueue({
       enabled: queueReadsEnabled,
     });
+  const { data: legacyLockedIds = [], isLoading: legacyLoading } =
+    useLegacyLockedQueueIds({
+      enabled: queueReadsEnabled,
+      excludeTokenIds: chainQueuedIds,
+    });
 
   return useMemo(() => {
-    if (!queueReadsEnabled || queueLoading) {
+    if (!queueReadsEnabled || queueLoading || legacyLoading) {
       return [];
     }
-    return dedupeFids(chainQueuedIds);
-  }, [queueReadsEnabled, queueLoading, chainQueuedIds]);
+    return dedupeFids([...chainQueuedIds, ...legacyLockedIds]);
+  }, [
+    queueReadsEnabled,
+    queueLoading,
+    legacyLoading,
+    chainQueuedIds,
+    legacyLockedIds,
+  ]);
 }
