@@ -58,6 +58,10 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
 
     event Reserved(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
 
+    /// @notice Emitted when a winner pulls the underlying Warplet without minting the receipt. The receipt
+    ///         id `tokenId` is permanently burned (no future receipt can ever be minted for that slot).
+    event WarpletRescued(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
+
     /// @notice Emitted when a winner mints the receipt with signed metadata AND pulls the underlying Warplet.
     event Minted(address indexed to, uint256 indexed warpletId, uint256 indexed tokenId, uint256 gobbleIndex);
 
@@ -138,6 +142,7 @@ contract GobbledWarplets is ERC721Enumerable, ERC721URIStorage, Ownable, EIP712,
     }
 
     /// @notice Owner mints a gobbled receipt directly (e.g. manual migration or break-glass).
+    /// @dev Does not set {warpletRescued} — the underlying Warplet is not pulled from the auction here.
     function adminMint(address to, uint256 warpletId, string calldata uri) external onlyOwner {
         require(to != address(0), "GobbledWarplets: zero recipient");
         require(warpletId < WARPLET_ID_PADDING, "GobbledWarplets: warpletId too large");

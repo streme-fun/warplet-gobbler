@@ -78,7 +78,7 @@ import {
 } from "@/lib/settlement-cache";
 import { mergeSettlementScanProgress } from "@/lib/settlement-backfill";
 import { CONTRACT_BLOCKS, CONTRACTS } from "@/lib/contracts";
-import { legacyMigrationConfigured } from "@/lib/legacy-migration";
+import { legacyMigrationConfigured, settlementScanFloorBlock } from "@/lib/legacy-migration";
 import { defaultAuctionBidPaymentMethod } from "@/lib/defaultAuctionBidPayment";
 import { formatUserFacingTxError } from "@/lib/format-tx-error";
 import { warpletsErc721EnumerableAbi } from "@/lib/warplets-abi";
@@ -1076,7 +1076,8 @@ export default function GobblerAuctionSection({
       clearTargetedSettlementRecords();
       return;
     }
-    if (CONTRACT_BLOCKS.auctionSellDeploy <= 0n) {
+    const scanFloor = settlementScanFloorBlock();
+    if (scanFloor <= 0n) {
       clearTargetedSettlementRecords();
       if (!missingDeployBlockWarnedRef.current) {
         missingDeployBlockWarnedRef.current = true;
@@ -1117,7 +1118,7 @@ export default function GobblerAuctionSection({
         if (cancelled) return;
         const windows = computeLogScanWindowsToFloor(
           latest,
-          CONTRACT_BLOCKS.auctionSellDeploy,
+          scanFloor,
           AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS,
         );
         const nowMs = Date.now();

@@ -7,7 +7,10 @@ import {FeeHandler} from "../src/FeeHandler.sol";
 import {DeployHelpers} from "./DeployHelpers.sol";
 
 /// @notice Deploy `DutchAuctionV2` then atomically repoint `FeeHandler` and restart stream.
-/// @dev Required env:
+/// @dev For a **full** stack redeploy (GobbledWarplets + AuctionSell + Gobbler + FeeHandler), use
+///      `DeployWarpletGobblerStack.s.sol` instead.
+///
+/// Required env:
 /// - `WARPLETS_NFT_ADDRESS`
 /// - `DUTCH_AUCTION_PAYMENT_TOKEN_ADDRESS`
 /// - `DUTCH_AUCTION_NFT_RESERVE_ADDRESS` (typically AuctionSell)

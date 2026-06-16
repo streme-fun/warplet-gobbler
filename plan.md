@@ -66,10 +66,8 @@ Verified 2026-06-16:
 
 | Contract | Script | Notes |
 |----------|--------|-------|
-| `GobbledWarplets` | `DeployAuctionSell.s.sol` | Deployed atomically with `AuctionSell` |
-| `AuctionSell` | `DeployAuctionSell.s.sol` | Deploys **paused**; set `AUCTION_SELL_STREME_ZAP` |
-| `DutchAuctionV2` | `DeployDutchAuction.s.sol` *or* `MigrateToNewDutchAuctionV2.s.sol` | `nftReserve` = **new** `AuctionSell` |
-| `GobbleSniper` | `DeployGobbleSniper.s.sol` | **Redeploy required** — old sniper `0x83a6F4a4F94CAFBAb0E6a4992EFEDc05C0774D5d` exists on Base but points at DutchAuction **V1** (`0xD359…`), not the live V2 Gobbler |
+| Full stack | `DeployWarpletGobblerStack.s.sol` | **One script** — GobbledWarplets + AuctionSell + DutchAuctionV2 + FeeHandler repoint; optional GobbleSniper |
+| `GobbleSniper` (standalone) | `DeployGobbleSniper.s.sol` | Only if you skipped `DEPLOY_GOBBLE_SNIPER=1` on the stack deploy |
 
 ### Keep (same addresses)
 
@@ -96,7 +94,6 @@ Ship these on the deploy branch **before** broadcasting:
 ### `GobbledWarplets` — legacy winner receipt
 
 - Owner calls `adminMint(to, warpletId, uri)` manually for migration winners (no on-chain claim path).
-- Constructor takes `LEGACY_AUCTION_SELL_ADDRESS` + `LEGACY_GOBBLED_WARPLETS_ADDRESS`.
 
 ### UI — unified queue strip (implemented)
 
@@ -121,12 +118,21 @@ Merge **new** on-chain queue + **legacy locked** Warplets into a single displaye
 
 Run from `contracts/` with `--rpc-url base --broadcast --verify -vvv`.
 
-### Step 1.1 — `GobbledWarplets` + `AuctionSell`
+### Single deploy (recommended)
 
 ```bash
-forge script script/DeployAuctionSell.s.sol:DeployAuctionSell \
+forge script script/DeployWarpletGobblerStack.s.sol:DeployWarpletGobblerStack \
   --rpc-url base --broadcast --verify -vvv
 ```
+
+Deploys in one broadcast:
+
+1. `GobbledWarplets`
+2. `AuctionSell` (paused)
+3. `gobbled.setMinter(auctionSell)`
+4. `DutchAuctionV2` (`nftReserve` = new `AuctionSell`)
+5. `FeeHandler.setAuction` + `startStream`
+6. `GobbleSniper` if `DEPLOY_GOBBLE_SNIPER=1`
 
 **Required env** (see `contracts/.env.example`):
 
@@ -143,46 +149,13 @@ AUCTION_SELL_STREME_ZAP=0xEe3f62CF6987121f9cBe567C0E5a01c940A7e570
 GOBBLED_WARPLETS_NAME=...
 GOBBLED_WARPLETS_SYMBOL=...
 GOBBLED_WARPLETS_TOKEN_URI_SETTER=<signer for mint API>
-```
-
-**Record:** `NEW_AUCTION_SELL`, `NEW_GOBBLED_WARPLETS`, deploy block.
-
-Script calls `gobbled.setMinter(newAuctionSell)` automatically. Auction starts **paused**.
-
-### Step 1.2 — `DutchAuctionV2` + repoint `FeeHandler`
-
-Option A — atomic (recommended):
-
-```bash
-# Set DUTCH_AUCTION_NFT_RESERVE_ADDRESS=NEW_AUCTION_SELL, FEE_HANDLER_ADDRESS=0x31aaf0...
-forge script script/MigrateToNewDutchAuctionV2.s.sol:MigrateToNewDutchAuctionV2 \
-  --rpc-url base --broadcast --verify -vvv
-```
-
-Option B — deploy Gobbler only, then manual admin txs:
-
-```bash
-forge script script/DeployDutchAuction.s.sol:DeployDutchAuction \
-  --rpc-url base --broadcast --verify -vvv
-# Then as FeeHandler admin:
-#   feeHandler.setAuction(newGobbler)
-#   feeHandler.startStream()
-```
-
-**Env for Gobbler:**
-
-```
-WARPLETS_NFT_ADDRESS=0x699727f9e01a822efdcf7333073f0461e5914b4e
-DUTCH_AUCTION_PAYMENT_TOKEN_ADDRESS=0x1A339C38Ae22726F1A4235bCecf8f12aebE4C5E8
-DUTCH_AUCTION_NFT_RESERVE_ADDRESS=<NEW_AUCTION_SELL>
 FEE_HANDLER_ADDRESS=0x31aaf0B92Bac3ce9336FA1494A1405c24Cb449E4
+# Optional: DEPLOY_GOBBLE_SNIPER=1 + sniper pool env
 ```
 
-**Record:** `NEW_DUTCH_AUCTION_V2`.
+**Record:** `NEW_AUCTION_SELL`, `NEW_GOBBLED_WARPLETS`, `NEW_DUTCH_AUCTION_V2`, deploy block.
 
-`setAuction` stops the stream to the old Gobbler, pulls stray $WARPGOBB balance from the old Gobbler into `FeeHandler`, and sets `streamActive = false` until `startStream()` (Migrate script calls both).
-
-### Step 1.3 — Unpause new `AuctionSell`
+### Unpause new `AuctionSell`
 
 ```bash
 AUCTION_SELL_ADDRESS=<NEW_AUCTION_SELL> \
@@ -192,9 +165,9 @@ forge script script/AuctionSellUnpause.s.sol:AuctionSellUnpause \
 
 `unpause()` auto-starts the first auction **if** the queue is non-empty. On a fresh deploy the queue is empty, so this only marks the contract live for incoming gobbles.
 
-### Step 1.4 — `GobbleSniper` (redeploy)
+### Optional — `GobbleSniper` later
 
-Previous deploy (`0x83a6…`) is live on Base but wired to DutchAuction V1. Redeploy against the new Gobbler and update `arb/.env` `GOBBLE_SNIPER_ADDRESS`.
+If you did not set `DEPLOY_GOBBLE_SNIPER=1` on the stack deploy:
 
 ```bash
 DUTCH_AUCTION_V2_ADDRESS=<NEW_DUTCH_AUCTION_V2> \
@@ -202,7 +175,7 @@ forge script script/DeployGobbleSniper.s.sol:DeployGobbleSniper \
   --rpc-url base --broadcast --verify -vvv
 ```
 
-### Step 1.5 — Optional admin rotation
+### Optional — admin rotation
 
 ```bash
 forge script script/RotateAdminToMultisig.s.sol:RotateAdminToMultisig \

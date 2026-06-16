@@ -372,6 +372,7 @@ contract AuctionSell is Ownable, Pausable, ReentrancyGuard, IAuctionSell, IERC72
     }
 
     function setDuration(uint256 _duration) external onlyOwner {
+        require(_duration > 0, "AuctionSell: zero duration");
         duration = _duration;
         emit AuctionDurationUpdated(_duration);
     }
