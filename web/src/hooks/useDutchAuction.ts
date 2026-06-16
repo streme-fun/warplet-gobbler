@@ -10,6 +10,7 @@ import { erc721Abi } from "@/abi/erc721";
 import { erc20Abi } from "@/abi/erc20";
 import { uniswapV3PoolAbi } from "@/abi/uniswapV3Pool";
 import { stateViewAbi } from "@/abi/stateView";
+import { WARPLET_SELLING_DISABLED } from "@/lib/migration";
 const ZERO = "0x0000000000000000000000000000000000000000";
 const ZERO_BYTES32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -306,6 +307,9 @@ export function useDutchAuctionActions() {
    * `minPrice` must match the snapshot used for slippage / frontrun protection (on-chain revert if pot < minPrice).
    */
   const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
+    if (WARPLET_SELLING_DISABLED) {
+      throw new Error("Warplet selling is temporarily paused.");
+    }
     if (!address) {
       throw new Error("Connect wallet to sell");
     }

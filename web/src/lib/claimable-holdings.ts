@@ -70,14 +70,25 @@ export function claimableHoldings(
 export function settlementRecordsForClaimableHoldings(
   holdings: readonly ClaimableHolding[],
   records: readonly SettlementRecord[],
+  opts: { freshRecords?: readonly SettlementRecord[] } = {},
 ): SettlementRecord[] {
-  if (holdings.length === 0 || records.length === 0) return [];
-  const warpletByReceiptId = new Map(
+  if (records.length === 0) return [];
+
+  const warpletByReceiptId = new Map<string, bigint>(
     holdings.map((h) => [h.receiptId.toString(), h.warpletId]),
   );
+  // A just-mined settle receipt is fresher than the 30s holdings reads. Keep
+  // exact local rows visible until the authoritative holdings query catches up.
+  const freshExactFps = new Set(
+    (opts.freshRecords ?? [])
+      .filter((r) => r.gobbledTokenId != null)
+      .map((r) => r.fp),
+  );
+
   return mergeSettlementRecords(
     records.filter((r) => {
       if (r.gobbledTokenId == null) return false;
+      if (freshExactFps.has(r.fp)) return true;
       const warpletId = warpletByReceiptId.get(r.gobbledTokenId);
       return warpletId != null && BigInt(r.tokenId) === warpletId;
     }),

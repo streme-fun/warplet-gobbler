@@ -24,7 +24,11 @@ export async function getNeynarUserByAddress(address: `0x${string}`): Promise<Ne
 
   if (env.neynarClientId) headers["x-neynar-client-id"] = env.neynarClientId;
 
-  const response = await fetch(url, { headers });
+  // Timeout so a stalled Neynar call can't hold up the event handler.
+  const response = await fetch(url, {
+    headers,
+    signal: AbortSignal.timeout(5_000),
+  });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(`Neynar lookup failed (${response.status}): ${text.slice(0, 200)}`);

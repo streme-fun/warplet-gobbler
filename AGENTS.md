@@ -11,9 +11,11 @@ WarpletGobbler is a PunkStrategy-style flywheel for [Warplets](https://opensea.i
 
 ## Monorepo Structure
 
-pnpm workspace with two packages:
+pnpm workspace with three packages:
 
 - `web/` — Next.js 14 (App Router) frontend with wagmi/viem/ConnectKit for Base chain
+- `arb/` — standalone arbitrage bot (snipes OpenSea listings, gobbles via `GobbleSniper`)
+- `packages/warplet-activity-indexer/` — Ponder event indexer (settlements, gobbles, Telegram notifications)
 - `contracts/` — Foundry (Solidity 0.8.26) smart contracts (git submodule deps: forge-std, openzeppelin-contracts)
 
 Note: `contracts/` is NOT in the pnpm workspace — it's a standalone Foundry project.
@@ -46,7 +48,7 @@ forge fmt             # format Solidity
 
 ### Web (`web/`)
 
-- **App Router** — page shell at `src/app/page.tsx`, all UI components split into `src/components/`
+- **App Router** — thin server route pages (`src/app/page.tsx`, `src/app/buy/page.tsx`, `src/app/sell/page.tsx`) each render the shared client shell `src/components/HomeView.tsx` and set their own `fc:miniapp` embed; `/buy` and `/sell` pass an `initialView` so the app opens to the matching screen. `HomeView.tsx` is the page shell (intentionally larger than the small split components below). Other UI components split into `src/components/`
 - **Components** (`src/components/`) — one file per component:
   - `AbyssBackground.tsx` — ground silhouette SVG + floating void particles
   - `ParallaxBackground.tsx` — depth-layered warplet field (back/mid/front layers)
@@ -56,9 +58,8 @@ forge fmt             # format Solidity
   - `StreamingNumber.tsx` — real-time ticking number (rAF, no re-renders)
   - `CountdownTimer.tsx` — HH:MM:SS countdown display
   - `StatBar.tsx` — labeled progress bar
-  - `AuctionWarpletCanvas.tsx` — canvas blob/tendrils + strike animation for auction items
-  - `AuctionItem.tsx` — auction card (uses AuctionWarpletCanvas + StreamingNumber)
   - `FlyingWarplet.tsx` — fly-to-center transition animation
+  - `GobblerAuctionSection.tsx` — main auction view (live hero, queue strip, settlement scan + claim surfacing)
 - **Mock data** (`src/lib/mock-data.ts`) — all mock constants (prices, auctions, user warplets)
 - **Providers** (`src/app/providers.tsx`) — wagmi + ConnectKit + React Query, configured for Base chain only
 - **Contract addresses** (`src/lib/contracts.ts`) — read from `NEXT_PUBLIC_*` env vars, fall back to `ZERO_ADDRESS` if unset
@@ -73,7 +74,8 @@ forge fmt             # format Solidity
 
 - Solidity 0.8.26 with optimizer (200 runs)
 - `FeeHandler.sol` — functional, claims WETH LP fees, swaps to $WARPGOBB via StremeZapUniversal, streams to Gobbler via Superfluid CFA
-- `DutchAuction.sol` — functional, receives Superfluid stream, allows Warplet deposit to drain pot
+- `DutchAuction.sol` — V1 Gobbler; receives Superfluid stream, allows Warplet deposit to drain pot
+- `DutchAuctionV2.sol` — current Gobbler; adds `gobbleFlash` (same-tx gobble for `GobbleSniper`); migration via `script/MigrateToNewDutchAuction*.s.sol`
 - `AuctionSell.sol` — functional, FIFO queue + bid token auction for gobbled Warplets, proceeds route to staking
 - `GobbledWarplets.sol` — functional, receipt NFT minted when a Warplet is gobbled
 - `GobbleSniper.sol` — functional, arbitrage helper for gobble-then-relist
@@ -95,6 +97,8 @@ Dynamic daisyUI classes like `bg-primary/20` are safelisted in `tailwind.config.
 
 ### Environment Variables
 
-- `web/.env.local`: `NEXT_PUBLIC_WC_PROJECT_ID` (WalletConnect), `NEXT_PUBLIC_BASE_RPC_URL` (optional), `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL` / `NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL` (UI labels)
+- `web/.env.local`: `NEXT_PUBLIC_WC_PROJECT_ID` (WalletConnect), `NEXT_PUBLIC_BASE_RPC_URL` (optional), `NEXT_PUBLIC_PAYMENT_TOKEN_SYMBOL` / `NEXT_PUBLIC_AUCTION_BID_TOKEN_SYMBOL` (UI labels), `NEXT_PUBLIC_APP_URL` (deployed base URL for Farcaster mini-app embed launch URLs; defaults to `https://warpletgobbler.xyz` — set it on preview/staging or share links embed production)
 - `web/.env.local` (gobbled image pipeline): `GEMINI_API_KEY`, `warpletgobbler_READ_WRITE_TOKEN` (Vercel Blob), `PINATA_JWT`, `PINATA_GATEWAY_URL`
+- `web/.env.local` (claim flow): `GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY` — EIP-712 signer for `GobbledWarplets.rescueWarplet` metadata; required for `/api/mint-gobbled-nft`
+- `web/.env.local` (optional): `NEYNAR_API_KEY` — Farcaster display name/avatar resolution in `/api/bidder-profile`
 - `contracts/.env`: `BASE_RPC_URL`, `BASESCAN_API_KEY`, `DEPLOYER_PRIVATE_KEY`

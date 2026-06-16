@@ -69,7 +69,8 @@ async function fetchSignedPayload(
 /**
  * Drives claim for auction winners via signed `rescueWarplet` on GobbledWarplets.
  */
-export function useGobbledRescue() {
+export function useGobbledRescue(opts: { contractAddress?: Address } = {}) {
+  const contractAddress = opts.contractAddress ?? CONTRACTS.gobbledWarplets;
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient({ chainId: base.id });
   const { writeContractAsync } = useWriteContract();
@@ -78,8 +79,7 @@ export function useGobbledRescue() {
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<Hash | null>(null);
 
-  const ready =
-    !isAddressEqual(CONTRACTS.gobbledWarplets, zeroAddress as Address);
+  const ready = !isAddressEqual(contractAddress, zeroAddress as Address);
 
   const reset = useCallback(() => {
     setStage("idle");
@@ -116,7 +116,7 @@ export function useGobbledRescue() {
         const hash = await writeContractAsync({
           chainId: base.id,
           account: address,
-          address: CONTRACTS.gobbledWarplets,
+          address: contractAddress,
           abi: gobbledWarpletsAbi,
           functionName: "rescueWarplet",
           args: [
@@ -136,7 +136,14 @@ export function useGobbledRescue() {
         setStage("error");
       }
     },
-    [ready, isConnected, address, publicClient, writeContractAsync],
+    [
+      ready,
+      isConnected,
+      address,
+      publicClient,
+      contractAddress,
+      writeContractAsync,
+    ],
   );
 
   return {

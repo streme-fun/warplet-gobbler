@@ -33,6 +33,12 @@ describe("mintErrorForClient", () => {
     expect(mintErrorForClient("GoogleGenerativeAI error")).toMatch(
       /prepare the claim artwork/,
     );
+    expect(mintErrorForClient("Image generation failed after fallback")).toMatch(
+      /prepare the claim artwork/,
+    );
+    expect(
+      mintErrorForClient("GOBBLED_TOKEN_URI_SETTER_PRIVATE_KEY not configured"),
+    ).toMatch(/Claim signing is not configured/);
     expect(
       mintErrorForClient("vercel blob storage returned 403 auth error"),
     ).toMatch(/save the claim assets/);

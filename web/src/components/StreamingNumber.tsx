@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { formatSmartStreamNumber } from "@/lib/format-stream-number";
+import { chaseStreamValue } from "@/lib/stream-display";
 
 type StreamingNumberProps = {
   start: number;
@@ -52,6 +53,7 @@ export default function StreamingNumber({
   className,
 }: StreamingNumberProps) {
   const ref = useRef<HTMLSpanElement>(null);
+  const displayRef = useRef<number | null>(null);
 
   useEffect(() => {
     const useSmart = smartMinSigFigs != null;
@@ -64,17 +66,30 @@ export default function StreamingNumber({
 
     let cancelled = false;
     const t0 = performance.now();
+    let last = t0;
     let raf = 0;
-    function tick() {
+    function tick(now: number) {
       if (cancelled) return;
-      const elapsed = (performance.now() - t0) / 1000;
-      let val = start + elapsed * perSecond;
-      if (min !== undefined && val < min) val = min;
+      const elapsed = (now - t0) / 1000;
+      let target = start + elapsed * perSecond;
+      if (min !== undefined && target < min) target = min;
+      const dt = Math.min(Math.max((now - last) / 1000, 0), 0.1);
+      last = now;
+
+      let display = chaseStreamValue(
+        displayRef.current ?? target,
+        target,
+        perSecond,
+        dt,
+      );
+      if (min !== undefined && display < min) display = min;
+      displayRef.current = display;
+
       if (ref.current) {
         ref.current.textContent =
           smartOpts != null
-            ? formatSmartStreamNumber(val, smartOpts)
-            : formatFixed(val, decimals, min, truncateFractionDigits);
+            ? formatSmartStreamNumber(display, smartOpts)
+            : formatFixed(display, decimals, min, truncateFractionDigits);
       }
       raf = requestAnimationFrame(tick);
     }
@@ -93,21 +108,30 @@ export default function StreamingNumber({
     truncateFractionDigits,
   ]);
 
-  let initialText: string;
-  if (smartMinSigFigs != null) {
-    let v = start;
-    if (min !== undefined && v < min) v = min;
-    initialText = formatSmartStreamNumber(v, {
-      minSigFigs: smartMinSigFigs,
-      hideDecimalsIfIntegerDigitsGt: smartHideDecimalsIfIntegerDigitsGt,
-    });
-  } else {
-    initialText = formatFixed(start, decimals, min, truncateFractionDigits);
+  // Freeze the first-paint text: after mount the rAF loop owns the node, and a
+  // React re-render rewriting it with a freshly computed value would snap the count.
+  const initialTextRef = useRef<string | null>(null);
+  if (initialTextRef.current === null) {
+    if (smartMinSigFigs != null) {
+      let v = start;
+      if (min !== undefined && v < min) v = min;
+      initialTextRef.current = formatSmartStreamNumber(v, {
+        minSigFigs: smartMinSigFigs,
+        hideDecimalsIfIntegerDigitsGt: smartHideDecimalsIfIntegerDigitsGt,
+      });
+    } else {
+      initialTextRef.current = formatFixed(
+        start,
+        decimals,
+        min,
+        truncateFractionDigits,
+      );
+    }
   }
 
   return (
     <span ref={ref} className={className}>
-      {initialText}
+      {initialTextRef.current}
     </span>
   );
 }
