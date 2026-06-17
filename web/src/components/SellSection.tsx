@@ -21,7 +21,6 @@ type SellSectionProps = {
   };
   payoutSymbol?: string;
   isAmountMissing: boolean;
-  isPriceLoading?: boolean;
   isDutchAuctionConfigured: boolean;
   fxEstMarketCapUsd: number;
   payoutAmount: number;
@@ -49,7 +48,6 @@ export default function SellSection({
   payoutStream,
   payoutSymbol,
   isAmountMissing,
-  isPriceLoading = false,
   isDutchAuctionConfigured,
   fxEstMarketCapUsd,
   payoutAmount,
@@ -126,23 +124,17 @@ export default function SellSection({
           The Gobbler will buy your Warplet for...
         </p>
         <div className="text-4xl sm:text-6xl font-mono font-semibold text-primary streaming-glow">
-          {isPriceLoading ? (
-            <span className="inline-block min-w-[10ch] h-[1.1em] skeleton rounded align-middle" />
-          ) : (
-            <StreamingNumber
-              start={payoutStream.start}
-              perSecond={payoutStream.perSecond}
-              smartMinSigFigs={6}
-              smartHideDecimalsIfIntegerDigitsGt={5}
-            />
-          )}
+          <StreamingNumber
+            start={payoutStream.start}
+            perSecond={payoutStream.perSecond}
+            smartMinSigFigs={6}
+            smartHideDecimalsIfIntegerDigitsGt={5}
+          />
           <span className="text-base font-normal text-base-content/40 ml-2">
             {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
           </span>
           <p className="text-xs sm:text-sm text-base-content/40 mt-1">
-            {isPriceLoading ? (
-              "Loading pot…"
-            ) : isAmountMissing ? (
+            {isAmountMissing ? (
               isDutchAuctionConfigured ? (
                 <>
                   (~$
