@@ -853,13 +853,21 @@ export default function GobblerAuctionSection({
     enabled: queueReadsEnabled,
   });
 
+  const legacyExcludeTokenIds = useMemo(() => {
+    const ids = [...chainQueuedIds];
+    if (chainLot != null && chainLot.tokenId > 0n && !chainLot.settled) {
+      ids.push(chainLot.tokenId);
+    }
+    return ids;
+  }, [chainQueuedIds, chainLot]);
+
   const {
     data: legacyLockedQueueIds = [],
     isLoading: legacyQueueIsLoading,
     refetch: refetchLegacyQueue,
   } = useLegacyLockedQueueIds({
     enabled: queueReadsEnabled,
-    excludeTokenIds: chainQueuedIds,
+    excludeTokenIds: legacyExcludeTokenIds,
   });
 
   const legacyLockedIdSet = useMemo(
@@ -1794,7 +1802,7 @@ export default function GobblerAuctionSection({
   }, [skipLineOptionVisible]);
 
   // Skip-the-line off until legacy queued warplets are on the new AuctionSell
-  // (#249800, #421769, #266221, #420499). Re-enable after bot drain / cutover.
+  // (see LEGACY_MIGRATION_PENDING_QUEUE_IDS). Re-enable after bot drain.
   const SKIP_LINE_ENABLED = false;
 
   /** Bump pay row mirrors sell CTA: show whenever multiple queue slots exist (outlined until a tile is picked). */

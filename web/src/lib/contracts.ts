@@ -9,13 +9,32 @@ const envAddress = (value?: string): Address =>
 const envBlock = (value?: string): bigint =>
   value != null && /^\d+$/.test(value) ? BigInt(value) : 0n;
 
-/** Base mainnet `DutchAuctionV2` — migration deploy 2026-06-16 (block 47430889). */
+/** Base mainnet migration stack — deploy block 47430889, 2026-06-16. */
+const MAINNET_AUCTION_SELL_DEPLOY_BLOCK = 47430889n;
+
+/** Base mainnet `DutchAuctionV2` (Gobbler). */
 const MAINNET_DUTCH_AUCTION_V2 =
   "0x3D44b22900A103ACF29dC8e81CDCB6306658F234" as Address;
+
+/** Base mainnet `AuctionSell` — post Phase B cutover. */
+const MAINNET_AUCTION_SELL =
+  "0x2943Fd3DD84BB3Bf51d5C4b288f648ab45e4Fc3D" as Address;
+
+/** Base mainnet `GobbledWarplets` receipt collection. */
+const MAINNET_GOBBLED_WARPLETS =
+  "0x6ba8972b58f6148D6f110D9e33fDd3DD581c96f2" as Address;
 
 /** Pre-migration Gobbler — FeeHandler stream moved away; pot is empty. */
 const LEGACY_DUTCH_AUCTION_V2 =
   "0x6B2A584369B2E81269618921C3b0033581819e39" as Address;
+
+/** Pre-migration `AuctionSell` — bot drain only after Phase B cutover. */
+const LEGACY_AUCTION_SELL =
+  "0xa1046076E518B3Fe1604B2F19ABE90c55c252fd9" as Address;
+
+/** Pre-migration `GobbledWarplets`. */
+const LEGACY_GOBBLED_WARPLETS =
+  "0x2159d7AAfA7CC6cBFf49B1ab9BD353c7e0d1d10b" as Address;
 
 function resolveDutchAuctionAddress(): Address {
   const fromEnv = process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS;
@@ -28,11 +47,39 @@ function resolveDutchAuctionAddress(): Address {
   return MAINNET_DUTCH_AUCTION_V2;
 }
 
-// Contract addresses — set in web/.env.local (env overrides hardcoded mainnet defaults)
+function resolveAuctionSellAddress(): Address {
+  const fromEnv = process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS;
+  if (
+    isAddressLike(fromEnv) &&
+    fromEnv.toLowerCase() !== LEGACY_AUCTION_SELL.toLowerCase()
+  ) {
+    return fromEnv;
+  }
+  return MAINNET_AUCTION_SELL;
+}
+
+function resolveGobbledWarpletsAddress(): Address {
+  const fromEnv = process.env.NEXT_PUBLIC_GOBBLED_WARPLETS_ADDRESS;
+  if (
+    isAddressLike(fromEnv) &&
+    fromEnv.toLowerCase() !== LEGACY_GOBBLED_WARPLETS.toLowerCase()
+  ) {
+    return fromEnv;
+  }
+  return MAINNET_GOBBLED_WARPLETS;
+}
+
+function resolveAuctionSellDeployBlock(): bigint {
+  const fromEnv = process.env.NEXT_PUBLIC_AUCTION_SELL_DEPLOY_BLOCK;
+  if (fromEnv != null && /^\d+$/.test(fromEnv)) return BigInt(fromEnv);
+  return MAINNET_AUCTION_SELL_DEPLOY_BLOCK;
+}
+
+// Contract addresses — mainnet defaults are baked in; env overrides for staging/preview.
 export const CONTRACTS = {
   feeHandler: envAddress(process.env.NEXT_PUBLIC_FEE_HANDLER_ADDRESS),
   dutchAuction: resolveDutchAuctionAddress(),
-  auctionSell: envAddress(process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS),
+  auctionSell: resolveAuctionSellAddress(),
   auctionSellLegacy: envAddress(
     process.env.NEXT_PUBLIC_AUCTION_SELL_LEGACY_ADDRESS,
   ),
@@ -48,7 +95,7 @@ export const CONTRACTS = {
       "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
   ),
   warplets: envAddress(process.env.NEXT_PUBLIC_WARPLETS_ADDRESS), // Warplets NFT collection on Base
-  gobbledWarplets: envAddress(process.env.NEXT_PUBLIC_GOBBLED_WARPLETS_ADDRESS), // Gobbled receipt collection
+  gobbledWarplets: resolveGobbledWarpletsAddress(),
   gobbledWarpletsLegacy: envAddress(
     process.env.NEXT_PUBLIC_GOBBLED_WARPLETS_LEGACY_ADDRESS,
   ),
@@ -60,7 +107,7 @@ export const CONTRACTS = {
 export const CONTRACT_BLOCKS = {
   // 0 means "unconfigured"; callers that use this as a scan floor must guard
   // against full-chain scans.
-  auctionSellDeploy: envBlock(process.env.NEXT_PUBLIC_AUCTION_SELL_DEPLOY_BLOCK),
+  auctionSellDeploy: resolveAuctionSellDeployBlock(),
   auctionSellLegacyDeploy: envBlock(
     process.env.NEXT_PUBLIC_AUCTION_SELL_LEGACY_DEPLOY_BLOCK,
   ),

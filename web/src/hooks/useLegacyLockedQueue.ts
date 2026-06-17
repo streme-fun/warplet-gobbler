@@ -6,11 +6,33 @@ import { useReadContract } from "wagmi";
 import { base } from "wagmi/chains";
 import { auctionSellAbi } from "@/abi/auctionSell";
 import { CONTRACTS } from "@/lib/contracts";
-import { legacyMigrationConfigured } from "@/lib/legacy-migration";
+import {
+  LEGACY_MIGRATION_PENDING_QUEUE_IDS,
+  legacyMigrationConfigured,
+} from "@/lib/legacy-migration";
+
+function filterExcluded(
+  ids: readonly bigint[],
+  exclude: ReadonlySet<string>,
+): bigint[] {
+  const out: bigint[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const key = id.toString();
+    if (seen.has(key) || exclude.has(key)) continue;
+    seen.add(key);
+    out.push(id);
+  }
+  return out;
+}
 
 /**
  * Warplets still held on legacy `AuctionSell` — shown in the queue strip until ops
  * `safeTransfer`s them to the new contract tail.
+ *
+ * When legacy env vars are unset (post cutover), falls back to
+ * `LEGACY_MIGRATION_PENDING_QUEUE_IDS` and drops each id once it appears on the
+ * new contract queue.
  */
 export function useLegacyLockedQueueIds(opts: {
   enabled: boolean;
@@ -18,7 +40,8 @@ export function useLegacyLockedQueueIds(opts: {
 }) {
   const legacyConfigured = legacyMigrationConfigured();
   const legacyAddress = CONTRACTS.auctionSellLegacy;
-  const readsEnabled = opts.enabled && legacyConfigured;
+  const onChainEnabled =
+    opts.enabled && legacyConfigured && !isAddressEqual(legacyAddress, zeroAddress);
 
   const queueQ = useReadContract({
     chainId: base.id,
@@ -26,7 +49,7 @@ export function useLegacyLockedQueueIds(opts: {
     address: legacyAddress,
     functionName: "getQueuedTokenIds",
     query: {
-      enabled: readsEnabled && !isAddressEqual(legacyAddress, zeroAddress),
+      enabled: onChainEnabled,
       refetchInterval: 15_000,
     },
   });
@@ -37,32 +60,30 @@ export function useLegacyLockedQueueIds(opts: {
     address: legacyAddress,
     functionName: "auction",
     query: {
-      enabled: readsEnabled && !isAddressEqual(legacyAddress, zeroAddress),
+      enabled: onChainEnabled,
       refetchInterval: 15_000,
     },
   });
 
   const data = useMemo(() => {
-    if (!readsEnabled) return [] as bigint[];
+    if (!opts.enabled) return [] as bigint[];
     const exclude = new Set(
       (opts.excludeTokenIds ?? []).map((id) => id.toString()),
     );
-    const queued = queueQ.data ?? [];
-    const live =
-      auctionQ.data != null && auctionQ.data.tokenId > 0n
-        ? [auctionQ.data.tokenId]
-        : [];
-    const merged: bigint[] = [];
-    const seen = new Set<string>();
-    for (const id of [...live, ...queued]) {
-      const key = id.toString();
-      if (seen.has(key) || exclude.has(key)) continue;
-      seen.add(key);
-      merged.push(id);
+
+    if (onChainEnabled) {
+      const queued = queueQ.data ?? [];
+      const live =
+        auctionQ.data != null && auctionQ.data.tokenId > 0n
+          ? [auctionQ.data.tokenId]
+          : [];
+      return filterExcluded([...live, ...queued], exclude);
     }
-    return merged;
+
+    return filterExcluded(LEGACY_MIGRATION_PENDING_QUEUE_IDS, exclude);
   }, [
-    readsEnabled,
+    opts.enabled,
+    onChainEnabled,
     queueQ.data,
     auctionQ.data,
     opts.excludeTokenIds,
@@ -70,8 +91,9 @@ export function useLegacyLockedQueueIds(opts: {
 
   return {
     data,
-    isLoading: queueQ.isLoading || auctionQ.isLoading,
+    isLoading: onChainEnabled && (queueQ.isLoading || auctionQ.isLoading),
     refetch: async () => {
+      if (!onChainEnabled) return;
       await Promise.all([queueQ.refetch(), auctionQ.refetch()]);
     },
   };

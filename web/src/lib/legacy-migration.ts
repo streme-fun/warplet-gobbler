@@ -1,6 +1,17 @@
 import { isAddressEqual, zeroAddress } from "viem";
 import { CONTRACT_BLOCKS, CONTRACTS } from "@/lib/contracts";
 
+/**
+ * Warplets still held on legacy `AuctionSell` until Phase C bot drain (2026-06 migration).
+ * FIFO: live legacy lot first, then legacy queue tail.
+ */
+export const LEGACY_MIGRATION_PENDING_QUEUE_IDS: readonly bigint[] = [
+  420499n,
+  421769n,
+  266221n,
+  249800n,
+];
+
 /** True when legacy env is configured (queue overlay only). */
 export function legacyMigrationConfigured(): boolean {
   return (
