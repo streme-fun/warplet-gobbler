@@ -1,11 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   AUCTION_BID_TOKEN_SYMBOL,
+  PAYMENT_TOKEN_LABEL,
   PAYMENT_TOKEN_SYMBOL,
 } from "@/lib/paymentToken";
+import BuyWarpgobbLink from "./BuyWarpgobbLink";
+
+/** Render a step body, turning each `$WARPGOBB` mention into a buy link. */
+function renderBodyWithBuyLink(body: string): ReactNode {
+  const parts = body.split(PAYMENT_TOKEN_LABEL);
+  if (parts.length === 1) return body;
+  return parts.map((part, index) => (
+    <Fragment key={index}>
+      {part}
+      {index < parts.length - 1 ? (
+        <BuyWarpgobbLink>{PAYMENT_TOKEN_LABEL}</BuyWarpgobbLink>
+      ) : null}
+    </Fragment>
+  ));
+}
 
 function InfoIcon({ className }: { className?: string }) {
   return (
@@ -259,7 +282,7 @@ export default function HowItWorks() {
                             </h3>
                           </div>
                           <p className="mt-1.5 text-sm leading-6 text-base-content/72">
-                            {body}
+                            {renderBodyWithBuyLink(body)}
                           </p>
                         </div>
                       </li>
