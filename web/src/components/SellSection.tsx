@@ -1,6 +1,7 @@
 "use client";
 
 import StreamingNumber from "./StreamingNumber";
+import BuyWarpgobbLink from "./BuyWarpgobbLink";
 import { WARPLET_SELLING_DISABLED } from "@/lib/migration";
 
 /* eslint-disable @next/next/no-img-element */
@@ -131,7 +132,9 @@ export default function SellSection({
             smartHideDecimalsIfIntegerDigitsGt={5}
           />
           <span className="text-base font-normal text-base-content/40 ml-2">
-            {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
+            <BuyWarpgobbLink>
+              {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
+            </BuyWarpgobbLink>
           </span>
           <p className="text-xs sm:text-sm text-base-content/40 mt-1">
             {isAmountMissing ? (

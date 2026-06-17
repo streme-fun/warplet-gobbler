@@ -10,6 +10,7 @@ import type { Address } from "viem";
 import type { AuctionBidPaymentMode } from "@/lib/defaultAuctionBidPayment";
 import AuctionWarpletImage from "./AuctionWarpletImage";
 import BidderAvatarName from "./BidderAvatarName";
+import BuyWarpgobbLink from "./BuyWarpgobbLink";
 import CountdownTimer from "./CountdownTimer";
 
 function SettlementProgressStrip({
@@ -944,11 +945,13 @@ export default function AuctionLiveHero({
                                 <div className="flex w-full max-w-sm flex-col items-center px-1">
                                   <p
                                     ref={bidTopAmountRef}
-                                    data-symbol={`$${bidSymbol}`}
                                     aria-label={`${topBidAmountStr} ${bidSymbol}`}
-                                    className="bid-top-symbol-after m-0 text-center font-mono text-lg tracking-tight text-base-content tabular-nums sm:text-2xl lg:text-3xl"
+                                    className="m-0 text-center font-mono text-lg tracking-tight text-base-content tabular-nums sm:text-2xl lg:text-3xl"
                                   >
                                     {topBidAmountStr}
+                                    <BuyWarpgobbLink className="ml-1.5 inline-block -translate-y-[0.06em] font-sans text-[11px] font-medium leading-none tracking-normal text-base-content/40 sm:text-[12px]">
+                                      {`$${bidSymbol}`}
+                                    </BuyWarpgobbLink>
                                   </p>
                                 </div>
                               )}
@@ -1103,20 +1106,15 @@ export default function AuctionLiveHero({
                     ? (chainBid.viewerEthBalanceHuman ?? "--")
                     : (chainBid.viewerBidTokenBalanceHuman ?? "--")}
                 </span>
-                <button
-                  type="button"
-                  className={`inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-semibold leading-none transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-secondary/60 ${
-                    chainBid.nativeEthBid?.available
-                      ? "text-secondary hover:text-secondary/80"
-                      : "text-base-content/55"
-                  }`}
-                  onClick={handlePaymentModeToggle}
-                  disabled={!chainBid.nativeEthBid?.available}
-                >
-                  <span>
-                    {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
-                  </span>
-                  {chainBid.nativeEthBid?.available ? (
+                {chainBid.nativeEthBid?.available ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-semibold leading-none text-secondary transition-colors hover:text-secondary/80 focus:outline-none focus-visible:ring-1 focus-visible:ring-secondary/60"
+                    onClick={handlePaymentModeToggle}
+                  >
+                    <span>
+                      {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
+                    </span>
                     <svg
                       width="10"
                       height="10"
@@ -1131,8 +1129,12 @@ export default function AuctionLiveHero({
                       <path d="M7 4v16m0 0l-3-3m3 3l3-3" />
                       <path d="M17 20V4m0 0l-3 3m3-3l3 3" />
                     </svg>
-                  ) : null}
-                </button>
+                  </button>
+                ) : (
+                  <BuyWarpgobbLink className="rounded-md px-1 py-0.5 text-[11px] font-semibold leading-none text-base-content/55">
+                    {`$${bidSymbol}`}
+                  </BuyWarpgobbLink>
+                )}
                 {paymentMode === "eth" && chainBid.nativeEthBid?.quoteError ? (
                   <button
                     type="button"
@@ -1259,18 +1261,19 @@ export default function AuctionLiveHero({
                           ? (chainBid.viewerEthBalanceHuman ?? "--")
                           : (chainBid.viewerBidTokenBalanceHuman ?? "--")}
                       </span>
-                      <button
-                        type="button"
-                        className={`font-semibold transition-colors ${
-                          chainBid.nativeEthBid?.available
-                            ? "text-secondary hover:text-secondary/80"
-                            : "text-base-content/55"
-                        }`}
-                        onClick={handlePaymentModeToggle}
-                        disabled={!chainBid.nativeEthBid?.available}
-                      >
-                        {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
-                      </button>
+                      {chainBid.nativeEthBid?.available ? (
+                        <button
+                          type="button"
+                          className="font-semibold text-secondary transition-colors hover:text-secondary/80"
+                          onClick={handlePaymentModeToggle}
+                        >
+                          {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
+                        </button>
+                      ) : (
+                        <BuyWarpgobbLink className="font-semibold text-base-content/55">
+                          {`$${bidSymbol}`}
+                        </BuyWarpgobbLink>
+                      )}
                       {paymentMode === "eth" &&
                       chainBid.nativeEthBid?.quoteError ? (
                         <button
