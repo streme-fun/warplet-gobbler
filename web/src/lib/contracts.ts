@@ -1,4 +1,5 @@
 import { type Address } from "viem";
+import { mainnetDutchAuctionAddress } from "@/lib/gobbler-mainnet";
 
 export const ZERO_ADDRESS =
   "0x0000000000000000000000000000000000000000" as Address;
@@ -9,11 +10,14 @@ const envAddress = (value?: string): Address =>
 const envBlock = (value?: string): bigint =>
   value != null && /^\d+$/.test(value) ? BigInt(value) : 0n;
 
-// Contract addresses — set in web/.env.local
+// Contract addresses — set in web/.env.local (env overrides hardcoded mainnet defaults)
 export const CONTRACTS = {
   feeHandler: envAddress(process.env.NEXT_PUBLIC_FEE_HANDLER_ADDRESS),
-  dutchAuction: envAddress(process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS),
+  dutchAuction: mainnetDutchAuctionAddress(),
   auctionSell: envAddress(process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS),
+  auctionSellLegacy: envAddress(
+    process.env.NEXT_PUBLIC_AUCTION_SELL_LEGACY_ADDRESS,
+  ),
   staking: envAddress(process.env.NEXT_PUBLIC_STAKING_ADDRESS),
   stratToken: envAddress(
     process.env.NEXT_PUBLIC_STAKING_TOKEN_ADDRESS ??
@@ -27,6 +31,9 @@ export const CONTRACTS = {
   ),
   warplets: envAddress(process.env.NEXT_PUBLIC_WARPLETS_ADDRESS), // Warplets NFT collection on Base
   gobbledWarplets: envAddress(process.env.NEXT_PUBLIC_GOBBLED_WARPLETS_ADDRESS), // Gobbled receipt collection
+  gobbledWarpletsLegacy: envAddress(
+    process.env.NEXT_PUBLIC_GOBBLED_WARPLETS_LEGACY_ADDRESS,
+  ),
   usdcToken: envAddress(process.env.NEXT_PUBLIC_USDC_TOKEN_ADDRESS),
   warpgobbWethPool: envAddress(process.env.NEXT_PUBLIC_WARPGOBB_WETH_POOL_ADDRESS),
   wethUsdcPool: envAddress(process.env.NEXT_PUBLIC_WETH_USDC_POOL_ADDRESS),
@@ -36,6 +43,9 @@ export const CONTRACT_BLOCKS = {
   // 0 means "unconfigured"; callers that use this as a scan floor must guard
   // against full-chain scans.
   auctionSellDeploy: envBlock(process.env.NEXT_PUBLIC_AUCTION_SELL_DEPLOY_BLOCK),
+  auctionSellLegacyDeploy: envBlock(
+    process.env.NEXT_PUBLIC_AUCTION_SELL_LEGACY_DEPLOY_BLOCK,
+  ),
 } as const;
 
 const ZERO_BYTES32 =

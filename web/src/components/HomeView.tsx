@@ -33,6 +33,7 @@ import {
   formatGobbleSellTxError,
   formatUserFacingTxError,
 } from "@/lib/format-tx-error";
+import { WARPLET_SELLING_DISABLED } from "@/lib/migration";
 import {
   resolveInitialView,
   type InitialView,
@@ -137,6 +138,58 @@ function MiniAppWalletButton() {
   // Fallback: if auto-connect hasn't resolved yet, show nothing
   // (avoids a flash of "Connect Wallet" in the mini app)
   return null;
+}
+
+function getMiniAppAddErrorName(error: unknown): string | null {
+  return typeof error === "object" && error !== null && "name" in error
+    ? String((error as { name?: unknown }).name)
+    : null;
+}
+
+function MiniAppAddButton({
+  onAddMiniApp,
+}: {
+  onAddMiniApp: () => Promise<void>;
+}) {
+  const [status, setStatus] = useState<"idle" | "adding" | "error">("idle");
+
+  const handleClick = useCallback(async () => {
+    if (status === "adding") return;
+    setStatus("adding");
+
+    try {
+      await onAddMiniApp();
+      setStatus("idle");
+    } catch (error) {
+      if (getMiniAppAddErrorName(error) === "RejectedByUser") {
+        setStatus("idle");
+        return;
+      }
+
+      console.error("Failed to add mini app:", error);
+      setStatus("error");
+    }
+  }, [onAddMiniApp, status]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={status === "adding"}
+      title={
+        status === "error"
+          ? "Could not add app. Check the Farcaster manifest domain."
+          : "Add WarpletGobbler to your Farcaster apps"
+      }
+      className="whitespace-nowrap text-xs px-3 py-1.5 rounded-full border border-primary/45 bg-primary/10 text-primary hover:border-primary/70 hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60 transition-colors"
+    >
+      {status === "adding"
+        ? "Adding"
+        : status === "error"
+          ? "Try again"
+          : "Add app"}
+    </button>
+  );
 }
 
 function GobblerBootOverlay({
@@ -599,7 +652,13 @@ export default function HomeView({
 }: {
   initialView?: InitialView;
 }) {
-  const { isLoaded, context, isMiniApp } = useMiniApp();
+  const {
+    isLoaded,
+    context,
+    isMiniApp,
+    isAdded: isMiniAppAdded,
+    addMiniApp,
+  } = useMiniApp();
   const { isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
   const publicClient = usePublicClient();
@@ -893,6 +952,8 @@ export default function HomeView({
   const FX_EST_MARKET_CAP_USD = 50_000;
 
   const isAmountMissing = currentPrice === undefined;
+  const isPriceLoading =
+    dutchAuctionPriceQuery.isLoading && currentPrice === undefined;
 
   const isDutchAuctionConfigured =
     CONTRACTS.dutchAuction.toLowerCase() !== ZERO_ADDRESS.toLowerCase();
@@ -930,6 +991,11 @@ export default function HomeView({
   }, [selectedFid, gobbling, flyingFid]);
 
   const handleSell = useCallback(async () => {
+    if (WARPLET_SELLING_DISABLED) {
+      setSellError("Warplet selling is temporarily paused.");
+      return;
+    }
+
     if (
       !selectedFid ||
       !isConnected ||
@@ -1146,7 +1212,10 @@ export default function HomeView({
               <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF] animate-pulse" />
               <span className="text-xs text-[#4C82FB]">Base</span>
             </div>
-            <div className="order-1 sm:order-none">
+            <div className="order-1 sm:order-none flex items-center gap-2">
+              {isMiniApp && !isMiniAppAdded && (
+                <MiniAppAddButton onAddMiniApp={addMiniApp} />
+              )}
               {isMiniApp ? (
                 <MiniAppWalletButton />
               ) : (
@@ -1328,6 +1397,7 @@ export default function HomeView({
           payoutStream={payoutStream}
           payoutSymbol={payoutSymbol}
           isAmountMissing={isAmountMissing}
+          isPriceLoading={isPriceLoading}
           isDutchAuctionConfigured={isDutchAuctionConfigured}
           fxEstMarketCapUsd={FX_EST_MARKET_CAP_USD}
           payoutAmount={payoutAmount}

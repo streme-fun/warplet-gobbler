@@ -1,6 +1,7 @@
 "use client";
 
 import StreamingNumber from "./StreamingNumber";
+import { WARPLET_SELLING_DISABLED } from "@/lib/migration";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -20,6 +21,7 @@ type SellSectionProps = {
   };
   payoutSymbol?: string;
   isAmountMissing: boolean;
+  isPriceLoading?: boolean;
   isDutchAuctionConfigured: boolean;
   fxEstMarketCapUsd: number;
   payoutAmount: number;
@@ -47,6 +49,7 @@ export default function SellSection({
   payoutStream,
   payoutSymbol,
   isAmountMissing,
+  isPriceLoading = false,
   isDutchAuctionConfigured,
   fxEstMarketCapUsd,
   payoutAmount,
@@ -74,8 +77,14 @@ export default function SellSection({
   };
 
   const buttonDisabled =
-    !!flyingFid || isSelling || isWriting || (isConnected && !selectedFid);
-  const buttonLabel = !isConnected
+    WARPLET_SELLING_DISABLED ||
+    !!flyingFid ||
+    isSelling ||
+    isWriting ||
+    (isConnected && !selectedFid);
+  const buttonLabel = WARPLET_SELLING_DISABLED
+    ? "Selling paused"
+    : !isConnected
     ? "Connect Wallet to Sell"
     : ownedWarpletsLoading
       ? "downloading your warplets... "
@@ -117,17 +126,23 @@ export default function SellSection({
           The Gobbler will buy your Warplet for...
         </p>
         <div className="text-4xl sm:text-6xl font-mono font-semibold text-primary streaming-glow">
-          <StreamingNumber
-            start={payoutStream.start}
-            perSecond={payoutStream.perSecond}
-            smartMinSigFigs={6}
-            smartHideDecimalsIfIntegerDigitsGt={5}
-          />
+          {isPriceLoading ? (
+            <span className="inline-block min-w-[10ch] h-[1.1em] skeleton rounded align-middle" />
+          ) : (
+            <StreamingNumber
+              start={payoutStream.start}
+              perSecond={payoutStream.perSecond}
+              smartMinSigFigs={6}
+              smartHideDecimalsIfIntegerDigitsGt={5}
+            />
+          )}
           <span className="text-base font-normal text-base-content/40 ml-2">
             {payoutSymbol?.startsWith("$") ? payoutSymbol : `$${payoutSymbol}`}
           </span>
           <p className="text-xs sm:text-sm text-base-content/40 mt-1">
-            {isAmountMissing ? (
+            {isPriceLoading ? (
+              "Loading pot…"
+            ) : isAmountMissing ? (
               isDutchAuctionConfigured ? (
                 <>
                   (~$
@@ -275,12 +290,24 @@ export default function SellSection({
             }`}
             disabled={buttonDisabled}
             onClick={
-              !isConnected ? onConnectWallet : selectedFid ? onSell : undefined
+              WARPLET_SELLING_DISABLED
+                ? undefined
+                : !isConnected
+                  ? onConnectWallet
+                  : selectedFid
+                    ? onSell
+                    : undefined
             }
           >
             {buttonLabel}
           </button>
         </div>
+
+        {WARPLET_SELLING_DISABLED && (
+          <p className="mt-2 text-xs text-base-content/50 text-center max-w-md mx-auto">
+            Warplet selling is temporarily paused.
+          </p>
+        )}
 
         {sellError && (
           <p className="mt-2 text-xs text-error/90 text-center max-w-md mx-auto break-words">

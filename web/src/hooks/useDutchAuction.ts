@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { type Address, encodeAbiParameters, formatUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { base } from "wagmi/chains";
@@ -10,21 +11,46 @@ import { erc721Abi } from "@/abi/erc721";
 import { erc20Abi } from "@/abi/erc20";
 import { uniswapV3PoolAbi } from "@/abi/uniswapV3Pool";
 import { stateViewAbi } from "@/abi/stateView";
+import { WARPLET_SELLING_DISABLED } from "@/lib/migration";
 const ZERO = "0x0000000000000000000000000000000000000000";
 const ZERO_BYTES32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
 
+async function fetchGobblerPriceWei(): Promise<bigint> {
+  const res = await fetch("/api/gobbler-current-price", { cache: "no-store" });
+  if (!res.ok) throw new Error("Gobbler price unavailable");
+  const body = (await res.json()) as { priceWei?: string };
+  if (!body.priceWei) throw new Error("Gobbler price missing");
+  return BigInt(body.priceWei);
+}
+
+/** Server-backed pot read — avoids stale Vercel env + Farcaster client RPC quirks. */
 export function useDutchAuctionPrice() {
-  return useReadContract({
-    chainId: base.id,
-    abi: dutchAuctionAbi,
-    address: CONTRACTS.dutchAuction,
-    functionName: "currentPrice",
-    query: {
-      // Base block time is ~2s; polling faster just reads the same block twice.
-      refetchInterval: 2_000,
+  const [sampleAt, setSampleAt] = useState(0);
+
+  const query = useQuery({
+    queryKey: ["gobbler-current-price"],
+    queryFn: async () => {
+      const priceWei = await fetchGobblerPriceWei();
+      setSampleAt(Date.now());
+      return priceWei;
     },
+    refetchInterval: 2_000,
+    staleTime: 0,
+    retry: 3,
+    // BigInt compares by value; still disable sharing so each poll re-runs payout math.
+    structuralSharing: false,
   });
+
+  return {
+    data: query.data,
+    // Wall-clock sample time on every successful fetch (not only when React Query
+    // considers `data` changed) — needed for perSecond in useDutchAuctionPayoutStream.
+    dataUpdatedAt: sampleAt || query.dataUpdatedAt,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+  };
 }
 
 /**
@@ -306,6 +332,9 @@ export function useDutchAuctionActions() {
    * `minPrice` must match the snapshot used for slippage / frontrun protection (on-chain revert if pot < minPrice).
    */
   const gobbleWarplet = async (tokenId: number, minPrice: bigint) => {
+    if (WARPLET_SELLING_DISABLED) {
+      throw new Error("Warplet selling is temporarily paused.");
+    }
     if (!address) {
       throw new Error("Connect wallet to sell");
     }
