@@ -952,6 +952,8 @@ export default function HomeView({
   const FX_EST_MARKET_CAP_USD = 50_000;
 
   const isAmountMissing = currentPrice === undefined;
+  const isPriceLoading =
+    dutchAuctionPriceQuery.isLoading && currentPrice === undefined;
 
   const isDutchAuctionConfigured =
     CONTRACTS.dutchAuction.toLowerCase() !== ZERO_ADDRESS.toLowerCase();
@@ -1395,6 +1397,7 @@ export default function HomeView({
           payoutStream={payoutStream}
           payoutSymbol={payoutSymbol}
           isAmountMissing={isAmountMissing}
+          isPriceLoading={isPriceLoading}
           isDutchAuctionConfigured={isDutchAuctionConfigured}
           fxEstMarketCapUsd={FX_EST_MARKET_CAP_USD}
           payoutAmount={payoutAmount}

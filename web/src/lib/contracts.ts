@@ -1,4 +1,5 @@
 import { type Address } from "viem";
+import { mainnetDutchAuctionAddress } from "@/lib/gobbler-mainnet";
 
 export const ZERO_ADDRESS =
   "0x0000000000000000000000000000000000000000" as Address;
@@ -9,28 +10,9 @@ const envAddress = (value?: string): Address =>
 const envBlock = (value?: string): bigint =>
   value != null && /^\d+$/.test(value) ? BigInt(value) : 0n;
 
-/** Base mainnet `DutchAuctionV2` — migration deploy 2026-06-16 (block 47430889). */
-const MAINNET_DUTCH_AUCTION_V2 =
-  "0x3D44b22900A103ACF29dC8e81CDCB6306658F234" as Address;
-
-/** Pre-migration Gobbler — FeeHandler stream moved away; pot is empty. */
-const LEGACY_DUTCH_AUCTION_V2 =
-  "0x6B2A584369B2E81269618921C3b0033581819e39" as Address;
-
-function resolveDutchAuctionAddress(): Address {
-  const fromEnv = process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS;
-  if (
-    isAddressLike(fromEnv) &&
-    fromEnv.toLowerCase() !== LEGACY_DUTCH_AUCTION_V2.toLowerCase()
-  ) {
-    return fromEnv;
-  }
-  return MAINNET_DUTCH_AUCTION_V2;
-}
-
 // Contract addresses — set in web/.env.local (env overrides hardcoded mainnet defaults)
 export const CONTRACTS = {
-  dutchAuction: resolveDutchAuctionAddress(),
+  dutchAuction: mainnetDutchAuctionAddress(),
   auctionSell: envAddress(process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS),
   auctionSellLegacy: envAddress(
     process.env.NEXT_PUBLIC_AUCTION_SELL_LEGACY_ADDRESS,

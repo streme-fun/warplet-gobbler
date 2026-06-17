@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { type Address, encodeAbiParameters, formatUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { base } from "wagmi/chains";
@@ -15,17 +16,31 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 const ZERO_BYTES32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
 
+async function fetchGobblerPriceWei(): Promise<bigint> {
+  const res = await fetch("/api/gobbler-current-price", { cache: "no-store" });
+  if (!res.ok) throw new Error("Gobbler price unavailable");
+  const body = (await res.json()) as { priceWei?: string };
+  if (!body.priceWei) throw new Error("Gobbler price missing");
+  return BigInt(body.priceWei);
+}
+
+/** Server-backed pot read — avoids stale Vercel env + Farcaster client RPC quirks. */
 export function useDutchAuctionPrice() {
-  return useReadContract({
-    chainId: base.id,
-    abi: dutchAuctionAbi,
-    address: CONTRACTS.dutchAuction,
-    functionName: "currentPrice",
-    query: {
-      // Base block time is ~2s; polling faster just reads the same block twice.
-      refetchInterval: 2_000,
-    },
+  const query = useQuery({
+    queryKey: ["gobbler-current-price"],
+    queryFn: fetchGobblerPriceWei,
+    refetchInterval: 2_000,
+    staleTime: 0,
+    retry: 3,
   });
+
+  return {
+    data: query.data,
+    dataUpdatedAt: query.dataUpdatedAt,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+  };
 }
 
 /**
