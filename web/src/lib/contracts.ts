@@ -12,6 +12,7 @@ const envBlock = (value?: string): bigint =>
 
 // Contract addresses — set in web/.env.local (env overrides hardcoded mainnet defaults)
 export const CONTRACTS = {
+  feeHandler: envAddress(process.env.NEXT_PUBLIC_FEE_HANDLER_ADDRESS),
   dutchAuction: mainnetDutchAuctionAddress(),
   auctionSell: envAddress(process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS),
   auctionSellLegacy: envAddress(

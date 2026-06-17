@@ -51,6 +51,13 @@ export const auctionSellAbi = [
   },
   {
     type: "function",
+    name: "queuedLength",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "nextQueuedTokenId",
     stateMutability: "view",
     inputs: [],
@@ -69,6 +76,27 @@ export const auctionSellAbi = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "proceedsRecipient",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "duration",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "timeBuffer",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
   },
   {
     type: "function",
@@ -139,6 +167,37 @@ export const auctionSellAbi = [
     stateMutability: "nonpayable",
     inputs: [{ name: "tokenId", type: "uint256" }],
     outputs: [],
+  },
+  {
+    type: "event",
+    name: "AuctionStarted",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "endTime", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "BidPlaced",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "bidder", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "TokenEnqueued",
+    inputs: [{ name: "tokenId", type: "uint256", indexed: true }],
+  },
+  {
+    type: "event",
+    name: "QueueBumped",
+    inputs: [
+      { name: "payer", type: "address", indexed: true },
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "fee", type: "uint256", indexed: false },
+    ],
   },
   {
     type: "event",
