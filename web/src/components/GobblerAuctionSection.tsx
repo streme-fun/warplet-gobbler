@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useAccount, useBalance, usePublicClient } from "wagmi";
+import { useAccount, useBalance, usePublicClient, useWriteContract } from "wagmi";
 import { base } from "wagmi/chains";
 import AuctionLiveHero from "./AuctionLiveHero";
 import AuctionWinnerClaimGate from "./AuctionWinnerClaimGate";
@@ -116,6 +116,11 @@ const AUCTION_SETTLED_LOOKBACK_BLOCKS = 1_000_000n;
 const AUCTION_SETTLED_LOG_CHUNK_BLOCKS = 10_000n;
 /** Targeted token-topic queries still respect Base public RPC's 10k-block cap. */
 const AUCTION_SETTLED_TARGET_LOG_CHUNK_BLOCKS = 10_000n;
+// One-off migration: let the legacy winner pull the underlying Warplet without the
+// signed metadata flow, scoped to a single Warplet id.
+const MIGRATION_ONEOFF_WARPLET_ID = 987458;
+const LEGACY_GOBBLED_WARPLETS =
+  "0x2159d7AAfA7CC6cBFf49B1ab9BD353c7e0d1d10b" as Address;
 /** Base block time (~2s) — used to estimate a ms timestamp from a block number
  *  so backfilled records sort on the same scale as `Date.now()`-stamped ones. */
 const BASE_BLOCK_MS = 2_000;
@@ -179,6 +184,7 @@ export default function GobblerAuctionSection({
 }) {
   const { address: viewerAddress, isConnected } = useAccount();
   const publicClient = usePublicClient({ chainId: base.id });
+  const { writeContractAsync } = useWriteContract();
   const live = MOCK_AUCTIONS[0];
   const [selectedQueueFid, setSelectedQueueFid] = useState<number | null>(null);
   const [bumpError, setBumpError] = useState<string | null>(null);
@@ -1472,6 +1478,12 @@ export default function GobblerAuctionSection({
   // ---------- Gobbled-warplet rescue (signed mint + NFT pull) ----------
   const rescue = useGobbledRescue({ contractAddress: gobbledWarpletsAddress });
 
+  // ---------- One-off migration rescue (legacy unsigned `rescueWarplet(uint256 warpletId)`) ----------
+  const [oneoffStage, setOneoffStage] = useState<
+    "idle" | "awaiting-wallet" | "confirming" | "success" | "error"
+  >("idle");
+  const [oneoffError, setOneoffError] = useState<string | null>(null);
+
   // Reset the rescue hook whenever we move to a different winner / lot, otherwise stale
   // success/error state from a previous lot would leak into the new banner.
   const lastClaimedFpRef = useRef<string | null>(null);
@@ -1480,6 +1492,8 @@ export default function GobblerAuctionSection({
     if (lastClaimedFpRef.current !== claimFocusRecord.fp) {
       lastClaimedFpRef.current = claimFocusRecord.fp;
       rescue.reset();
+      setOneoffStage("idle");
+      setOneoffError(null);
     }
   }, [claimFocusRecord, rescue]);
 
@@ -1505,16 +1519,68 @@ export default function GobblerAuctionSection({
     );
   }, [rescue, claimFocusRecord]);
 
+  const isOneoffMigrationClaim =
+    claimFocusRecord?.tokenId === MIGRATION_ONEOFF_WARPLET_ID &&
+    viewerAddress != null &&
+    isAddressEqual(viewerAddress, claimFocusRecord.bidder);
+
+  const handleOneoffLegacyRescue = useCallback(async () => {
+    if (!isOneoffMigrationClaim) return;
+    if (!viewerAddress) return;
+    if (!publicClient) return;
+    setOneoffError(null);
+    try {
+      setOneoffStage("awaiting-wallet");
+      const hash = await writeContractAsync({
+        chainId: base.id,
+        account: viewerAddress,
+        address: LEGACY_GOBBLED_WARPLETS,
+        abi: gobbledWarpletsAbi,
+        functionName: "rescueWarplet",
+        args: [BigInt(MIGRATION_ONEOFF_WARPLET_ID)],
+      });
+      setOneoffStage("confirming");
+      await publicClient.waitForTransactionReceipt({ hash });
+      setOneoffStage("success");
+      const fp = claimFocusRecord?.fp;
+      if (fp) {
+        setDismissedWinnerFps(addDismissedFp(fp));
+        setFreshClaimSettlementRecords((prev) => prev.filter((r) => r.fp !== fp));
+      }
+    } catch (e) {
+      setOneoffError(formatUserFacingTxError(e));
+      setOneoffStage("error");
+    }
+  }, [
+    isOneoffMigrationClaim,
+    viewerAddress,
+    publicClient,
+    writeContractAsync,
+    claimFocusRecord?.fp,
+    setDismissedWinnerFps,
+    setFreshClaimSettlementRecords,
+  ]);
+
   const claimAction: ClaimAction | undefined =
     claimFocusRecord &&
     viewerAddress &&
     isAddressEqual(viewerAddress, claimFocusRecord.bidder) &&
-    rescue.ready
+    (isOneoffMigrationClaim || rescue.ready)
       ? {
           visible: true,
-          stage: rescue.stage,
-          error: rescue.error,
-          onClaim: handleClaimWarplet,
+          stage: isOneoffMigrationClaim
+            ? oneoffStage === "awaiting-wallet"
+              ? "awaiting-wallet"
+              : oneoffStage === "confirming"
+                ? "confirming"
+                : oneoffStage === "success"
+                  ? "success"
+                  : oneoffStage === "error"
+                    ? "error"
+                    : "idle"
+            : rescue.stage,
+          error: isOneoffMigrationClaim ? oneoffError : rescue.error,
+          onClaim: isOneoffMigrationClaim ? handleOneoffLegacyRescue : handleClaimWarplet,
         }
       : undefined;
 
@@ -1522,8 +1588,9 @@ export default function GobblerAuctionSection({
     claimFocusRecord &&
     viewerAddress &&
     isAddressEqual(viewerAddress, claimFocusRecord.bidder) &&
-    rescue.ready &&
-    rescue.stage !== "success",
+    (isOneoffMigrationClaim
+      ? oneoffStage !== "success"
+      : rescue.ready && rescue.stage !== "success"),
   );
 
   const claimForRow = useCallback(
@@ -1533,18 +1600,38 @@ export default function GobblerAuctionSection({
         row.fp !== claimFocusRecord.fp ||
         !viewerAddress ||
         !isAddressEqual(viewerAddress, row.bidder) ||
-        !rescue.ready
+        (!isOneoffMigrationClaim && !rescue.ready)
       ) {
         return undefined;
       }
       return {
         visible: true,
-        stage: rescue.stage,
-        error: rescue.error,
-        onClaim: () => void rescue.claim(row.tokenId, row.gobbledTokenId),
+        stage: isOneoffMigrationClaim
+          ? oneoffStage === "awaiting-wallet"
+            ? "awaiting-wallet"
+            : oneoffStage === "confirming"
+              ? "confirming"
+              : oneoffStage === "success"
+                ? "success"
+                : oneoffStage === "error"
+                  ? "error"
+                  : "idle"
+          : rescue.stage,
+        error: isOneoffMigrationClaim ? oneoffError : rescue.error,
+        onClaim: isOneoffMigrationClaim
+          ? () => void handleOneoffLegacyRescue()
+          : () => void rescue.claim(row.tokenId, row.gobbledTokenId),
       };
     },
-    [claimFocusRecord, viewerAddress, rescue],
+    [
+      claimFocusRecord,
+      viewerAddress,
+      rescue,
+      isOneoffMigrationClaim,
+      oneoffStage,
+      oneoffError,
+      handleOneoffLegacyRescue,
+    ],
   );
 
   useLayoutEffect(() => {

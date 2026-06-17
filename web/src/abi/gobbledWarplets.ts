@@ -18,6 +18,16 @@ export const gobbledWarpletsAbi = [
     ],
     outputs: [],
   },
+  // Legacy deployed GobbledWarplets includes an unsigned rescue overload:
+  // `rescueWarplet(uint256 warpletId)` which only pulls the underlying Warplet.
+  // We keep it in the ABI for a one-off migration flow for `#987458`.
+  {
+    type: "function",
+    name: "rescueWarplet",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "warpletId", type: "uint256" }],
+    outputs: [],
+  },
   {
     type: "function",
     name: "gobbleCount",
