@@ -26,17 +26,27 @@ async function fetchGobblerPriceWei(): Promise<bigint> {
 
 /** Server-backed pot read — avoids stale Vercel env + Farcaster client RPC quirks. */
 export function useDutchAuctionPrice() {
+  const [sampleAt, setSampleAt] = useState(0);
+
   const query = useQuery({
     queryKey: ["gobbler-current-price"],
-    queryFn: fetchGobblerPriceWei,
+    queryFn: async () => {
+      const priceWei = await fetchGobblerPriceWei();
+      setSampleAt(Date.now());
+      return priceWei;
+    },
     refetchInterval: 2_000,
     staleTime: 0,
     retry: 3,
+    // BigInt compares by value; still disable sharing so each poll re-runs payout math.
+    structuralSharing: false,
   });
 
   return {
     data: query.data,
-    dataUpdatedAt: query.dataUpdatedAt,
+    // Wall-clock sample time on every successful fetch (not only when React Query
+    // considers `data` changed) — needed for perSecond in useDutchAuctionPayoutStream.
+    dataUpdatedAt: sampleAt || query.dataUpdatedAt,
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,
