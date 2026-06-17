@@ -1435,12 +1435,12 @@ export default function HomeView({
   );
 }
 
-// Fall back to the deployed $LARPBOBB address if the env var isn't set (e.g. local dev),
+// Fall back to the deployed $WARPGOBB address if the env var isn't set (e.g. local dev),
 // so the footer always shows a real address rather than zero.
 const FOOTER_CA: Address =
   CONTRACTS.warpgobbToken !== ZERO_ADDRESS
     ? CONTRACTS.warpgobbToken
-    : ("0x3042b035325393F3d72390C7E5d51F26fe1F0e61" as Address);
+    : ("0x1A339C38Ae22726F1A4235bCecf8f12aebE4C5E8" as Address);
 
 function CaFooter({ pointerThrough = false }: { pointerThrough?: boolean }) {
   const [copied, setCopied] = useState(false);
