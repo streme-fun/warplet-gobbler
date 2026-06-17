@@ -37,4 +37,13 @@ export const dutchAuctionAbi = [
     outputs: [{ name: "", type: "address", internalType: "address" }],
     stateMutability: "view",
   },
+  {
+    type: "event",
+    name: "Gobbled",
+    inputs: [
+      { name: "seller", type: "address", indexed: true },
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "payout", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;

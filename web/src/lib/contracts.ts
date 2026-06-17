@@ -11,6 +11,7 @@ const envBlock = (value?: string): bigint =>
 
 // Contract addresses — set in web/.env.local
 export const CONTRACTS = {
+  feeHandler: envAddress(process.env.NEXT_PUBLIC_FEE_HANDLER_ADDRESS),
   dutchAuction: envAddress(process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS),
   auctionSell: envAddress(process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS),
   staking: envAddress(process.env.NEXT_PUBLIC_STAKING_ADDRESS),
