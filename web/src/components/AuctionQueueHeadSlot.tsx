@@ -57,7 +57,7 @@ export default function AuctionQueueHeadSlot({
     bumpPhase === "head_preview";
 
   return (
-    <div className="relative box-border h-28 w-28 shrink-0 snap-start sm:h-36 sm:w-36">
+    <div className="relative box-border aspect-square w-full shrink-0">
       <div
         className={`pointer-events-none absolute inset-0 ${QUEUE_BUMP_CROSSFADE_OPACITY_CLASS} ${
           hidePlaceholder ? "opacity-0" : "opacity-100"

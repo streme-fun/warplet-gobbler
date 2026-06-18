@@ -13,6 +13,7 @@ export default function AuctionQueueCard({
   placeInLine,
   isSelected,
   onSelect,
+  size = "regular",
   sourceBumpFadeOut = false,
   sourceBumpEmptyHold = false,
   bumpStripLand = false,
@@ -21,6 +22,7 @@ export default function AuctionQueueCard({
   placeInLine: number;
   isSelected: boolean;
   onSelect: () => void;
+  size?: "regular" | "compact";
   /** Phase 1: artwork fades out at the source tile. */
   sourceBumpFadeOut?: boolean;
   /** Phase 2: dashed shell at source; artwork hidden (head preview shows the Warplet). */
@@ -30,13 +32,16 @@ export default function AuctionQueueCard({
 }) {
   const emptyHold = sourceBumpEmptyHold;
   const innerGone = sourceBumpFadeOut || emptyHold;
+  const compact = size === "compact";
 
   return (
     <button
       type="button"
       onClick={onSelect}
       disabled={sourceBumpFadeOut || emptyHold}
-      className={`relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 snap-center rounded-xl overflow-hidden text-center ${QUEUE_BUMP_CROSSFADE_TILE_SURFACE_CLASS} ${
+      className={`relative aspect-square w-full flex-shrink-0 overflow-hidden text-center ${
+        compact ? "rounded-lg" : "rounded-xl"
+      } ${QUEUE_BUMP_CROSSFADE_TILE_SURFACE_CLASS} ${
         bumpStripLand ? "animate-queue-bump-strip-land" : ""
       } ${
         emptyHold
@@ -56,9 +61,24 @@ export default function AuctionQueueCard({
         }`}
         aria-hidden={innerGone}
       >
-        {!emptyHold ? <AuctionQueuePlaceBadge place={placeInLine} /> : null}
+        {!emptyHold ? (
+          <AuctionQueuePlaceBadge
+            place={placeInLine}
+            className={
+              compact
+                ? placeInLine === 2
+                  ? "!left-0.5 !top-0.5 !text-[0.56rem] sm:!text-[0.68rem]"
+                  : "!left-0.5 !top-0 !text-[0.9rem] sm:!text-[1rem]"
+                : ""
+            }
+          />
+        ) : null}
         <AuctionWarpletImage fid={fid} variant="cover" />
-        <span className="pointer-events-none absolute bottom-0 inset-x-0 z-10 text-[10px] py-0.5 bg-black/60 text-base-content/70 text-center tabular-nums">
+        <span
+          className={`pointer-events-none absolute bottom-0 inset-x-0 z-10 bg-black/60 text-center text-base-content/70 tabular-nums ${
+            compact ? "py-0 text-[8px]" : "py-0.5 text-[10px]"
+          }`}
+        >
           #{fid}
         </span>
       </span>

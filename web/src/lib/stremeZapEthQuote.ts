@@ -9,6 +9,8 @@ const MAX_SEED_WEI = parseEther("2");
 const MAX_EXPAND_STEPS = 18;
 const MAX_REFINE_STEPS = 8;
 const MAX_RATIO_HINT_ENTRIES = 50;
+const BPS_DENOMINATOR = 10_000n;
+const QUOTE_SIM_BALANCE_WEI = parseEther("1000");
 const quoteRatioHints = new Map<string, bigint>();
 
 type ZapSimParams = {
@@ -17,12 +19,15 @@ type ZapSimParams = {
   bidWei: bigint;
   ethWei: bigint;
   account: Address;
+  warnOnFailure?: boolean;
 };
 
 async function simulateZapAmountOut(
   client: PublicClient,
   p: ZapSimParams,
 ): Promise<bigint | null> {
+  const simulatedBalance =
+    p.ethWei > QUOTE_SIM_BALANCE_WEI ? p.ethWei : QUOTE_SIM_BALANCE_WEI;
   try {
     const { result } = await client.simulateContract({
       address: p.zap,
@@ -31,10 +36,11 @@ async function simulateZapAmountOut(
       args: [p.bidToken, p.ethWei, p.bidWei, zeroAddress],
       value: p.ethWei,
       account: p.account,
+      stateOverride: [{ address: p.account, balance: simulatedBalance }],
     });
     return result as bigint;
   } catch (error) {
-    if (process.env.NODE_ENV !== "production") {
+    if (p.warnOnFailure && process.env.NODE_ENV !== "production") {
       console.warn("[streme-zap-quote] simulateContract failed", {
         zap: p.zap,
         bidToken: p.bidToken,
@@ -42,8 +48,6 @@ async function simulateZapAmountOut(
         ethWei: p.ethWei.toString(),
         error: error instanceof Error ? error.message : String(error),
       });
-    } else {
-      console.warn("[streme-zap-quote] simulateContract failed");
     }
     return null;
   }
@@ -81,6 +85,7 @@ export async function quoteMinEthForZapBid(
   if (hi < MIN_SEED_WEI) hi = MIN_SEED_WEI;
   if (hi > MAX_SEED_WEI) hi = MAX_SEED_WEI;
   if (hi > MAX_ETH) hi = MAX_ETH;
+  if (hi <= 0n) return null;
 
   let lo = 0n;
   let okAtHi = await zapMeetsBid(client, {
@@ -127,6 +132,7 @@ export async function quoteMinEthForZapBid(
     bidWei,
     ethWei: hi,
     account,
+    warnOnFailure: true,
   });
   if (expectedOutWei == null) return null;
 
@@ -141,5 +147,34 @@ export async function quoteMinEthForZapBid(
 
 export function applyEthQuoteBuffer(minEthWei: bigint, bufferBps: bigint): bigint {
   if (bufferBps <= 0n) return minEthWei;
-  return minEthWei + (minEthWei * bufferBps) / 10_000n;
+  return minEthWei + (minEthWei * bufferBps) / BPS_DENOMINATOR;
+}
+
+export function applyBidQuoteDiscount(
+  expectedOutWei: bigint,
+  discountBps: bigint,
+): bigint {
+  if (expectedOutWei <= 0n) return 0n;
+  if (discountBps <= 0n) return expectedOutWei;
+  if (discountBps >= BPS_DENOMINATOR) return 0n;
+  return expectedOutWei - (expectedOutWei * discountBps) / BPS_DENOMINATOR;
+}
+
+export async function quoteZapBidForEthSpend(
+  client: PublicClient,
+  account: Address,
+  zap: Address,
+  bidToken: Address,
+  ethWei: bigint,
+): Promise<{ expectedOutWei: bigint } | null> {
+  if (isAddressEqual(zap, zeroAddress) || ethWei <= 0n) return null;
+  const expectedOutWei = await simulateZapAmountOut(client, {
+    zap,
+    bidToken,
+    bidWei: 0n,
+    ethWei,
+    account,
+  });
+  if (expectedOutWei == null || expectedOutWei <= 0n) return null;
+  return { expectedOutWei };
 }
