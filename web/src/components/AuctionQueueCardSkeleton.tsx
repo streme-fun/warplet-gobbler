@@ -1,15 +1,31 @@
 "use client";
 
 /** Same footprint as `AuctionQueueCard` — placeholder while queue or auction data loads. */
-export default function AuctionQueueCardSkeleton() {
+export default function AuctionQueueCardSkeleton({
+  size = "regular",
+}: {
+  size?: "regular" | "compact";
+}) {
+  const compact = size === "compact";
+
   return (
     <div
-      className="relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border-2 border-base-content/10 snap-center pointer-events-none"
+      className={`relative aspect-square w-full flex-shrink-0 overflow-hidden border-2 border-base-content/10 pointer-events-none ${
+        compact ? "rounded-lg" : "rounded-xl"
+      }`}
       aria-hidden
     >
-      <div className="pointer-events-none absolute left-1 top-1 z-10 h-5 w-7 rounded-md skeleton opacity-70 sm:h-6 sm:w-8" />
+      <div
+        className={`pointer-events-none absolute left-1 top-1 z-10 rounded-md skeleton opacity-70 ${
+          compact ? "h-3 w-5 sm:h-4 sm:w-6" : "h-5 w-7 sm:h-6 sm:w-8"
+        }`}
+      />
       <div className="absolute inset-0 skeleton rounded-none" />
-      <span className="pointer-events-none absolute bottom-0 inset-x-0 z-10 h-[22px] skeleton rounded-none border-t border-base-content/5" />
+      <span
+        className={`pointer-events-none absolute bottom-0 inset-x-0 z-10 skeleton rounded-none border-t border-base-content/5 ${
+          compact ? "h-3" : "h-[22px]"
+        }`}
+      />
     </div>
   );
 }

@@ -13,7 +13,7 @@ export default function AuctionQueueBumpPreviewCard({
 }) {
   return (
     <div
-      className="relative box-border h-full min-h-[7rem] w-full flex-shrink-0 snap-start pointer-events-none overflow-hidden rounded-xl border-[3px] border-dashed border-secondary/55 shadow-[0_0_40px_-2px_rgba(123,97,255,0.62),0_0_80px_-14px_rgba(123,97,255,0.42)] sm:min-h-[9rem]"
+      className="relative box-border h-full w-full flex-shrink-0 pointer-events-none overflow-hidden rounded-xl border-[3px] border-dashed border-secondary/55 shadow-[0_0_40px_-2px_rgba(123,97,255,0.62),0_0_80px_-14px_rgba(123,97,255,0.42)]"
       aria-hidden
     >
       <div

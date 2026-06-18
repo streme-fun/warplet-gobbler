@@ -39,7 +39,10 @@ import {
   type AuctionSellLot,
 } from "@/hooks/useAuctionSell";
 import { useAuctionSellBid } from "@/hooks/useAuctionSellBid";
-import { useStremeEthBidQuote } from "@/hooks/useStremeEthBidQuote";
+import {
+  useStremeEthBidQuote,
+  useStremeEthSpendQuote,
+} from "@/hooks/useStremeEthBidQuote";
 import { useAuctionSellSettleActions } from "@/hooks/useAuctionSellSettle";
 import { useAuctionSellStartAuction } from "@/hooks/useAuctionSellStartAuction";
 import { useAuctionSellQueue } from "@/hooks/useAuctionSellQueue";
@@ -197,10 +200,6 @@ export default function GobblerAuctionSection({
     strip: bigint[];
     fid: number;
   } | null>(null);
-  const queueStripScrollRef = useRef<HTMLDivElement | null>(null);
-  const queueStripInnerRef = useRef<HTMLDivElement | null>(null);
-  /** When the strip is wider than the viewport, pack tiles from the left; otherwise space them around. */
-  const [queueStripOverflow, setQueueStripOverflow] = useState(false);
   const [bumpVisualPhase, setBumpVisualPhase] =
     useState<QueueBumpHeadPhase>("idle");
   const [bumpAnimatingFid, setBumpAnimatingFid] = useState<number | null>(null);
@@ -771,6 +770,9 @@ export default function GobblerAuctionSection({
   });
 
   const [quoteBidWei, setQuoteBidWei] = useState<bigint | null>(null);
+  const [quoteEthSpendWei, setQuoteEthSpendWei] = useState<bigint | null>(
+    null,
+  );
   const [lastGoodEthQuote, setLastGoodEthQuote] = useState<{
     minEthFormatted: string | null;
     txValueWei: bigint | null;
@@ -832,6 +834,18 @@ export default function GobblerAuctionSection({
     zapAddress: stremeZapAddress,
     bidTokenAddress: bidTokenAddress ?? undefined,
     bidWei: quoteBidWei,
+  });
+
+  const ethSpendQuote = useStremeEthSpendQuote({
+    enabled:
+      chainBidActive &&
+      nativeEthBidConfigured &&
+      quoteEthSpendWei != null &&
+      stremeZapAddress != null &&
+      bidTokenAddress != null,
+    zapAddress: stremeZapAddress,
+    bidTokenAddress: bidTokenAddress ?? undefined,
+    ethWei: quoteEthSpendWei,
   });
 
   useEffect(() => {
@@ -909,8 +923,10 @@ export default function GobblerAuctionSection({
     mockStripOrder,
   ]);
 
-  /** Skeleton tiles in the waiting row while queue is loading (not shown after load). */
-  const QUEUE_STRIP_SKELETON_COUNT = 5;
+  /** Responsive queue grid: full first row, then half-size rows. */
+  const QUEUE_FEATURED_MOBILE_COUNT = 3;
+  const QUEUE_FEATURED_DESKTOP_COUNT = 6;
+  const QUEUE_GRID_SKELETON_COUNT = 18;
   const showQueueStripSkeleton =
     !queueReadsEnabled ||
     (queueReadsEnabled && (queueIsLoading || legacyQueueIsLoading));
@@ -959,7 +975,6 @@ export default function GobblerAuctionSection({
     if (bumpVisualPhase !== "fade_source") return;
     const t = window.setTimeout(() => {
       setBumpVisualPhase("head_preview");
-      queueStripScrollRef.current?.scrollTo({ left: 0, behavior: "smooth" });
     }, BUMP_FADE_SOURCE_MS);
     return () => clearTimeout(t);
   }, [bumpVisualPhase]);
@@ -1727,21 +1742,6 @@ export default function GobblerAuctionSection({
     }
   }, [queuedRows, selectedQueueFid, setSelectedQueueFid]);
 
-  useLayoutEffect(() => {
-    const root = queueStripScrollRef.current;
-    const inner = queueStripInnerRef.current;
-    if (!root) return;
-    const measure = () => {
-      const cw = root.clientWidth;
-      setQueueStripOverflow(cw > 0 && root.scrollWidth > cw + 1);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(root);
-    if (inner) ro.observe(inner);
-    return () => ro.disconnect();
-  }, [queuedRows.length, showQueueStripSkeleton, queueShuffleVersion]);
-
   const handleQueueBump = useCallback(async () => {
     setBumpError(null);
     if (DEV_MOCK_QUEUE_SKIP_CTA_DISABLED) return;
@@ -1807,6 +1807,150 @@ export default function GobblerAuctionSection({
 
   /** Bump pay row mirrors sell CTA: show whenever multiple queue slots exist (outlined until a tile is picked). */
   const showBumpPanel = SKIP_LINE_ENABLED && skipLineOptionVisible;
+
+  const queueHeadPreviewVisible =
+    !showQueueStripSkeleton &&
+    (bumpVisualPhase !== "idle" || bumpAnimatingFid != null);
+
+  const renderQueueCardTile = (
+    row: (typeof queuedRows)[number],
+    queueIndex: number,
+    size: "regular" | "compact",
+    keyPrefix: string,
+  ) => (
+    <QueueStripCellChrome
+      key={`${keyPrefix}-${row.fid}`}
+      shuffleVersion={queueShuffleVersion}
+      slotIndex={queueIndex + 1}
+      className="min-w-0"
+    >
+      <AuctionQueueCard
+        fid={row.fid}
+        placeInLine={row.place}
+        size={size}
+        isSelected={selectedInQueueFid === row.fid}
+        sourceBumpFadeOut={
+          DEV_MOCK_QUEUE_BUMP_LOCAL &&
+          bumpVisualPhase === "fade_source" &&
+          bumpAnimatingFid === row.fid
+        }
+        sourceBumpEmptyHold={
+          DEV_MOCK_QUEUE_BUMP_LOCAL &&
+          bumpVisualPhase === "head_preview" &&
+          bumpAnimatingFid === row.fid
+        }
+        bumpStripLand={
+          DEV_MOCK_QUEUE_BUMP_LOCAL &&
+          bumpVisualPhase === "finalize" &&
+          bumpAnimatingFid === row.fid &&
+          queueIndex === 0
+        }
+        onSelect={() =>
+          setSelectedQueueFid(selectedQueueFid === row.fid ? null : row.fid)
+        }
+      />
+    </QueueStripCellChrome>
+  );
+
+  const renderQueueSkeletonTile = (
+    index: number,
+    size: "regular" | "compact",
+    keyPrefix: string,
+  ) => (
+    <QueueStripCellChrome
+      key={`${keyPrefix}-sk-${index}`}
+      shuffleVersion={0}
+      slotIndex={index + 1}
+      className="min-w-0"
+    >
+      <AuctionQueueCardSkeleton size={size} />
+    </QueueStripCellChrome>
+  );
+
+  const renderQueueHeadTile = (keyPrefix: string) => (
+    <QueueStripCellChrome
+      key={`${keyPrefix}-head`}
+      shuffleVersion={queueShuffleVersion}
+      slotIndex={0}
+      className="min-w-0"
+    >
+      <AuctionQueueHeadSlot
+        bumpPhase={bumpVisualPhase}
+        selectionPreviewFid={null}
+        bumpPreviewFid={bumpAnimatingFid}
+      />
+    </QueueStripCellChrome>
+  );
+
+  const renderQueueGrid = (
+    featuredCount: number,
+    keyPrefix: string,
+    className: string,
+  ) => {
+    const featuredGridClass =
+      featuredCount === QUEUE_FEATURED_MOBILE_COUNT
+        ? "grid grid-cols-3 gap-2"
+        : "grid grid-cols-6 gap-2";
+    const compactGridClass =
+      featuredCount === QUEUE_FEATURED_MOBILE_COUNT
+        ? "mt-1.5 grid grid-cols-6 gap-1.5"
+        : "mt-2 grid grid-cols-12 gap-1.5";
+    const featuredQueueCount = queueHeadPreviewVisible
+      ? Math.max(featuredCount - 1, 0)
+      : featuredCount;
+
+    if (showQueueStripSkeleton) {
+      const skeletonIndexes = Array.from(
+        { length: QUEUE_GRID_SKELETON_COUNT },
+        (_, i) => i,
+      );
+      const featured = skeletonIndexes.slice(0, featuredCount);
+      const compact = skeletonIndexes.slice(featuredCount);
+
+      return (
+        <div className={className}>
+          <div className={featuredGridClass}>
+            {featured.map((i) =>
+              renderQueueSkeletonTile(i, "regular", keyPrefix),
+            )}
+          </div>
+          {compact.length > 0 ? (
+            <div className={compactGridClass}>
+              {compact.map((i) =>
+                renderQueueSkeletonTile(i, "compact", keyPrefix),
+              )}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    const featuredRows = queuedRows.slice(0, featuredQueueCount);
+    const compactRows = queuedRows.slice(featuredQueueCount);
+
+    return (
+      <div className={className}>
+        <div className={featuredGridClass}>
+          {queueHeadPreviewVisible ? renderQueueHeadTile(keyPrefix) : null}
+          {featuredRows.map((row, i) =>
+            renderQueueCardTile(row, i, "regular", keyPrefix),
+          )}
+        </div>
+        {compactRows.length > 0 ? (
+          <div className={compactGridClass}>
+            {compactRows.map((row, i) =>
+              renderQueueCardTile(
+                row,
+                featuredQueueCount + i,
+                "compact",
+                keyPrefix,
+              ),
+            )}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const clearBidTopDisplayHold = useCallback(() => {
     setBidTopDisplayHold(null);
@@ -2141,7 +2285,8 @@ export default function GobblerAuctionSection({
                         ethBidQuote.data?.txValueWei == null &&
                         lastGoodEthQuote?.txValueWei == null,
                       quoteError:
-                        ethBidQuoteError && lastGoodEthQuote?.txValueWei == null
+                        ethBidQuoteError &&
+                        lastGoodEthQuote?.txValueWei == null
                           ? ethBidQuoteError
                           : null,
                       minEthFormatted:
@@ -2157,6 +2302,16 @@ export default function GobblerAuctionSection({
                         lastGoodEthQuote?.txValueFormatted ??
                         null,
                       onRefreshQuote: () => void ethBidQuote.refetch(),
+                      spendBidWei: ethSpendQuote.data?.bidWei ?? null,
+                      spendQuoteLoading: ethSpendQuote.isFetching,
+                      spendQuoteError:
+                        ethSpendQuote.error instanceof Error
+                          ? ethSpendQuote.error.message
+                          : ethSpendQuote.error != null
+                            ? String(ethSpendQuote.error)
+                            : null,
+                      onEthSpendWeiDebounced: setQuoteEthSpendWei,
+                      onRefreshSpendQuote: () => void ethSpendQuote.refetch(),
                     }
                   : undefined,
               }
@@ -2210,96 +2365,21 @@ export default function GobblerAuctionSection({
           ) : null}
           <div className="w-full flex flex-col items-center">
             <div className="w-full pb-2 pt-1 px-1">
-              {/*
-                One scroll row: [On Deck][#2][#3]…
-                - The first queued Warplet owns the left-most visible slot.
-                - Short queue: whole row is mx-auto (cluster sits in the middle, gap-2 next to #2).
-                - Long queue: row hugs the left; horizontal scroll keeps the active bump preview sticky.
-              */}
-              <div className="relative w-full min-h-[7rem] sm:min-h-[9rem]">
+              <div className="relative w-full">
                 <QueueBumpCutStrip
                   active={queueBumpBladeActive}
                   onSequenceComplete={() => bumpAfterBladeRef.current()}
                 />
-                <div
-                  ref={queueStripScrollRef}
-                  className="relative z-10 w-full min-w-0 overflow-x-auto overflow-y-visible scrollbar-hide snap-x snap-mandatory"
-                >
-                  <div
-                    ref={queueStripInnerRef}
-                    className={`flex w-max min-h-[7rem] items-start gap-2 sm:min-h-[9rem] sm:gap-2 ${
-                      queueStripOverflow ? "" : "mx-auto"
-                    }`}
-                  >
-                    {!showQueueStripSkeleton &&
-                    (bumpVisualPhase !== "idle" || bumpAnimatingFid != null) ? (
-                      <div className="sticky left-0 z-20 shrink-0 self-start isolate">
-                        <div className="rounded-xl bg-base-100/95 shadow-[8px_0_20px_-6px_rgba(19,17,28,0.85)] ring-1 ring-base-content/[0.08] backdrop-blur-sm supports-[backdrop-filter]:bg-base-100/80">
-                          <QueueStripCellChrome
-                            shuffleVersion={queueShuffleVersion}
-                            slotIndex={0}
-                            className="shrink-0"
-                          >
-                            <AuctionQueueHeadSlot
-                              bumpPhase={bumpVisualPhase}
-                              selectionPreviewFid={null}
-                              bumpPreviewFid={bumpAnimatingFid}
-                            />
-                          </QueueStripCellChrome>
-                        </div>
-                      </div>
-                    ) : null}
-                    {showQueueStripSkeleton
-                      ? Array.from(
-                          { length: QUEUE_STRIP_SKELETON_COUNT },
-                          (_, i) => (
-                            <QueueStripCellChrome
-                              key={`queue-sk-${i}`}
-                              shuffleVersion={0}
-                              slotIndex={i + 1}
-                              className="shrink-0 snap-center"
-                            >
-                              <AuctionQueueCardSkeleton />
-                            </QueueStripCellChrome>
-                          ),
-                        )
-                      : queuedRows.map((row, i) => (
-                          <QueueStripCellChrome
-                            key={row.fid}
-                            shuffleVersion={queueShuffleVersion}
-                            slotIndex={i + 1}
-                            className="shrink-0 snap-center"
-                          >
-                            <AuctionQueueCard
-                              fid={row.fid}
-                              placeInLine={row.place}
-                              isSelected={selectedInQueueFid === row.fid}
-                              sourceBumpFadeOut={
-                                DEV_MOCK_QUEUE_BUMP_LOCAL &&
-                                bumpVisualPhase === "fade_source" &&
-                                bumpAnimatingFid === row.fid
-                              }
-                              sourceBumpEmptyHold={
-                                DEV_MOCK_QUEUE_BUMP_LOCAL &&
-                                bumpVisualPhase === "head_preview" &&
-                                bumpAnimatingFid === row.fid
-                              }
-                              bumpStripLand={
-                                DEV_MOCK_QUEUE_BUMP_LOCAL &&
-                                bumpVisualPhase === "finalize" &&
-                                bumpAnimatingFid === row.fid &&
-                                i === 0
-                              }
-                              onSelect={() =>
-                                setSelectedQueueFid(
-                                  selectedQueueFid === row.fid ? null : row.fid,
-                                )
-                              }
-                            />
-                          </QueueStripCellChrome>
-                        ))}
-                  </div>
-                </div>
+                {renderQueueGrid(
+                  QUEUE_FEATURED_MOBILE_COUNT,
+                  "queue-mobile",
+                  "relative z-10 w-full sm:hidden",
+                )}
+                {renderQueueGrid(
+                  QUEUE_FEATURED_DESKTOP_COUNT,
+                  "queue-desktop",
+                  "relative z-10 hidden w-full sm:block",
+                )}
               </div>
             </div>
 

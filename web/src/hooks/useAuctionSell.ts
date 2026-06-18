@@ -195,7 +195,7 @@ export function useAuctionSellAuction() {
 
   const formatBidAmount = (amount: bigint) =>
     Number(formatUnits(amount, decimals)).toLocaleString(undefined, {
-      maximumFractionDigits: 6,
+      maximumFractionDigits: 2,
     });
 
   const bidSymbol = symbolQ.data ?? AUCTION_BID_TOKEN_SYMBOL;

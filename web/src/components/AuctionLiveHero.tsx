@@ -158,6 +158,45 @@ const DEFAULT_BID_FLOOR_HUMAN = "1000000";
 const TOKEN_INPUT_MAX_FRAC_DIGITS = 4;
 const ETH_INPUT_MAX_FRAC_DIGITS = 6;
 const BID_INPUT_MAX_INT_DIGITS = 9;
+const MIN_BID_VALIDATION_PREFIX = "Your bid must be at least ";
+
+function formatBidTokenHumanDisplay(human: string, decimals: number): string {
+  return formatBidAmountDisplay(
+    trimDecimalDisplay(human),
+    Math.min(decimals, TOKEN_INPUT_MAX_FRAC_DIGITS),
+    BID_INPUT_MAX_INT_DIGITS,
+  );
+}
+
+function formatBidTokenWeiDisplay(wei: bigint, decimals: number): string {
+  return formatBidTokenHumanDisplay(formatUnits(wei, decimals), decimals);
+}
+
+function formatBidTokenWeiCeilDisplay(wei: bigint, decimals: number): string {
+  if (wei <= 0n) return "0";
+  const maxFracDigits = Math.min(decimals, TOKEN_INPUT_MAX_FRAC_DIGITS);
+  const roundedUnitWei =
+    decimals > maxFracDigits ? 10n ** BigInt(decimals - maxFracDigits) : 1n;
+  const roundedWei =
+    roundedUnitWei > 1n && wei % roundedUnitWei !== 0n
+      ? ((wei / roundedUnitWei) + 1n) * roundedUnitWei
+      : wei;
+  return formatBidTokenWeiDisplay(roundedWei, decimals);
+}
+
+function formatEthWeiCeilDisplay(wei: bigint): string {
+  if (wei <= 0n) return "";
+  const roundedFracWei = 10n ** BigInt(18 - ETH_INPUT_MAX_FRAC_DIGITS);
+  const roundedWei =
+    wei % roundedFracWei === 0n
+      ? wei
+      : ((wei / roundedFracWei) + 1n) * roundedFracWei;
+  return formatBidAmountDisplay(
+    trimDecimalDisplay(formatUnits(roundedWei, 18)),
+    ETH_INPUT_MAX_FRAC_DIGITS,
+    BID_INPUT_MAX_INT_DIGITS,
+  );
+}
 
 export type AuctionLiveHeroChainBid = {
   minBidHuman: string | null;
@@ -186,6 +225,11 @@ export type AuctionLiveHeroChainBid = {
     txValueWei: bigint | null;
     txValueFormatted: string | null;
     onRefreshQuote: () => void;
+    spendBidWei?: bigint | null;
+    spendQuoteLoading?: boolean;
+    spendQuoteError?: string | null;
+    onEthSpendWeiDebounced?: (wei: bigint | null) => void;
+    onRefreshSpendQuote?: () => void;
   };
 };
 
@@ -376,6 +420,7 @@ export default function AuctionLiveHero({
   const bidTopAmountRef = useRef<HTMLParagraphElement>(null);
   const renewFlashRef = useRef<HTMLDivElement>(null);
   const userSelectedPaymentModeRef = useRef(false);
+  const userEditedEthAmountRef = useRef(false);
   const { isDisconnected, isReconnecting, isConnecting } = useAccount();
   const { openConnectModal } = useConnectModal();
   const [bidAmountRaw, setBidAmountRaw] = useState("");
@@ -400,6 +445,72 @@ export default function AuctionLiveHero({
     chainBid?.nativeEthBid?.txValueFormatted;
   const chainBidNativeEthOnRefreshQuote =
     chainBid?.nativeEthBid?.onRefreshQuote;
+  const chainBidNativeEthOnEthSpendWeiDebounced =
+    chainBid?.nativeEthBid?.onEthSpendWeiDebounced;
+
+  const targetEthAmountDisplay = useMemo(() => {
+    if (chainBidNativeEthTxValueWei != null) {
+      return formatEthWeiCeilDisplay(chainBidNativeEthTxValueWei);
+    }
+    const quoted = chainBidNativeEthTxValueFormatted;
+    if (!quoted) return "";
+    return formatBidAmountDisplay(
+      normalizeBidString(quoted),
+      ETH_INPUT_MAX_FRAC_DIGITS,
+      BID_INPUT_MAX_INT_DIGITS,
+    );
+  }, [chainBidNativeEthTxValueWei, chainBidNativeEthTxValueFormatted]);
+
+  const ethInputWei = useMemo(() => {
+    if (paymentMode !== "eth") return null;
+    try {
+      return parseUnits(
+        bidDisplayToParseable(ethAmountDisplayRaw, ETH_INPUT_MAX_FRAC_DIGITS),
+        18,
+      );
+    } catch {
+      return null;
+    }
+  }, [paymentMode, ethAmountDisplayRaw]);
+
+  const tokenInputBidWei = useMemo(() => {
+    if (
+      paymentMode !== "token" ||
+      !chainBidParseHumanToWei ||
+      chainBidDecimals == null
+    ) {
+      return null;
+    }
+    try {
+      return chainBidParseHumanToWei(
+        bidDisplayToParseable(bidAmountRaw, chainBidDecimals),
+      );
+    } catch {
+      return null;
+    }
+  }, [paymentMode, bidAmountRaw, chainBidParseHumanToWei, chainBidDecimals]);
+
+  const translatedEthBidWei =
+    paymentMode === "eth" ? (chainBid?.nativeEthBid?.spendBidWei ?? null) : null;
+  const effectiveBidWei =
+    paymentMode === "eth" ? translatedEthBidWei : tokenInputBidWei;
+  const minBidDisplay = useMemo(() => {
+    if (chainBidDecimals == null) return null;
+    if (chainBidMinBidWei != null) {
+      return formatBidTokenWeiCeilDisplay(chainBidMinBidWei, chainBidDecimals);
+    }
+    if (chainBidMinBidHuman == null) return null;
+    return formatBidTokenHumanDisplay(chainBidMinBidHuman, chainBidDecimals);
+  }, [chainBidMinBidHuman, chainBidMinBidWei, chainBidDecimals]);
+  const translatedEthBidDisplay = useMemo(() => {
+    if (translatedEthBidWei == null || chainBidDecimals == null) return null;
+    return formatBidTokenWeiDisplay(translatedEthBidWei, chainBidDecimals);
+  }, [translatedEthBidWei, chainBidDecimals]);
+  const belowMinimumBid = Boolean(
+    chainBidMinBidWei != null &&
+      effectiveBidWei != null &&
+      effectiveBidWei < chainBidMinBidWei,
+  );
 
   const chainBlocksBid = Boolean(
     contractPaused || auctionExpiredOnChain || idleNoChainAuction,
@@ -407,9 +518,11 @@ export default function AuctionLiveHero({
   const nativeEthBlocksBid = Boolean(
     paymentMode === "eth" &&
     chainBid?.nativeEthBid?.available === true &&
-    (chainBid.nativeEthBid.txValueWei == null ||
-      (chainBid.nativeEthBid.quoteLoading &&
-        chainBid.nativeEthBid.txValueWei == null)),
+    (ethInputWei == null ||
+      ethInputWei <= 0n ||
+      chainBid.nativeEthBid.spendBidWei == null ||
+      (chainBid.nativeEthBid.spendQuoteLoading &&
+        chainBid.nativeEthBid.spendBidWei == null)),
   );
 
   const bidUsdEstimate = useMemo(() => {
@@ -418,12 +531,25 @@ export default function AuctionLiveHero({
     if (spot == null || !Number.isFinite(spot) || spot <= 0 || dec == null) {
       return null;
     }
+    if (paymentMode === "eth") {
+      const spendBidWei = chainBid?.nativeEthBid?.spendBidWei;
+      if (spendBidWei == null || spendBidWei <= 0n) return null;
+      const n = Number.parseFloat(formatUnits(spendBidWei, dec));
+      if (!Number.isFinite(n) || n < 0) return null;
+      return n * spot;
+    }
     const raw = bidDisplayToParseable(bidAmountRaw, dec);
     if (raw === "" || raw === "0") return null;
     const n = Number.parseFloat(raw);
     if (!Number.isFinite(n) || n < 0) return null;
     return n * spot;
-  }, [bidAmountRaw, chainBid?.bidTokenPriceUsd, chainBid?.bidDecimals]);
+  }, [
+    paymentMode,
+    bidAmountRaw,
+    chainBid?.bidTokenPriceUsd,
+    chainBid?.bidDecimals,
+    chainBid?.nativeEthBid?.spendBidWei,
+  ]);
 
   const insufficientBalance = useMemo(() => {
     if (paymentMode === "eth") {
@@ -462,14 +588,7 @@ export default function AuctionLiveHero({
       chosen = chainBidMinBidWei;
     }
     try {
-      const human = trimDecimalDisplay(formatUnits(chosen, chainBidDecimals));
-      setBidAmountRaw(
-        formatBidAmountDisplay(
-          human,
-          Math.min(chainBidDecimals, TOKEN_INPUT_MAX_FRAC_DIGITS),
-          BID_INPUT_MAX_INT_DIGITS,
-        ),
-      );
+      setBidAmountRaw(formatBidTokenWeiCeilDisplay(chosen, chainBidDecimals));
     } catch {
       if (chainBidMinBidHuman != null) {
         setBidAmountRaw(
@@ -500,7 +619,13 @@ export default function AuctionLiveHero({
   useEffect(() => {
     // New lot -> re-apply automatic default until user switches again.
     userSelectedPaymentModeRef.current = false;
+    userEditedEthAmountRef.current = false;
   }, [displayTokenId]);
+
+  useEffect(() => {
+    // A new required bid should reset ETH to the new automatic quote.
+    userEditedEthAmountRef.current = false;
+  }, [chainBidMinBidWei]);
 
   useEffect(() => {
     if (
@@ -529,15 +654,37 @@ export default function AuctionLiveHero({
 
   useEffect(() => {
     if (paymentMode !== "eth") return;
-    const quoted = chainBidNativeEthTxValueFormatted;
-    if (!quoted) return;
-    const formatted = formatBidAmountDisplay(
-      normalizeBidString(quoted),
-      ETH_INPUT_MAX_FRAC_DIGITS,
-      BID_INPUT_MAX_INT_DIGITS,
-    );
-    setEthAmountDisplayRaw(formatted);
-  }, [paymentMode, chainBidNativeEthTxValueFormatted]);
+    if (userEditedEthAmountRef.current) return;
+    if (!targetEthAmountDisplay) return;
+    setEthAmountDisplayRaw(targetEthAmountDisplay);
+  }, [paymentMode, targetEthAmountDisplay]);
+
+  useEffect(() => {
+    if (paymentMode !== "eth") {
+      chainBidNativeEthOnEthSpendWeiDebounced?.(null);
+      return;
+    }
+    if (!chainBidNativeEthOnEthSpendWeiDebounced) return;
+    const id = window.setTimeout(() => {
+      try {
+        const wei = parseUnits(
+          bidDisplayToParseable(
+            ethAmountDisplayRaw,
+            ETH_INPUT_MAX_FRAC_DIGITS,
+          ),
+          18,
+        );
+        chainBidNativeEthOnEthSpendWeiDebounced(wei > 0n ? wei : null);
+      } catch {
+        chainBidNativeEthOnEthSpendWeiDebounced(null);
+      }
+    }, 220);
+    return () => window.clearTimeout(id);
+  }, [
+    paymentMode,
+    ethAmountDisplayRaw,
+    chainBidNativeEthOnEthSpendWeiDebounced,
+  ]);
 
   useEffect(() => {
     if (paymentMode !== "eth") return;
@@ -552,6 +699,11 @@ export default function AuctionLiveHero({
     chainBidNativeEthTxValueWei,
     chainBidNativeEthOnRefreshQuote,
   ]);
+
+  useEffect(() => {
+    if (!bidValidationError?.startsWith(MIN_BID_VALIDATION_PREFIX)) return;
+    setBidValidationError(null);
+  }, [effectiveBidWei, chainBidMinBidWei, bidValidationError]);
 
   const tick = extendSuccessTick ?? 0;
   useEffect(() => {
@@ -627,7 +779,6 @@ export default function AuctionLiveHero({
     if (
       !chainBid ||
       chainBid.minBidWei == null ||
-      chainBid.minBidHuman == null ||
       chainBid.bidDecimals == null
     ) {
       setBidValidationError("Loading…");
@@ -637,33 +788,57 @@ export default function AuctionLiveHero({
     chainBid.onClearTxError?.();
 
     let wei: bigint;
-    try {
-      wei = chainBid.parseHumanToWei(
-        bidDisplayToParseable(bidAmountRaw, chainBid.bidDecimals),
-      );
-    } catch {
-      setBidValidationError(`Enter a valid amount in ${bidSymbol}.`);
-      return;
+    let ethTxValueWei: bigint | null = null;
+    if (paymentMode === "eth") {
+      try {
+        ethTxValueWei = parseUnits(
+          bidDisplayToParseable(
+            ethAmountDisplayRaw,
+            ETH_INPUT_MAX_FRAC_DIGITS,
+          ),
+          18,
+        );
+      } catch {
+        setBidValidationError("Enter a valid amount in ETH.");
+        return;
+      }
+      if (ethTxValueWei <= 0n) {
+        setBidValidationError("Enter a valid amount in ETH.");
+        return;
+      }
+      const spendBidWei = chainBid.nativeEthBid?.spendBidWei ?? null;
+      if (spendBidWei == null || spendBidWei <= 0n) {
+        setBidValidationError("ETH estimate unavailable. Try refresh estimate.");
+        return;
+      }
+      wei = spendBidWei;
+    } else {
+      try {
+        wei = chainBid.parseHumanToWei(
+          bidDisplayToParseable(bidAmountRaw, chainBid.bidDecimals),
+        );
+      } catch {
+        setBidValidationError(`Enter a valid amount in ${bidSymbol}.`);
+        return;
+      }
     }
     if (wei < chainBid.minBidWei) {
-      const minShown = formatBidAmountDisplay(
-        trimDecimalDisplay(chainBid.minBidHuman),
-        Math.min(chainBid.bidDecimals, TOKEN_INPUT_MAX_FRAC_DIGITS),
-        BID_INPUT_MAX_INT_DIGITS,
+      const minShown = formatBidTokenWeiCeilDisplay(
+        chainBid.minBidWei,
+        chainBid.bidDecimals,
       );
       setBidValidationError(
-        `Your bid must be at least ${minShown} ${bidSymbol}.`,
+        `${MIN_BID_VALIDATION_PREFIX}${minShown} ${bidSymbol}.`,
       );
       return;
     }
 
     if (paymentMode === "eth") {
-      const txValueWei = chainBid.nativeEthBid?.txValueWei ?? null;
-      if (txValueWei == null || txValueWei <= 0n) {
-        setBidValidationError("ETH quote unavailable. Try refresh estimate.");
+      if (ethTxValueWei == null || ethTxValueWei <= 0n) {
+        setBidValidationError("Enter a valid amount in ETH.");
         return;
       }
-      await chainBid.onSubmit(wei, { payment: "eth", txValueWei });
+      await chainBid.onSubmit(wei, { payment: "eth", txValueWei: ethTxValueWei });
     } else {
       await chainBid.onSubmit(wei, { payment: "token" });
     }
@@ -679,18 +854,15 @@ export default function AuctionLiveHero({
       paymentMode === "token" ? "eth" : "token";
     setPaymentMode(nextMode);
     if (nextMode === "eth") {
-      const quoted = chainBid.nativeEthBid?.txValueFormatted;
-      if (quoted) {
-        setEthAmountDisplayRaw(
-          formatBidAmountDisplay(
-            normalizeBidString(quoted),
-            ETH_INPUT_MAX_FRAC_DIGITS,
-            BID_INPUT_MAX_INT_DIGITS,
-          ),
-        );
+      userEditedEthAmountRef.current = false;
+      if (targetEthAmountDisplay) {
+        setEthAmountDisplayRaw(targetEthAmountDisplay);
       } else {
         chainBid.nativeEthBid?.onRefreshQuote();
       }
+    } else {
+      userEditedEthAmountRef.current = false;
+      chainBid.nativeEthBid?.onEthSpendWeiDebounced?.(null);
     }
   };
 
@@ -700,6 +872,92 @@ export default function AuctionLiveHero({
   const hasNextAuctionToken = Boolean(
     startNewAuction && !startNewAuction.queueBlockedReason,
   );
+  const activeEthQuoteError =
+    paymentMode === "eth"
+      ? (chainBid?.nativeEthBid?.spendQuoteError ??
+        chainBid?.nativeEthBid?.quoteError ??
+        null)
+      : null;
+  const displayedEthAmount =
+    userEditedEthAmountRef.current || ethAmountDisplayRaw
+      ? ethAmountDisplayRaw
+      : targetEthAmountDisplay;
+  const ethDefaultQuotePending = Boolean(
+    paymentMode === "eth" &&
+      chainBid?.nativeEthBid?.available &&
+      chainBid.nativeEthBid.quoteLoading &&
+      !displayedEthAmount,
+  );
+  const ethTranslationPending = Boolean(
+    paymentMode === "eth" &&
+      chainBid?.nativeEthBid?.available &&
+      ethInputWei != null &&
+      ethInputWei > 0n &&
+      chainBid.nativeEthBid.spendQuoteLoading &&
+      chainBid.nativeEthBid.spendBidWei == null,
+  );
+  const ethEstimatePending = ethDefaultQuotePending || ethTranslationPending;
+  const belowMinimumButtonCopy =
+    paymentMode === "eth" && translatedEthBidDisplay
+      ? `~${translatedEthBidDisplay} $${bidSymbol}`
+      : "Below Minimum";
+  const belowMinimumButtonHint =
+    minBidDisplay != null ? `min ${minBidDisplay} $${bidSymbol}` : null;
+  const balanceLine =
+    chainBid &&
+    (chainBid.viewerBidTokenBalanceHuman != null ||
+      chainBid.nativeEthBid?.available) ? (
+      <p className="flex min-h-5 items-center justify-end gap-1.5 px-0.5 text-right text-[10px] text-base-content/45 sm:text-xs">
+        <span>
+          Balance:{" "}
+          {paymentMode === "eth"
+            ? (chainBid.viewerEthBalanceHuman ?? "--")
+            : (chainBid.viewerBidTokenBalanceHuman ?? "--")}
+        </span>
+        {chainBid.nativeEthBid?.available ? (
+          <button
+            type="button"
+            className="group inline-flex items-center gap-1 rounded-sm font-semibold leading-none text-secondary transition-colors hover:text-secondary/80 focus:outline-none focus-visible:ring-1 focus-visible:ring-secondary/60"
+            onClick={handlePaymentModeToggle}
+            aria-label={`Switch bid currency to ${
+              paymentMode === "token" ? "ETH" : bidSymbol
+            }`}
+          >
+            <span>{paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}</span>
+            <svg
+              className="h-3 w-3 shrink-0 transition-transform duration-200 group-hover:scale-110 sm:h-3.5 sm:w-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.25"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M7 4v16m0 0l-3-3m3 3l3-3" />
+              <path d="M17 20V4m0 0l-3 3m3-3l3 3" />
+            </svg>
+          </button>
+        ) : (
+          <BuyWarpgobbLink className="font-semibold text-base-content/55">
+            {`$${bidSymbol}`}
+          </BuyWarpgobbLink>
+        )}
+        {paymentMode === "eth" && activeEthQuoteError ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs ml-1 h-auto min-h-0 px-1 py-0 text-error normal-case"
+            onClick={() => {
+              const refreshSpend = chainBid.nativeEthBid?.onRefreshSpendQuote;
+              if (refreshSpend) refreshSpend();
+              else chainBid.nativeEthBid?.onRefreshQuote();
+            }}
+          >
+            Retry estimate
+          </button>
+        ) : null}
+      </p>
+    ) : null;
 
   const topBidUsdNotional = useMemo(() => {
     const spot = chainBid?.bidTokenPriceUsd;
@@ -1094,200 +1352,134 @@ export default function AuctionLiveHero({
       </div>
       {chainBid ? (
         <div className="mx-auto mt-6 w-full max-w-96 space-y-2 px-2 sm:mt-8 sm:max-w-none sm:px-4">
-          {chainBid.viewerBidTokenBalanceHuman != null ||
-          chainBid.nativeEthBid?.available ? (
-            <div className="flex w-full items-center justify-between gap-2 px-0.5">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-base-content/40">
-                Balance
-              </span>
-              <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
-                <span className="font-mono text-xs tabular-nums text-base-content/75">
-                  {paymentMode === "eth"
-                    ? (chainBid.viewerEthBalanceHuman ?? "--")
-                    : (chainBid.viewerBidTokenBalanceHuman ?? "--")}
-                </span>
-                {chainBid.nativeEthBid?.available ? (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-semibold leading-none text-secondary transition-colors hover:text-secondary/80 focus:outline-none focus-visible:ring-1 focus-visible:ring-secondary/60"
-                    onClick={handlePaymentModeToggle}
-                  >
-                    <span>
-                      {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
-                    </span>
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M7 4v16m0 0l-3-3m3 3l3-3" />
-                      <path d="M17 20V4m0 0l-3 3m3-3l3 3" />
-                    </svg>
-                  </button>
-                ) : (
-                  <BuyWarpgobbLink className="rounded-md px-1 py-0.5 text-[11px] font-semibold leading-none text-base-content/55">
-                    {`$${bidSymbol}`}
-                  </BuyWarpgobbLink>
-                )}
-                {paymentMode === "eth" && chainBid.nativeEthBid?.quoteError ? (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs text-error normal-case ml-1"
-                    onClick={() => chainBid.nativeEthBid?.onRefreshQuote()}
-                  >
-                    Retry estimate
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
           <label className="form-control w-full">
-                    <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                      <div
-                        className={`group flex min-h-12 w-full min-w-0 items-center gap-2 rounded-lg border border-base-content/15 bg-base-200/50 px-3 shadow-inner transition-colors focus-within:border-secondary/70 focus-within:bg-base-200/60 focus-within:shadow-[inset_0_0_0_1px_rgba(123,97,255,0.25)] sm:min-h-10 sm:flex-1 sm:rounded-none sm:border-0 sm:border-b sm:border-base-content/20 sm:bg-transparent sm:px-0.5 sm:shadow-none sm:focus-within:shadow-none ${
-                          chainBid.disabled ||
-                          chainBid.loading ||
-                          chainBid.minBidWei == null ||
-                          chainBid.bidDecimals == null
-                            ? "opacity-50 pointer-events-none"
-                            : ""
-                        }`}
-                      >
-                        <span
-                          className="shrink-0 select-none text-left font-mono text-xs text-base-content/40 tabular-nums sm:text-sm sm:text-base-content/50"
-                          title="Approximate USD (spot)"
-                        >
-                          {formatUsdTilde(bidUsdEstimate, 2)}
-                        </span>
-                        <input
-                          ref={bidInputRef}
-                          type="text"
-                          inputMode="decimal"
-                          autoComplete="off"
-                          className="min-w-0 flex-1 border-0 bg-transparent py-2 text-right font-mono text-base tracking-tight text-base-content tabular-nums outline-none placeholder:text-base-content/25 focus:ring-0 sm:text-xl"
-                          value={
-                            paymentMode === "eth"
-                              ? ethAmountDisplayRaw ||
-                                (chainBid.nativeEthBid?.txValueFormatted
-                                  ? formatBidAmountDisplay(
-                                      normalizeBidString(
-                                        chainBid.nativeEthBid.txValueFormatted,
-                                      ),
-                                      ETH_INPUT_MAX_FRAC_DIGITS,
-                                      BID_INPUT_MAX_INT_DIGITS,
-                                    )
-                                  : "")
-                              : bidAmountRaw
-                          }
-                          onChange={(e) => {
-                            if (paymentMode === "eth") return;
-                            const el = e.target;
-                            const next = formatBidAmountDisplay(
-                              normalizeBidString(el.value),
-                              Math.min(
-                                chainBid.bidDecimals,
-                                TOKEN_INPUT_MAX_FRAC_DIGITS,
-                              ),
-                              BID_INPUT_MAX_INT_DIGITS,
+            <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div
+                  className={`group flex min-h-12 w-full min-w-0 items-center gap-2 rounded-lg border border-base-content/15 bg-base-200/50 px-3 shadow-inner transition-colors focus-within:border-secondary/70 focus-within:bg-base-200/60 focus-within:shadow-[inset_0_0_0_1px_rgba(123,97,255,0.25)] sm:min-h-10 sm:rounded-none sm:border-0 sm:border-b sm:border-base-content/20 sm:bg-transparent sm:px-0.5 sm:shadow-none sm:focus-within:shadow-none ${
+                    chainBid.disabled ||
+                    chainBid.loading ||
+                    chainBid.minBidWei == null ||
+                    chainBid.bidDecimals == null
+                      ? "opacity-50 pointer-events-none"
+                      : ""
+                  }`}
+                >
+                  <span
+                    className="shrink-0 select-none text-left font-mono text-xs text-base-content/40 tabular-nums sm:text-sm sm:text-base-content/50"
+                    title="Approximate USD (spot)"
+                  >
+                    {formatUsdTilde(bidUsdEstimate, 2)}
+                  </span>
+                  <input
+                    ref={bidInputRef}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    className="min-w-0 flex-1 border-0 bg-transparent py-2 text-right font-mono text-base tracking-tight text-base-content tabular-nums outline-none placeholder:text-base-content/25 focus:ring-0 sm:text-xl"
+                    placeholder={
+                      paymentMode === "eth" && ethDefaultQuotePending
+                        ? "Estimating ETH..."
+                        : "0"
+                    }
+                    value={
+                      paymentMode === "eth"
+                        ? displayedEthAmount
+                        : bidAmountRaw
+                    }
+                    onChange={(e) => {
+                      const el = e.target;
+                      const maxFracDigits =
+                        paymentMode === "eth"
+                          ? ETH_INPUT_MAX_FRAC_DIGITS
+                          : Math.min(
+                              chainBid.bidDecimals,
+                              TOKEN_INPUT_MAX_FRAC_DIGITS,
                             );
-                            setBidAmountRaw(next);
-                            setBidValidationError(null);
-                            chainBid.onClearTxError?.();
-                            requestAnimationFrame(() => {
-                              try {
-                                el.setSelectionRange(next.length, next.length);
-                              } catch {
-                                /* ignore */
-                              }
-                            });
-                          }}
-                          readOnly={paymentMode === "eth"}
-                          disabled={
-                            chainBid.disabled ||
-                            chainBid.loading ||
-                            chainBid.minBidWei == null ||
-                            chainBid.bidDecimals == null
-                          }
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={
-                          walletDisconnected
-                            ? openConnectWallet
-                            : handleChainBidSubmit
+                      const next = formatBidAmountDisplay(
+                        normalizeBidString(el.value),
+                        maxFracDigits,
+                        BID_INPUT_MAX_INT_DIGITS,
+                      );
+                      if (paymentMode === "eth") {
+                        userEditedEthAmountRef.current = true;
+                        setEthAmountDisplayRaw(next);
+                      } else {
+                        setBidAmountRaw(next);
+                      }
+                      setBidValidationError(null);
+                      chainBid.onClearTxError?.();
+                      requestAnimationFrame(() => {
+                        try {
+                          el.setSelectionRange(next.length, next.length);
+                        } catch {
+                          /* ignore */
                         }
-                        disabled={
-                          chainBid.loading ||
-                          (!walletDisconnected &&
-                            (bidDisabled ||
-                              chainBlocksBid ||
-                              nativeEthBlocksBid ||
-                              insufficientBalance ||
-                              chainBid.disabled ||
-                              chainBid.minBidWei == null))
-                        }
-                        className="gobble-btn-ghost-purple w-full shrink-0 !text-xl !tracking-[2px] sm:w-auto sm:!text-2xl"
-                      >
-                        {chainBid.loading ? (
-                          <span className="loading loading-spinner loading-sm" />
-                        ) : walletDisconnected ? (
-                          "Connect Wallet to Bid"
-                        ) : insufficientBalance ? (
-                          "Insufficient Balance"
-                        ) : (
-                          <>
-                            Bid{" "}
-                            {paymentMode === "eth"
-                              ? `${ethAmountDisplayRaw || "0"} ETH`
-                              : `${bidAmountRaw || "0"} $${bidSymbol}`}
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </label>
-                  {chainBid.viewerBidTokenBalanceHuman != null ||
-                  chainBid.nativeEthBid?.available ? (
-                    <p className="hidden text-[10px] text-base-content/45 px-0.5 items-center justify-end gap-1 text-right sm:flex sm:pr-[5.5rem]">
-                      <span>
-                        Balance:{" "}
-                        {paymentMode === "eth"
-                          ? (chainBid.viewerEthBalanceHuman ?? "--")
-                          : (chainBid.viewerBidTokenBalanceHuman ?? "--")}
+                      });
+                    }}
+                    disabled={
+                      chainBid.disabled ||
+                      chainBid.loading ||
+                      chainBid.minBidWei == null ||
+                      chainBid.bidDecimals == null
+                    }
+                  />
+                </div>
+                {balanceLine}
+              </div>
+              <button
+                type="button"
+                onClick={
+                  walletDisconnected ? openConnectWallet : handleChainBidSubmit
+                }
+                disabled={
+                  chainBid.loading ||
+                  (!walletDisconnected &&
+                    (bidDisabled ||
+                      chainBlocksBid ||
+                      nativeEthBlocksBid ||
+                      belowMinimumBid ||
+                      insufficientBalance ||
+                      chainBid.disabled ||
+                      chainBid.minBidWei == null))
+                }
+                className={`gobble-btn-ghost-purple w-full shrink-0 sm:w-auto ${
+                  belowMinimumBid
+                    ? "!text-base !tracking-[1px] sm:!text-lg"
+                    : "!text-xl !tracking-[2px] sm:!text-2xl"
+                }`}
+              >
+                {chainBid.loading ? (
+                  <span className="loading loading-spinner loading-sm" />
+                ) : walletDisconnected ? (
+                  "Connect Wallet to Bid"
+                ) : insufficientBalance ? (
+                  paymentMode === "eth" ? "Not Enough ETH" : "Insufficient Balance"
+                ) : ethEstimatePending ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="loading loading-spinner loading-sm" />
+                    <span>Estimating ETH</span>
+                  </span>
+                ) : belowMinimumBid ? (
+                  <span className="flex flex-col items-center justify-center leading-tight">
+                    <span>{belowMinimumButtonCopy}</span>
+                    {belowMinimumButtonHint ? (
+                      <span className="mt-0.5 font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/70 sm:text-xs">
+                        {belowMinimumButtonHint}
                       </span>
-                      {chainBid.nativeEthBid?.available ? (
-                        <button
-                          type="button"
-                          className="font-semibold text-secondary transition-colors hover:text-secondary/80"
-                          onClick={handlePaymentModeToggle}
-                        >
-                          {paymentMode === "token" ? `$${bidSymbol}` : "$ETH"}
-                        </button>
-                      ) : (
-                        <BuyWarpgobbLink className="font-semibold text-base-content/55">
-                          {`$${bidSymbol}`}
-                        </BuyWarpgobbLink>
-                      )}
-                      {paymentMode === "eth" &&
-                      chainBid.nativeEthBid?.quoteError ? (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs text-error normal-case ml-auto"
-                          onClick={() =>
-                            chainBid.nativeEthBid?.onRefreshQuote()
-                          }
-                        >
-                          Retry estimate
-                        </button>
-                      ) : null}
-                    </p>
-                  ) : null}
+                    ) : null}
+                  </span>
+                ) : (
+                  <>
+                    Bid{" "}
+                    {paymentMode === "eth"
+                      ? `${displayedEthAmount || "0"} ETH`
+                      : `${bidAmountRaw || "0"} $${bidSymbol}`}
+                  </>
+                )}
+              </button>
+            </div>
+          </label>
           {txOrValidationError ? (
             <p className="text-xs text-error/90 text-left break-words px-0.5">
               {txOrValidationError}
