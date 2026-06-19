@@ -468,9 +468,16 @@ export default function LegacyAuctionToolsPanel() {
             {legacy.heldWarplets.length > 0 ? (
               legacy.heldWarplets.map((warplet) => {
                 const rescueAction = `rescue-${warplet.tokenId.toString()}`;
+                const rescueInfo =
+                  legacy.settledRescueByToken[warplet.tokenId.toString()];
+                const connectedWinner =
+                  legacy.address != null &&
+                  rescueInfo != null &&
+                  isAddressEqual(legacy.address, rescueInfo.winner);
                 const canRescue =
                   legacy.isConnected &&
                   warplet.status === "held-needs-rescue-check" &&
+                  connectedWinner &&
                   !legacy.isTxPending;
                 return (
                   <div
@@ -488,6 +495,11 @@ export default function LegacyAuctionToolsPanel() {
                       >
                         {heldStatusLabel(warplet.status)}
                       </span>
+                      {rescueInfo ? (
+                        <p className="mt-1 break-all text-[11px] text-base-content/55">
+                          Winner wallet required: {shortAddress(rescueInfo.winner)}
+                        </p>
+                      ) : null}
                     </div>
                     {warplet.status === "held-needs-rescue-check" ? (
                       <button
@@ -501,7 +513,9 @@ export default function LegacyAuctionToolsPanel() {
                         {legacy.activeAction === rescueAction &&
                         legacy.txStage !== "idle"
                           ? txStageLabel(legacy.txStage)
-                          : "Legacy/manual rescue"}
+                          : connectedWinner
+                            ? "Rescue as winner"
+                            : "Winner wallet only"}
                       </button>
                     ) : null}
                   </div>

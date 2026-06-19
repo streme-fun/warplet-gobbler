@@ -36,7 +36,12 @@ const LEGACY_AUCTION_SELL =
 const LEGACY_GOBBLED_WARPLETS =
   "0x2159d7AAfA7CC6cBFf49B1ab9BD353c7e0d1d10b" as Address;
 
+const LEGACY_AUCTION_ONLY =
+  process.env.NEXT_PUBLIC_LEGACY_AUCTION_ONLY === "true";
+
 function resolveDutchAuctionAddress(): Address {
+  if (LEGACY_AUCTION_ONLY) return LEGACY_DUTCH_AUCTION_V2;
+
   const fromEnv = process.env.NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS;
   if (
     isAddressLike(fromEnv) &&
@@ -48,6 +53,8 @@ function resolveDutchAuctionAddress(): Address {
 }
 
 function resolveAuctionSellAddress(): Address {
+  if (LEGACY_AUCTION_ONLY) return LEGACY_AUCTION_SELL;
+
   const fromEnv = process.env.NEXT_PUBLIC_AUCTION_SELL_ADDRESS;
   if (
     isAddressLike(fromEnv) &&
@@ -59,6 +66,8 @@ function resolveAuctionSellAddress(): Address {
 }
 
 function resolveGobbledWarpletsAddress(): Address {
+  if (LEGACY_AUCTION_ONLY) return LEGACY_GOBBLED_WARPLETS;
+
   const fromEnv = process.env.NEXT_PUBLIC_GOBBLED_WARPLETS_ADDRESS;
   if (
     isAddressLike(fromEnv) &&

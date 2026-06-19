@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   formatUnits,
   isAddress,
@@ -58,6 +58,9 @@ export function useLegacyAuctionTools() {
   const [txStage, setTxStage] = useState<LegacyAuctionTxStage>("idle");
   const [txHash, setTxHash] = useState<Hash | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
+  const [settledRescueByToken, setSettledRescueByToken] = useState<
+    Record<string, { winner: Address; amountWei: string; gobbledTokenId: string }>
+  >({});
 
   const currentAuctionQ = useReadContract({
     chainId: base.id,
@@ -224,6 +227,66 @@ export function useLegacyAuctionTools() {
       ),
     [heldWarplets],
   );
+
+  useEffect(() => {
+    if (!publicClient || rescueCandidates.length === 0) {
+      setSettledRescueByToken({});
+      return;
+    }
+
+    let cancelled = false;
+    const candidateIds = new Set(
+      rescueCandidates.map((warplet) => warplet.tokenId.toString()),
+    );
+
+    void publicClient
+      .getContractEvents({
+        address: LEGACY_AUCTION_SELL_ADDRESS,
+        abi: auctionSellAbi,
+        eventName: "AuctionSettled",
+        // Legacy AuctionSell settled #420499 at block 47517586. Keep the
+        // scan bounded while covering the full migration window.
+        fromBlock: 47_400_000n,
+        toBlock: "latest",
+      })
+      .then((logs) => {
+        if (cancelled) return;
+        const next: Record<
+          string,
+          { winner: Address; amountWei: string; gobbledTokenId: string }
+        > = {};
+
+        for (const log of logs) {
+          const tokenId = log.args.tokenId?.toString();
+          const winner = log.args.winner;
+          const amount = log.args.amount;
+          const gobbledTokenId = log.args.gobbledTokenId;
+          if (
+            tokenId == null ||
+            !candidateIds.has(tokenId) ||
+            winner == null ||
+            amount == null ||
+            gobbledTokenId == null
+          ) {
+            continue;
+          }
+          next[tokenId] = {
+            winner,
+            amountWei: amount.toString(),
+            gobbledTokenId: gobbledTokenId.toString(),
+          };
+        }
+
+        setSettledRescueByToken(next);
+      })
+      .catch(() => {
+        if (!cancelled) setSettledRescueByToken({});
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [publicClient, rescueCandidates]);
 
   const bidDecimals = Number(decimalsQ.data ?? 18);
   const bidSymbol =
@@ -408,6 +471,7 @@ export function useLegacyAuctionTools() {
     heldTokenIds,
     heldWarplets,
     rescueCandidates,
+    settledRescueByToken,
     heldBalance: heldBalanceQ.data ?? 0n,
     paused: pausedQ.data === true,
     reservePriceWei: reserveQ.data ?? null,
