@@ -9,22 +9,19 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  AUCTION_BID_TOKEN_SYMBOL,
-  PAYMENT_TOKEN_LABEL,
-  PAYMENT_TOKEN_SYMBOL,
-} from "@/lib/paymentToken";
 import BuyWarpgobbLink from "./BuyWarpgobbLink";
+
+const INSTRUCTIONS_TOKEN_LABEL = "$WARPGOBB";
 
 /** Render a step body, turning each `$WARPGOBB` mention into a buy link. */
 function renderBodyWithBuyLink(body: string): ReactNode {
-  const parts = body.split(PAYMENT_TOKEN_LABEL);
+  const parts = body.split(INSTRUCTIONS_TOKEN_LABEL);
   if (parts.length === 1) return body;
   return parts.map((part, index) => (
     <Fragment key={index}>
       {part}
       {index < parts.length - 1 ? (
-        <BuyWarpgobbLink>{PAYMENT_TOKEN_LABEL}</BuyWarpgobbLink>
+        <BuyWarpgobbLink>{INSTRUCTIONS_TOKEN_LABEL}</BuyWarpgobbLink>
       ) : null}
     </Fragment>
   ));
@@ -152,19 +149,19 @@ function StakeIcon({ className }: { className?: string }) {
 const STEPS = [
   {
     title: "Fees become a stream",
-    body: `LP fees are collected, swapped into $${PAYMENT_TOKEN_SYMBOL}, and sent into the Gobbler as a live Superfluid stream.`,
+    body: "LP fees are collected, swapped into $WARPGOBB, and sent into the Gobbler as a live Superfluid stream.",
     Icon: StreamIcon,
     accent: "text-primary",
   },
   {
     title: "The stream becomes a payout",
-    body: `The balance grows every second. Deposit a Warplet to take the live $${PAYMENT_TOKEN_SYMBOL} pot.`,
+    body: "The balance grows every second. Deposit a Warplet to take the live $WARPGOBB pot.",
     Icon: WarpletIcon,
     accent: "text-secondary",
   },
   {
     title: "The Warplet goes back out",
-    body: `The gobbled Warplet enters the auction queue. Bidders compete with ${AUCTION_BID_TOKEN_SYMBOL}, and the winner claims the NFT.`,
+    body: "The gobbled Warplet enters the auction queue. Bidders compete with $WARPGOBB, and the winner claims the NFT.",
     Icon: AuctionIcon,
     accent: "text-accent",
   },
