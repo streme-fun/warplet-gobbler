@@ -23,6 +23,7 @@ import GobbleOverlay from "@/components/GobbleOverlay";
 import GobblePeek from "@/components/GobblePeek";
 import BuyOverlay from "@/components/BuyOverlay";
 import GobblerAuctionSection from "@/components/GobblerAuctionSection";
+import LegacyAuctionToolsPanel from "@/components/LegacyAuctionToolsPanel";
 import FlyingWarplet from "@/components/FlyingWarplet";
 import SellSection from "@/components/SellSection";
 import MobileBottomNav from "@/components/MobileBottomNav";
@@ -1330,6 +1331,7 @@ export default function HomeView({
               {auctionBidError}
             </p>
           )}
+          <LegacyAuctionToolsPanel />
         </section>
 
         {/* === Sell Section === */}
