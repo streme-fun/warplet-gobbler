@@ -37,6 +37,9 @@ import { formatUserFacingTxError } from "@/lib/format-tx-error";
 
 type ReadResult = { status?: string; result?: unknown };
 
+const LEGACY_SETTLEMENT_SCAN_FLOOR = 47_517_000n;
+const LEGACY_SETTLEMENT_SCAN_CHUNK = 9_000n;
+
 export type LegacyAuctionTxStage =
   | "idle"
   | "signing"
@@ -47,6 +50,34 @@ export type LegacyAuctionAction =
   | "settle-start-next"
   | "extend"
   | `rescue-${string}`;
+
+async function findLegacySettlementForToken(
+  publicClient: NonNullable<ReturnType<typeof usePublicClient>>,
+  tokenId: bigint,
+) {
+  const latest = await publicClient.getBlockNumber();
+  let toBlock = latest;
+
+  while (toBlock >= LEGACY_SETTLEMENT_SCAN_FLOOR) {
+    const fromBlock =
+      toBlock - LEGACY_SETTLEMENT_SCAN_CHUNK + 1n > LEGACY_SETTLEMENT_SCAN_FLOOR
+        ? toBlock - LEGACY_SETTLEMENT_SCAN_CHUNK + 1n
+        : LEGACY_SETTLEMENT_SCAN_FLOOR;
+    const logs = await publicClient.getContractEvents({
+      address: LEGACY_AUCTION_SELL_ADDRESS,
+      abi: auctionSellAbi,
+      eventName: "AuctionSettled",
+      args: { tokenId },
+      fromBlock,
+      toBlock,
+    });
+    if (logs.length > 0) return logs[logs.length - 1];
+    if (fromBlock === LEGACY_SETTLEMENT_SCAN_FLOOR) break;
+    toBlock = fromBlock - 1n;
+  }
+
+  return null;
+}
 
 export function useLegacyAuctionTools() {
   const { address, isConnected } = useAccount();
@@ -235,35 +266,26 @@ export function useLegacyAuctionTools() {
     }
 
     let cancelled = false;
-    const candidateIds = new Set(
-      rescueCandidates.map((warplet) => warplet.tokenId.toString()),
-    );
-
-    void publicClient
-      .getContractEvents({
-        address: LEGACY_AUCTION_SELL_ADDRESS,
-        abi: auctionSellAbi,
-        eventName: "AuctionSettled",
-        // Legacy AuctionSell settled #420499 at block 47517586. Keep the
-        // scan bounded while covering the full migration window.
-        fromBlock: 47_400_000n,
-        toBlock: "latest",
-      })
-      .then((logs) => {
+    void Promise.allSettled(
+      rescueCandidates.map((warplet) =>
+        findLegacySettlementForToken(publicClient, warplet.tokenId),
+      ),
+    )
+      .then((results) => {
         if (cancelled) return;
         const next: Record<
           string,
           { winner: Address; amountWei: string; gobbledTokenId: string }
         > = {};
 
-        for (const log of logs) {
-          const tokenId = log.args.tokenId?.toString();
-          const winner = log.args.winner;
-          const amount = log.args.amount;
-          const gobbledTokenId = log.args.gobbledTokenId;
+        for (const result of results) {
+          if (result.status !== "fulfilled" || result.value == null) continue;
+          const tokenId = result.value.args.tokenId?.toString();
+          const winner = result.value.args.winner;
+          const amount = result.value.args.amount;
+          const gobbledTokenId = result.value.args.gobbledTokenId;
           if (
             tokenId == null ||
-            !candidateIds.has(tokenId) ||
             winner == null ||
             amount == null ||
             gobbledTokenId == null

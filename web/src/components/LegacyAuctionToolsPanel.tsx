@@ -336,11 +336,11 @@ export default function LegacyAuctionToolsPanel() {
             active={auctionState.canExtend}
           />
           <MachineStep
-            label="Legacy rescue"
+            label="Legacy claim"
             detail={
               rescueCount > 0
-                ? `${rescueCount} held but not queued/current`
-                : "No held rescue candidates"
+                ? `${rescueCount} claim candidate${rescueCount === 1 ? "" : "s"}`
+                : "No claim candidates"
             }
             active={rescueCount > 0}
           />
@@ -497,7 +497,11 @@ export default function LegacyAuctionToolsPanel() {
                       </span>
                       {rescueInfo ? (
                         <p className="mt-1 break-all text-[11px] text-base-content/55">
-                          Winner wallet required: {shortAddress(rescueInfo.winner)}
+                          Winner wallet: {shortAddress(rescueInfo.winner)}
+                        </p>
+                      ) : warplet.status === "held-needs-rescue-check" ? (
+                        <p className="mt-1 text-[11px] text-base-content/55">
+                          Checking settlement record...
                         </p>
                       ) : null}
                     </div>
@@ -514,8 +518,10 @@ export default function LegacyAuctionToolsPanel() {
                         legacy.txStage !== "idle"
                           ? txStageLabel(legacy.txStage)
                           : connectedWinner
-                            ? "Rescue as winner"
-                            : "Winner wallet only"}
+                            ? "Claim Warplet"
+                            : rescueInfo
+                              ? "Connect winner wallet"
+                              : "Checking claim"}
                       </button>
                     ) : null}
                   </div>
