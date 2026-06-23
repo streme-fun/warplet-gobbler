@@ -1682,6 +1682,18 @@ export default function GobblerAuctionSection({
   const countdownEndUnix = chainCountdownLive
     ? Number(chainLot!.endTime)
     : undefined;
+  /** On-chain lot length from `auction()` start/end; demo mode uses mock `endsSecs`. */
+  const auctionDurationSecs = useMemo(() => {
+    if (
+      chainLot != null &&
+      chainLot.startTime > 0n &&
+      chainLot.endTime > chainLot.startTime
+    ) {
+      return Number(chainLot.endTime - chainLot.startTime);
+    }
+    if (!onChainMode) return live.endsSecs;
+    return undefined;
+  }, [chainLot, onChainMode, live.endsSecs]);
   /** Only demo mode uses a relative timer — never fake “time’s up” when an AuctionSell address is configured. */
   const countdownDurationSecs =
     !onChainMode && !chainCountdownLive ? live.endsSecs : undefined;
@@ -2232,6 +2244,7 @@ export default function GobblerAuctionSection({
         showNoBids={showNoBids || bidHoldNoBidsUi}
         countdownEndUnix={countdownEndUnix}
         countdownDurationSecs={countdownDurationSecs}
+        auctionDurationSecs={auctionDurationSecs}
         auctionSettled={auctionSettled}
         settledFooterCopy={settledFooterCopy}
         startNewAuction={
