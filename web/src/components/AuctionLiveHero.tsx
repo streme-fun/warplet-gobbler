@@ -872,10 +872,7 @@ export default function AuctionLiveHero({
 
   const sold = auctionSettled;
 
-  const auctionSubtitle =
-    auctionDurationSecs != null
-      ? `${formatDuration(auctionDurationSecs)} round — bid to win.`
-      : "Bid to win before time runs out.";
+  const auctionSubtitle = "A Warplet a day keeps the Gobbler away. Bid to win.";
   const hasHighBidder =
     topBidder != null && !isAddressEqual(topBidder, zeroAddress);
   const hasNextAuctionToken = Boolean(
