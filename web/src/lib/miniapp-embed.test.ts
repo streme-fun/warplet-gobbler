@@ -8,14 +8,13 @@ import {
 
 describe("buildMiniappEmbed", () => {
   it("covers R7: reproduces the original layout embed for the auction image + root launch URL (full blob, incl. splash fields)", () => {
-    // This is the exact shape layout.tsx hardcoded before the helper was
-    // extracted — a regression guard so the layout refactor changes nothing.
+    // Full-blob assertion — guards against the helper dropping splash fields
+    // or drifting from the canonical auction preview URL.
     expect(
       buildMiniappEmbed({ imageUrl: AUCTION_EMBED_IMAGE, launchUrl: appUrl }),
     ).toEqual({
       version: "1",
-      imageUrl:
-        "https://api.warpletgobbler.xyz/api/gobbler/frimg/mini/auction.png",
+      imageUrl: `${appUrl}/api/og/auction.png`,
       button: {
         title: "Launch",
         action: {

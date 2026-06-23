@@ -6,21 +6,18 @@
 export const appUrl =
   process.env.NEXT_PUBLIC_APP_URL || "https://warpletgobbler.xyz";
 
-/** Bid/auction preview image, hosted on the external image service. */
-export const AUCTION_EMBED_IMAGE =
-  "https://api.warpletgobbler.xyz/api/gobbler/frimg/mini/auction.png";
+/** Bid/auction preview image, rendered dynamically from the live auction lot. */
+export const AUCTION_EMBED_IMAGE = `${appUrl}/api/og/auction.png`;
 
 /**
  * Sell preview image — PLACEHOLDER.
  *
- * The real sell-themed asset is an external dependency: it must be produced and
- * hosted at `…/frimg/mini/sell.png` on the image service. Until it exists we
- * fall back to the auction image so the embed preview never 404s.
+ * The real sell-themed asset is a follow-up. Until it exists we fall back to
+ * the live auction image so the embed preview never 404s.
  *
  * ROLLOUT CAVEAT: while this points at the auction image, a shared `/sell` link
  * previews with the *bid* image — do not promote `/sell` in marketing until the
- * real asset lands (see the plan's Scope Boundaries → Deferred to Follow-Up Work).
- * TODO: switch to `…/frimg/mini/sell.png` once the asset is hosted.
+ * real asset lands.
  */
 export const SELL_EMBED_IMAGE = AUCTION_EMBED_IMAGE;
 

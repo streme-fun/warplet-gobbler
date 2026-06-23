@@ -1,0 +1,4 @@
+interface:
+  display_name: "WarpletGobbler Stats Image"
+  short_description: "Generate WarpletGobbler stats images"
+  default_prompt: "Use $warplet-gobbler-stats-image to create a WarpletGobbler daily stats image."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "WarpletGobbler Stats"
+  short_description: "Fetch current WarpletGobbler stats"
+  default_prompt: "Use $warplet-gobbler-stats to refresh the current WarpletGobbler auction, floor, and market stats."
