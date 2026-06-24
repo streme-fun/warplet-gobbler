@@ -54,10 +54,9 @@ export default function AuctionWarpletImage({
   }
 
   if (variant === "hero") {
-    const showGobbled = !gobbledImageFailed;
+    const showGobbled = mode !== "original" && !gobbledImageFailed;
     const gobbledStyle = {
       clipPath: mode === "split" ? "inset(0 0 0 50%)" : undefined,
-      opacity: mode === "original" ? 0 : 1,
     };
 
     return (
