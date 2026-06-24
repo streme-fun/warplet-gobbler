@@ -28,6 +28,7 @@ import {
 import AuctionQueueCard from "./AuctionQueueCard";
 import AuctionQueueCardSkeleton from "./AuctionQueueCardSkeleton";
 import AuctionQueueBumpPanel from "./AuctionQueueBumpPanel";
+import AuctionQueueBumpSheet from "./AuctionQueueBumpSheet";
 import AuctionQueueHeadSlot, {
   type QueueBumpHeadPhase,
 } from "./AuctionQueueHeadSlot";
@@ -2396,11 +2397,17 @@ export default function GobblerAuctionSection({
               </div>
             </div>
 
-            {showBumpPanel && (
+            {/*
+              No selection yet: keep the discoverability prompt inline under the
+              carousel. Once a Warplet is picked the confirm CTA moves into a
+              viewport-anchored sheet (see AuctionQueueBumpSheet) so it can't get
+              revealed off-screen when bumping a tile from deep in the queue.
+            */}
+            {showBumpPanel && selectedInQueueFid == null && (
               <div className="mt-3 sm:mt-4 w-full flex justify-center">
                 <AuctionQueueBumpPanel
                   bidSymbol={bidSymbol}
-                  hasQueueSelection={selectedInQueueFid != null}
+                  hasQueueSelection={false}
                   alreadyFirst={alreadyFirst}
                   bumpLiveReady={bumpLiveReady}
                   bumpDisabled={
@@ -2414,6 +2421,23 @@ export default function GobblerAuctionSection({
                 />
               </div>
             )}
+            <AuctionQueueBumpSheet
+              open={showBumpPanel && selectedInQueueFid != null}
+              onClose={() => setSelectedQueueFid(null)}
+              placeInLine={selectedQueueIdx >= 0 ? selectedQueueIdx + 1 : null}
+              bidSymbol={bidSymbol}
+              hasQueueSelection={selectedInQueueFid != null}
+              alreadyFirst={alreadyFirst}
+              bumpLiveReady={bumpLiveReady}
+              bumpDisabled={
+                (!isConnected && !DEV_MOCK_QUEUE_BUMP_LOCAL) ||
+                DEV_MOCK_QUEUE_SKIP_CTA_DISABLED ||
+                bumpVisualPhase !== "idle"
+              }
+              bumpHint={bumpError}
+              onBump={handleQueueBump}
+              isBumping={isBumping}
+            />
             {showLastWinnerBanner && !claimBlocking ? (
               <div className="mt-4 w-full flex justify-center px-1">
                 <LastAuctionSettlementStack
