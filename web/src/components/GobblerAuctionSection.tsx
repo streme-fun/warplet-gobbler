@@ -1813,9 +1813,9 @@ export default function GobblerAuctionSection({
     }
   }, [skipLineOptionVisible]);
 
-  // Skip-the-line off until legacy queued warplets are on the new AuctionSell
-  // (see LEGACY_MIGRATION_PENDING_QUEUE_IDS). Re-enable after bot drain.
-  const SKIP_LINE_ENABLED = false;
+  // Skip-the-line re-enabled: legacy queued warplets have been drained/migrated
+  // onto the new AuctionSell, so the merged-queue confusion no longer applies.
+  const SKIP_LINE_ENABLED = true;
 
   /** Bump pay row mirrors sell CTA: show whenever multiple queue slots exist (outlined until a tile is picked). */
   const showBumpPanel = SKIP_LINE_ENABLED && skipLineOptionVisible;
