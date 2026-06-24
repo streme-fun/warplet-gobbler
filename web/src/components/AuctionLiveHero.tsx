@@ -9,7 +9,9 @@ import { formatUnits, isAddressEqual, parseUnits, zeroAddress } from "viem";
 import type { Address } from "viem";
 import type { AuctionBidPaymentMode } from "@/lib/defaultAuctionBidPayment";
 import { formatDuration } from "@/lib/format-duration";
-import AuctionWarpletImage from "./AuctionWarpletImage";
+import AuctionWarpletImage, {
+  type AuctionWarpletImageMode,
+} from "./AuctionWarpletImage";
 import BidderAvatarName from "./BidderAvatarName";
 import BuyWarpgobbLink from "./BuyWarpgobbLink";
 import CountdownTimer from "./CountdownTimer";
@@ -160,6 +162,92 @@ const TOKEN_INPUT_MAX_FRAC_DIGITS = 4;
 const ETH_INPUT_MAX_FRAC_DIGITS = 6;
 const BID_INPUT_MAX_INT_DIGITS = 9;
 const MIN_BID_VALIDATION_PREFIX = "Your bid must be at least ";
+const BID_SUP_ELIGIBILITY_COPY = "Valid bids may earn $SUP";
+const WINNER_PAYOFF_COPY = "Winner gets 2 NFTs: original + gobbled";
+const AUCTION_IMAGE_MODES: AuctionWarpletImageMode[] = [
+  "split",
+  "gobbled",
+  "original",
+];
+const AUCTION_IMAGE_MODE_LABELS: Record<AuctionWarpletImageMode, string> = {
+  split: "half original, half gobbled",
+  original: "original",
+  gobbled: "gobbled",
+};
+
+function nextAuctionImageModeFor(
+  mode: AuctionWarpletImageMode,
+): AuctionWarpletImageMode {
+  const currentIndex = AUCTION_IMAGE_MODES.indexOf(mode);
+  return (
+    AUCTION_IMAGE_MODES[(currentIndex + 1) % AUCTION_IMAGE_MODES.length] ??
+    "split"
+  );
+}
+
+function AuctionImageModeIcon({
+  mode,
+  className,
+}: {
+  mode: AuctionWarpletImageMode;
+  className?: string;
+}) {
+  if (mode === "original") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+        aria-hidden="true"
+      >
+        <rect x="4" y="5" width="16" height="14" rx="2" />
+        <circle cx="9" cy="10" r="1.5" />
+        <path d="m5.5 17 4.5-4.5 3.5 3.5 2-2 3 3" />
+      </svg>
+    );
+  }
+
+  if (mode === "gobbled") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+        aria-hidden="true"
+      >
+        <rect x="4" y="5" width="16" height="14" rx="2" />
+        <path d="M7 11h10" />
+        <path d="m8 11 2 4 2-4 2 4 2-4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="4" y="5" width="16" height="14" rx="2" />
+      <path d="M12 5v14" />
+      <path d="m8 9-2 2 2 2" />
+      <path d="m16 9 2 2-2 2" />
+    </svg>
+  );
+}
 
 function formatBidTokenHumanDisplay(human: string, decimals: number): string {
   return formatBidAmountDisplay(
@@ -435,6 +523,19 @@ export default function AuctionLiveHero({
   const [showExtendSuccessBanner, setShowExtendSuccessBanner] = useState(false);
   const [paymentMode, setPaymentMode] =
     useState<AuctionBidPaymentMode>("token");
+  const [auctionImageMode, setAuctionImageMode] =
+    useState<AuctionWarpletImageMode>("split");
+  const nextAuctionImageMode = nextAuctionImageModeFor(auctionImageMode);
+  const auctionImageModeLabel = AUCTION_IMAGE_MODE_LABELS[auctionImageMode];
+  const nextAuctionImageModeLabel =
+    AUCTION_IMAGE_MODE_LABELS[nextAuctionImageMode];
+  const auctionImageCaption =
+    auctionImageMode === "gobbled"
+      ? `Gobbled #${displayTokenId}`
+      : `Warplet #${displayTokenId}`;
+  const toggleAuctionImageMode = () => {
+    setAuctionImageMode((current) => nextAuctionImageModeFor(current));
+  };
   const hasChainBid = chainBid != null;
   const chainBidMinBidWei = chainBid?.minBidWei;
   const chainBidMinBidHuman = chainBid?.minBidHuman;
@@ -871,8 +972,6 @@ export default function AuctionLiveHero({
   };
 
   const sold = auctionSettled;
-
-  const auctionSubtitle = "A Warplet a day keeps the Gobbler away. Bid to win.";
   const hasHighBidder =
     topBidder != null && !isAddressEqual(topBidder, zeroAddress);
   const hasNextAuctionToken = Boolean(
@@ -1000,6 +1099,20 @@ export default function AuctionLiveHero({
     if (walletReconnecting) return;
     openConnectModal?.();
   };
+  const demoBidButtonDisabled =
+    !walletDisconnected && (bidDisabled || chainBlocksBid);
+  const chainBidButtonDisabled = Boolean(
+    chainBid &&
+      (chainBid.loading ||
+        (!walletDisconnected &&
+          (bidDisabled ||
+            chainBlocksBid ||
+            nativeEthBlocksBid ||
+            belowMinimumBid ||
+            insufficientBalance ||
+            chainBid.disabled ||
+            chainBid.minBidWei == null))),
+  );
 
   return (
     <div
@@ -1026,9 +1139,25 @@ export default function AuctionLiveHero({
               </div>
             ) : (
               <div className="relative h-full min-h-[10.5rem] w-full overflow-hidden rounded-l-[0.78rem] bg-transparent sm:aspect-square sm:h-auto sm:min-h-0">
-                <AuctionWarpletImage fid={displayTokenId} variant="hero" />
+                <AuctionWarpletImage
+                  fid={displayTokenId}
+                  variant="hero"
+                  mode={auctionImageMode}
+                />
+                <button
+                  type="button"
+                  onClick={toggleAuctionImageMode}
+                  className="absolute right-1.5 top-1.5 z-[2] flex h-7 w-7 items-center justify-center rounded-full border border-base-content/20 bg-black/50 text-base-content/75 shadow-lg shadow-black/30 backdrop-blur-md transition hover:border-secondary/70 hover:text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary sm:right-2 sm:top-2 sm:h-8 sm:w-8"
+                  aria-label={`Showing ${auctionImageModeLabel}. Switch to ${nextAuctionImageModeLabel}.`}
+                  title={`Image: ${auctionImageModeLabel}`}
+                >
+                  <AuctionImageModeIcon
+                    mode={auctionImageMode}
+                    className="h-4 w-4 sm:h-[18px] sm:w-[18px]"
+                  />
+                </button>
                 <p className="absolute bottom-0 inset-x-0 z-[1] text-[10px] sm:text-xs lg:text-sm font-medium text-base-content/70 bg-black/50 backdrop-blur-sm py-1 sm:py-1.5 px-2 text-center m-0">
-                  Warplet #{displayTokenId}
+                  {auctionImageCaption}
                 </p>
               </div>
             )}
@@ -1039,13 +1168,16 @@ export default function AuctionLiveHero({
               <h2 className="font-creepster gobble-title-shadow m-0 max-w-full truncate text-2xl font-normal uppercase leading-tight tracking-wide text-secondary">
                 Warplet auction
               </h2>
+              <p className="mx-auto mt-0.5 max-w-[11rem] text-[9px] font-medium leading-snug text-base-content/55">
+                {WINNER_PAYOFF_COPY}
+              </p>
             </div>
             <div className="hidden shrink-0 border-b border-base-content/10 pb-2 sm:block">
               <h2 className="font-creepster gobble-title-shadow max-w-full truncate text-2xl sm:text-3xl lg:text-4xl font-normal tracking-wide uppercase text-secondary m-0 leading-tight">
                 WARPLET AUCTION
               </h2>
               <p className="mx-auto max-w-xl text-[10px] sm:text-xs text-base-content/65 mt-1.5 mb-0 leading-snug">
-                {auctionSubtitle}
+                {WINNER_PAYOFF_COPY}
               </p>
             </div>
 
@@ -1350,12 +1482,15 @@ export default function AuctionLiveHero({
                   ref={btnRef}
                   type="button"
                   onClick={walletDisconnected ? openConnectWallet : handleDemoBid}
-                  disabled={
-                    !walletDisconnected && (bidDisabled || chainBlocksBid)
-                  }
-                  className="gobble-btn-ghost-purple w-full"
+                  disabled={demoBidButtonDisabled}
+                  className="gobble-btn-ghost-purple flex w-full flex-col items-center justify-center gap-0.5"
                 >
-                  {walletDisconnected ? "Connect Wallet to Bid" : "Bid"}
+                  <span>{walletDisconnected ? "Connect Wallet to Bid" : "Bid"}</span>
+                  {!demoBidButtonDisabled ? (
+                    <span className="font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/75 sm:text-xs">
+                      {BID_SUP_ELIGIBILITY_COPY}
+                    </span>
+                  ) : null}
                 </button>
               )}
             </div>
@@ -1444,27 +1579,24 @@ export default function AuctionLiveHero({
                 onClick={
                   walletDisconnected ? openConnectWallet : handleChainBidSubmit
                 }
-                disabled={
-                  chainBid.loading ||
-                  (!walletDisconnected &&
-                    (bidDisabled ||
-                      chainBlocksBid ||
-                      nativeEthBlocksBid ||
-                      belowMinimumBid ||
-                      insufficientBalance ||
-                      chainBid.disabled ||
-                      chainBid.minBidWei == null))
-                }
+                disabled={chainBidButtonDisabled}
                 className={`gobble-btn-ghost-purple w-full shrink-0 sm:w-auto ${
                   belowMinimumBid
                     ? "!text-base !tracking-[1px] sm:!text-lg"
                     : "!text-xl !tracking-[2px] sm:!text-2xl"
-                }`}
+                } flex flex-col items-center justify-center gap-0.5`}
               >
                 {chainBid.loading ? (
                   <span className="loading loading-spinner loading-sm" />
                 ) : walletDisconnected ? (
-                  "Connect Wallet to Bid"
+                  <>
+                    <span>Connect Wallet to Bid</span>
+                    {!chainBidButtonDisabled ? (
+                      <span className="font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/75 sm:text-xs">
+                        {BID_SUP_ELIGIBILITY_COPY}
+                      </span>
+                    ) : null}
+                  </>
                 ) : insufficientBalance ? (
                   paymentMode === "eth" ? "Not Enough ETH" : "Insufficient Balance"
                 ) : ethEstimatePending ? (
@@ -1483,10 +1615,17 @@ export default function AuctionLiveHero({
                   </span>
                 ) : (
                   <>
-                    Bid{" "}
-                    {paymentMode === "eth"
-                      ? `${displayedEthAmount || "0"} ETH`
-                      : `${bidAmountRaw || "0"} $${bidSymbol}`}
+                    <span>
+                      Bid{" "}
+                      {paymentMode === "eth"
+                        ? `${displayedEthAmount || "0"} ETH`
+                        : `${bidAmountRaw || "0"} $${bidSymbol}`}
+                    </span>
+                    {!chainBidButtonDisabled ? (
+                      <span className="font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/75 sm:text-xs">
+                        {BID_SUP_ELIGIBILITY_COPY}
+                      </span>
+                    ) : null}
                   </>
                 )}
               </button>

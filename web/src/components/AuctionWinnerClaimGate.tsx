@@ -76,7 +76,7 @@ export default function AuctionWinnerClaimGate({
 
         <div className="text-center mb-6 sm:mb-8">
           <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-base-content/50">
-            You rescued a Warplet
+            You won both NFTs
           </p>
           <h2 className="font-creepster gobble-title-shadow mt-1 text-4xl leading-[0.95] sm:text-6xl sm:leading-none font-normal tracking-wide uppercase text-secondary">
             Congratulations
@@ -100,6 +100,9 @@ export default function AuctionWinnerClaimGate({
               #{tokenId}
             </span>{" "}
             is yours
+          </p>
+          <p className="mt-1.5 text-xs sm:text-sm text-success/75 font-medium leading-snug">
+            Claim the original Warplet and gobbled NFT.
           </p>
           <p className="mt-2 text-xs sm:text-sm text-base-content/55 font-mono tabular-nums leading-snug">
             winning bid · {winAmountLabel}{" "}
