@@ -2,16 +2,30 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import { useEffect, useState } from "react";
 import { warpletImageSrc } from "@/lib/warplet-image-src";
+
+function gobbledImageSrc(fid: number): string {
+  return `/api/gobbled-composite-image?tokenId=${encodeURIComponent(String(fid))}`;
+}
+
+export type AuctionWarpletImageMode = "split" | "original" | "gobbled";
 
 export default function AuctionWarpletImage({
   fid,
   variant = "default",
+  mode = "split",
 }: {
   fid: number;
   variant?: "default" | "hero" | "thumb" | "cover";
+  mode?: AuctionWarpletImageMode;
 }) {
   const src = warpletImageSrc(fid);
+  const [gobbledImageFailed, setGobbledImageFailed] = useState(false);
+
+  useEffect(() => {
+    setGobbledImageFailed(false);
+  }, [fid]);
 
   if (variant === "cover") {
     return (
@@ -40,6 +54,10 @@ export default function AuctionWarpletImage({
   }
 
   if (variant === "hero") {
+    const showGobbled = mode !== "original" && !gobbledImageFailed;
+    const gobbledClipPath =
+      mode === "split" ? { clipPath: "inset(0 0 0 50%)" } : undefined;
+
     return (
       <div className="group absolute inset-0 overflow-hidden rounded-[inherit] sm:rounded-l-[0.78rem]">
         <img
@@ -50,6 +68,19 @@ export default function AuctionWarpletImage({
           loading="lazy"
           decoding="async"
         />
+        {showGobbled && (
+          <img
+            src={gobbledImageSrc(fid)}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 size-full object-cover object-center"
+            style={gobbledClipPath}
+            draggable={false}
+            loading="lazy"
+            decoding="async"
+            onError={() => setGobbledImageFailed(true)}
+          />
+        )}
       </div>
     );
   }

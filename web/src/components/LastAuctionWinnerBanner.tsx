@@ -40,7 +40,7 @@ export function rescueStageCtaLabel(stage: RescueStage): string {
     case "success":
       return "Rescued!";
     default:
-      return "Claim Warplets";
+      return "Claim both NFTs";
   }
 }
 
@@ -55,7 +55,7 @@ function rescueStageCtaLabelInline(stage: RescueStage): string {
     case "success":
       return "Done";
     default:
-      return "Claim";
+      return "Claim NFTs";
   }
 }
 
