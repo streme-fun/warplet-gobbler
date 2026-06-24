@@ -25,7 +25,7 @@ export default function AuctionWarpletImage({
 
   useEffect(() => {
     setGobbledImageFailed(false);
-  }, [fid]);
+  }, [fid, mode]);
 
   if (variant === "cover") {
     return (
@@ -54,9 +54,11 @@ export default function AuctionWarpletImage({
   }
 
   if (variant === "hero") {
-    const showGobbled = mode !== "original" && !gobbledImageFailed;
-    const gobbledClipPath =
-      mode === "split" ? { clipPath: "inset(0 0 0 50%)" } : undefined;
+    const showGobbled = !gobbledImageFailed;
+    const gobbledStyle = {
+      clipPath: mode === "split" ? "inset(0 0 0 50%)" : undefined,
+      opacity: mode === "original" ? 0 : 1,
+    };
 
     return (
       <div className="group absolute inset-0 overflow-hidden rounded-[inherit] sm:rounded-l-[0.78rem]">
@@ -74,7 +76,7 @@ export default function AuctionWarpletImage({
             alt=""
             aria-hidden="true"
             className="absolute inset-0 size-full object-cover object-center"
-            style={gobbledClipPath}
+            style={gobbledStyle}
             draggable={false}
             loading="lazy"
             decoding="async"

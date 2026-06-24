@@ -8,6 +8,7 @@ import { useAccount } from "wagmi";
 import { formatUnits, isAddressEqual, parseUnits, zeroAddress } from "viem";
 import type { Address } from "viem";
 import type { AuctionBidPaymentMode } from "@/lib/defaultAuctionBidPayment";
+import { formatDuration } from "@/lib/format-duration";
 import AuctionWarpletImage, {
   type AuctionWarpletImageMode,
 } from "./AuctionWarpletImage";
@@ -161,7 +162,7 @@ const TOKEN_INPUT_MAX_FRAC_DIGITS = 4;
 const ETH_INPUT_MAX_FRAC_DIGITS = 6;
 const BID_INPUT_MAX_INT_DIGITS = 9;
 const MIN_BID_VALIDATION_PREFIX = "Your bid must be at least ";
-const BID_SUP_ELIGIBILITY_COPY = "Valid bids may be eligible for $SUP";
+const BID_SUP_ELIGIBILITY_COPY = "Valid bids may earn $SUP";
 const WINNER_PAYOFF_COPY = "Winner gets 2 NFTs: original + gobbled";
 const AUCTION_IMAGE_MODES: AuctionWarpletImageMode[] = [
   "split",
@@ -439,6 +440,7 @@ export default function AuctionLiveHero({
   showNoBids,
   countdownEndUnix,
   countdownDurationSecs,
+  auctionDurationSecs,
   auctionSettled,
   settledFooterCopy,
   startNewAuction,
@@ -466,6 +468,8 @@ export default function AuctionLiveHero({
   showNoBids: boolean;
   countdownEndUnix?: number;
   countdownDurationSecs?: number;
+  /** Lot length from on-chain `startTime`/`endTime` or mock `endsSecs`. */
+  auctionDurationSecs?: number;
   auctionSettled: boolean;
   /** Line under the card when the lot is settled (queue-aware copy from parent). */
   settledFooterCopy?: string | null;
@@ -1095,6 +1099,20 @@ export default function AuctionLiveHero({
     if (walletReconnecting) return;
     openConnectModal?.();
   };
+  const demoBidButtonDisabled =
+    !walletDisconnected && (bidDisabled || chainBlocksBid);
+  const chainBidButtonDisabled = Boolean(
+    chainBid &&
+      (chainBid.loading ||
+        (!walletDisconnected &&
+          (bidDisabled ||
+            chainBlocksBid ||
+            nativeEthBlocksBid ||
+            belowMinimumBid ||
+            insufficientBalance ||
+            chainBid.disabled ||
+            chainBid.minBidWei == null))),
+  );
 
   return (
     <div
@@ -1148,7 +1166,7 @@ export default function AuctionLiveHero({
           <div className="flex min-h-0 min-w-0 flex-col items-center gap-1 bg-base-100/35 px-2.5 pb-1 pt-1.5 text-center sm:h-full sm:max-w-[26rem] sm:gap-3 sm:bg-base-100/20 sm:px-3.5 sm:pb-3.5 sm:pt-3.5 lg:max-w-[28rem]">
             <div className="shrink-0 pb-1 text-center sm:hidden">
               <h2 className="font-creepster gobble-title-shadow m-0 max-w-full truncate text-2xl font-normal uppercase leading-tight tracking-wide text-secondary">
-                Daily auction
+                Warplet auction
               </h2>
               <p className="mx-auto mt-0.5 max-w-[11rem] text-[9px] font-medium leading-snug text-base-content/55">
                 {WINNER_PAYOFF_COPY}
@@ -1156,7 +1174,7 @@ export default function AuctionLiveHero({
             </div>
             <div className="hidden shrink-0 border-b border-base-content/10 pb-2 sm:block">
               <h2 className="font-creepster gobble-title-shadow max-w-full truncate text-2xl sm:text-3xl lg:text-4xl font-normal tracking-wide uppercase text-secondary m-0 leading-tight">
-                DAILY WARPLET AUCTION
+                WARPLET AUCTION
               </h2>
               <p className="mx-auto max-w-xl text-[10px] sm:text-xs text-base-content/65 mt-1.5 mb-0 leading-snug">
                 {WINNER_PAYOFF_COPY}
@@ -1221,6 +1239,12 @@ export default function AuctionLiveHero({
                               —:—:—
                             </span>
                           )}
+                          {auctionDurationSecs != null &&
+                          !auctionExpiredOnChain ? (
+                            <p className="mt-0.5 text-[10px] text-base-content/40 sm:text-[11px]">
+                              of {formatDuration(auctionDurationSecs)} round
+                            </p>
+                          ) : null}
                           {auctionExpiredOnChain ? (
                             <p className="mx-auto max-w-sm text-[10px] sm:text-[11px] text-warning/85 mt-1.5 leading-snug">
                               {(() => {
@@ -1458,15 +1482,15 @@ export default function AuctionLiveHero({
                   ref={btnRef}
                   type="button"
                   onClick={walletDisconnected ? openConnectWallet : handleDemoBid}
-                  disabled={
-                    !walletDisconnected && (bidDisabled || chainBlocksBid)
-                  }
+                  disabled={demoBidButtonDisabled}
                   className="gobble-btn-ghost-purple flex w-full flex-col items-center justify-center gap-0.5"
                 >
                   <span>{walletDisconnected ? "Connect Wallet to Bid" : "Bid"}</span>
-                  <span className="font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/75 sm:text-xs">
-                    {BID_SUP_ELIGIBILITY_COPY}
-                  </span>
+                  {!demoBidButtonDisabled ? (
+                    <span className="font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/75 sm:text-xs">
+                      {BID_SUP_ELIGIBILITY_COPY}
+                    </span>
+                  ) : null}
                 </button>
               )}
             </div>
@@ -1555,17 +1579,7 @@ export default function AuctionLiveHero({
                 onClick={
                   walletDisconnected ? openConnectWallet : handleChainBidSubmit
                 }
-                disabled={
-                  chainBid.loading ||
-                  (!walletDisconnected &&
-                    (bidDisabled ||
-                      chainBlocksBid ||
-                      nativeEthBlocksBid ||
-                      belowMinimumBid ||
-                      insufficientBalance ||
-                      chainBid.disabled ||
-                      chainBid.minBidWei == null))
-                }
+                disabled={chainBidButtonDisabled}
                 className={`gobble-btn-ghost-purple w-full shrink-0 sm:w-auto ${
                   belowMinimumBid
                     ? "!text-base !tracking-[1px] sm:!text-lg"
@@ -1577,9 +1591,11 @@ export default function AuctionLiveHero({
                 ) : walletDisconnected ? (
                   <>
                     <span>Connect Wallet to Bid</span>
-                    <span className="font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/75 sm:text-xs">
-                      {BID_SUP_ELIGIBILITY_COPY}
-                    </span>
+                    {!chainBidButtonDisabled ? (
+                      <span className="font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/75 sm:text-xs">
+                        {BID_SUP_ELIGIBILITY_COPY}
+                      </span>
+                    ) : null}
                   </>
                 ) : insufficientBalance ? (
                   paymentMode === "eth" ? "Not Enough ETH" : "Insufficient Balance"
@@ -1605,9 +1621,11 @@ export default function AuctionLiveHero({
                         ? `${displayedEthAmount || "0"} ETH`
                         : `${bidAmountRaw || "0"} $${bidSymbol}`}
                     </span>
-                    <span className="font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/75 sm:text-xs">
-                      {BID_SUP_ELIGIBILITY_COPY}
-                    </span>
+                    {!chainBidButtonDisabled ? (
+                      <span className="font-sans text-[10px] font-semibold normal-case tracking-normal text-base-content/75 sm:text-xs">
+                        {BID_SUP_ELIGIBILITY_COPY}
+                      </span>
+                    ) : null}
                   </>
                 )}
               </button>
