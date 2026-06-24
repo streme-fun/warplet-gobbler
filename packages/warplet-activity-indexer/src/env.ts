@@ -59,6 +59,7 @@ export const env = {
   telegramDedupeFile: optionalString("INDEXER_TELEGRAM_DEDUPE_FILE"),
   neynarApiKey: process.env.NEYNAR_API_KEY,
   neynarClientId: process.env.NEYNAR_CLIENT_ID,
+  appUrl: optionalString("INDEXER_APP_URL") ?? optionalString("NEXT_PUBLIC_APP_URL") ?? "https://www.warpletgobbler.xyz",
   notifyOnBackfill: optionalBoolean("INDEXER_NOTIFY_ON_BACKFILL", true),
   notifyFromBlockRaw: optionalString("INDEXER_NOTIFY_FROM_BLOCK"),
 };

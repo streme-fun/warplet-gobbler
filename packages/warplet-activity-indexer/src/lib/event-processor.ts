@@ -208,33 +208,43 @@ function renderTelegramMessage(record: BaseActivityRecord, profile: NeynarUser |
   const actor = formatActor(record.actorAddress, profile);
   const txUrl = `https://basescan.org/tx/${record.transactionHash}`;
   const tx = `<a href="${txUrl}">tx</a>`;
+  const app = `<a href="${appUrlFor(record)}">app</a>`;
 
   switch (record.type) {
     case "BID_PLACED":
       return [
         `🟢 <b>Bid</b> #${record.tokenId?.toString() ?? "?"}`,
         `${actor}`,
-        `<b>${formatTokenAmount(record.amount)}</b> · ${tx}`,
+        `<b>${formatTokenAmount(record.amount)}</b> · ${app} · ${tx}`,
       ].join("\n");
     case "WARPLET_GOBBLED":
       return [
         `🔴 <b>Gobbled</b> #${record.tokenId?.toString() ?? "?"}`,
         `${actor}`,
-        `<b>${formatTokenAmount(record.payout)}</b> out · ${tx}`,
+        `<b>${formatTokenAmount(record.payout)}</b> out · ${app} · ${tx}`,
       ].join("\n");
     case "AUCTION_SETTLED":
       return [
         `🟢 <b>Settled</b> #${record.tokenId?.toString() ?? "?"}`,
         `${actor}`,
-        `<b>${formatTokenAmount(record.amount)}</b> · receipt <b>#${record.gobbledTokenId?.toString() ?? "?"}</b> · ${tx}`,
+        `<b>${formatTokenAmount(record.amount)}</b> · receipt <b>#${record.gobbledTokenId?.toString() ?? "?"}</b> · ${app} · ${tx}`,
       ].join("\n");
     case "NEW_USER_INTERACTION":
       return [
         `🟢 <b>New user</b>`,
         `${actor}`,
-        `${tx}`,
+        `${app} · ${tx}`,
       ].join("\n");
   }
+}
+
+function appUrlFor(record?: Pick<BaseActivityRecord, "type">): string {
+  const base = env.appUrl.replace(/\/+$/, "");
+  if (record?.type === "WARPLET_GOBBLED") return `${base}/#sell-section`;
+  if (record?.type === "BID_PLACED" || record?.type === "AUCTION_SETTLED") {
+    return `${base}/#auction`;
+  }
+  return base;
 }
 
 function renderNewUserTelegramMessage(
@@ -256,6 +266,7 @@ function renderNewUserTelegramMessage(
   if (newUser.neynarFollowerCount != null) {
     bits.push(`<b>${newUser.neynarFollowerCount}</b> followers`);
   }
+  bits.push(`<a href="${appUrlFor()}">app</a>`);
   if (tx) bits.push(tx);
 
   return bits.join("\n");
